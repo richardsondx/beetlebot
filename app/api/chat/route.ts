@@ -482,6 +482,8 @@ type MessageIntent = {
   isUpcomingQuery: boolean;
   /** Message asks for fresh/deep research rather than immediate execution. */
   isResearchRequest: boolean;
+  /** Message asks about things to do / events / what's happening in a city or area — exploration, NOT personal calendar. */
+  isDiscoveryQuery: boolean;
 };
 
 function normalizeRequestedMode(raw?: string): string {
@@ -548,6 +550,7 @@ async function classifyMessageIntent(
     isTravelQuery: false,
     isUpcomingQuery: false,
     isResearchRequest: false,
+    isDiscoveryQuery: false,
   };
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return fallback;
@@ -563,16 +566,17 @@ async function classifyMessageIntent(
     `User message: """${message}"""`,
     "",
     "Return exactly:",
-    '{ "isActionCommand": boolean, "isCalendarWrite": boolean, "isCalendarQuery": boolean, "referencesPriorSuggestions": boolean, "isTravelQuery": boolean, "isUpcomingQuery": boolean, "isResearchRequest": boolean }',
+    '{ "isActionCommand": boolean, "isCalendarWrite": boolean, "isCalendarQuery": boolean, "referencesPriorSuggestions": boolean, "isTravelQuery": boolean, "isUpcomingQuery": boolean, "isResearchRequest": boolean, "isDiscoveryQuery": boolean }',
     "",
     "Definitions:",
     "isActionCommand  — true when the user wants to EXECUTE something (add to calendar, move/reschedule an event, book, confirm a choice, keep a suggestion, cancel something) rather than explore or get new ideas.",
     "isCalendarWrite  — true when the intent involves creating, editing, moving, fixing duplicates, merging, or removing a calendar event.",
-    "isCalendarQuery — true when the user asks to read/check schedule info (calendar, meetings, upcoming events, next event, availability, free time).",
+    "isCalendarQuery — true ONLY when the user asks about THEIR OWN personal schedule (e.g. 'what's on my calendar', 'do I have anything tomorrow', 'when is my next meeting', 'am I free Saturday'). Must be about the user's own calendar/schedule. FALSE for discovery questions like 'what's happening in the city', 'what's going on tonight', 'things to do this weekend' — those are discovery, not calendar.",
     "referencesPriorSuggestions — true when the user refers to options already shown (e.g. 'these', 'this one', 'that option', 'option 2', 'the first one').",
     "isTravelQuery — true when the user asks about travel/trips/vacation plans.",
-    "isUpcomingQuery — true when the user asks for what is next/upcoming/coming soon.",
+    "isUpcomingQuery — true when the user asks for what is next/upcoming/coming soon on their personal calendar.",
     "isResearchRequest — true when user asks for fresh/new/deep research or discovery from new sources.",
+    "isDiscoveryQuery — true when the user asks about things to do, events happening, what's going on, nightlife, activities, or attractions in a city or area. This is about exploring the world, NOT checking their personal calendar. Examples: 'what's happening tonight', 'things to do in Toronto', 'any events this weekend', 'what's going on in the city'.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -611,6 +615,7 @@ async function classifyMessageIntent(
       isTravelQuery: Boolean(parsed.isTravelQuery),
       isUpcomingQuery: Boolean(parsed.isUpcomingQuery),
       isResearchRequest: Boolean(parsed.isResearchRequest),
+      isDiscoveryQuery: Boolean(parsed.isDiscoveryQuery),
     };
   } catch {
     return fallback;
@@ -1154,7 +1159,7 @@ export async function POST(request: Request) {
     });
 
     const isActionCmd = intent.isActionCommand;
-    const calendarIntent = intent.isCalendarQuery || intent.isCalendarWrite;
+    const calendarIntent = (intent.isCalendarQuery || intent.isCalendarWrite) && !intent.isDiscoveryQuery;
     const calendarWriteIntent = intent.isCalendarWrite;
     const shouldRunResearch =
       !isActionCmd &&

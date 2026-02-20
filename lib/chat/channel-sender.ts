@@ -311,11 +311,13 @@ async function sendViaWhatsApp(
   }
 
   const messageIds: string[] = [];
-  const card = firstImageCard(message);
+  const realCards = allImageCards(message).filter(
+    (c) => !c.imageUrl.includes("placehold.co"),
+  );
+  const card = realCards.length > 0 ? realCards[0] : null;
 
   try {
     if (card) {
-      // Send image + caption
       const caption = buildWaCaption(message.text, card, caps.captionMaxLen);
       const imgId = await waSendImage(
         accessToken,
@@ -326,8 +328,7 @@ async function sendViaWhatsApp(
       );
       if (imgId) messageIds.push(imgId);
 
-      // If there are more cards, send their URLs as a text list
-      const extraCards = allImageCards(message).slice(1, 5);
+      const extraCards = realCards.slice(1, 5);
       if (extraCards.length > 0) {
         const lines = [
           "More options:",
@@ -345,7 +346,6 @@ async function sendViaWhatsApp(
         if (textId) messageIds.push(textId);
       }
     } else {
-      // Plain text fallback
       const plain = truncate(toPlainText(message), caps.captionMaxLen * 4);
       const textId = await waSendText(
         accessToken,

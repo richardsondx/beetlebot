@@ -175,7 +175,7 @@ export async function POST(request: Request) {
   const chatResponse = await chatPost(chatRequest);
 
   const chatPayload = (await chatResponse.json().catch(() => ({}))) as {
-    data?: { reply?: string; blocks?: RichBlock[]; threadId?: string };
+    data?: { reply?: string; blocks?: RichBlock[]; threadId?: string; messageId?: string };
     error?: string;
   };
 
@@ -187,6 +187,7 @@ export async function POST(request: Request) {
     provider: "telegram",
     accessToken: telegram.accessToken,
     recipientId: incoming.chatId,
+    assistantMessageId: chatPayload.data?.messageId,
     message: {
       text: replyText,
       blocks: chatPayload.data?.blocks,

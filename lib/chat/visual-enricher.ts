@@ -13,6 +13,7 @@
 
 import type { AssistantMessage, ImageCard, RichBlock } from "./rich-message";
 import { sanitiseBlocks } from "./safety";
+import { getBestEventImageUrl } from "@/lib/media/cache";
 
 // ── Raw LLM option (before enrichment) ────────────────────────────────────
 
@@ -155,7 +156,10 @@ export function parseLlmPayload(raw: string): RawLlmPayload {
 
 async function enrichOption(opt: RawOption): Promise<ImageCard> {
   const query = `${opt.category ?? ""} ${opt.title}`.trim();
-  const imageUrl = await fetchImageUrl(query);
+  const imageUrl = await fetchBestImageUrl({
+    query,
+    actionUrl: opt.actionUrl,
+  });
 
   return {
     type: "image_card",
@@ -170,6 +174,17 @@ async function enrichOption(opt: RawOption): Promise<ImageCard> {
 }
 
 // ── Image fetch helpers ────────────────────────────────────────────────────
+
+async function fetchBestImageUrl(input: {
+  query: string;
+  actionUrl?: string;
+}): Promise<string> {
+  if (input.actionUrl) {
+    const best = await getBestEventImageUrl({ actionUrl: input.actionUrl });
+    if (best?.imageUrl) return best.imageUrl;
+  }
+  return fetchImageUrl(input.query);
+}
 
 async function fetchImageUrl(query: string): Promise<string> {
   const unsplashKey = process.env.UNSPLASH_ACCESS_KEY;

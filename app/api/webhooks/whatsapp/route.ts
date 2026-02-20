@@ -217,7 +217,7 @@ export async function POST(request: Request) {
   });
   const chatResponse = await chatPost(chatRequest);
   const chatPayload = (await chatResponse.json().catch(() => ({}))) as {
-    data?: { reply?: string; blocks?: unknown[]; threadId?: string };
+    data?: { reply?: string; blocks?: unknown[]; threadId?: string; messageId?: string };
     error?: string;
   };
   const replyText =
@@ -232,6 +232,7 @@ export async function POST(request: Request) {
     accessToken: whatsapp.accessToken,
     recipientId: firstSender,
     phoneNumberId: effectivePhoneNumberId,
+    assistantMessageId: chatPayload.data?.messageId,
     message: {
       text: replyText,
       blocks: replyBlocks as RichBlock[] | undefined,

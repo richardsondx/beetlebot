@@ -23,7 +23,45 @@ const REMOVE_SELECTORS = [
   ".advertisement",
 ];
 
-function extractMainText(html: string, hint?: string): { title: string; text: string } {
+function resolveLink(href: string, baseUrl: string): string | null {
+  const trimmed = href.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("#")) return null;
+  if (/^(mailto:|tel:|javascript:)/i.test(trimmed)) return null;
+  try {
+    return new URL(trimmed, baseUrl).toString();
+  } catch {
+    return null;
+  }
+}
+
+function extractLinks($: cheerio.CheerioAPI, baseUrl: string) {
+  const out: Array<{ href: string; text: string }> = [];
+  const seen = new Set<string>();
+
+  const anchors = $("main a[href], article a[href], [role='main'] a[href], body a[href]")
+    .toArray()
+    .slice(0, 200);
+  for (const el of anchors) {
+    const hrefRaw = $(el).attr("href");
+    if (!hrefRaw) continue;
+    const href = resolveLink(hrefRaw, baseUrl);
+    if (!href) continue;
+    if (seen.has(href)) continue;
+    seen.add(href);
+    const text = ($(el).text() || "").replace(/\s+/g, " ").trim().slice(0, 90);
+    out.push({ href, text });
+    if (out.length >= 12) break;
+  }
+
+  return out;
+}
+
+function extractMainText(
+  html: string,
+  baseUrl: string,
+  hint?: string,
+): { title: string; text: string; links: Array<{ href: string; text: string }> } {
   const $ = cheerio.load(html);
 
   for (const selector of REMOVE_SELECTORS) {
@@ -34,6 +72,7 @@ function extractMainText(html: string, hint?: string): { title: string; text: st
 
   const mainEl = $("main, [role='main'], article, .content, #content").first();
   const root = mainEl.length ? mainEl : $("body");
+  const links = extractLinks($, baseUrl);
 
   const rawText = root
     .text()
@@ -42,7 +81,7 @@ function extractMainText(html: string, hint?: string): { title: string; text: st
     .trim();
 
   if (rawText.length <= MAX_CONTENT_LENGTH) {
-    return { title, text: rawText };
+    return { title, text: rawText, links };
   }
 
   if (hint) {
@@ -52,11 +91,11 @@ function extractMainText(html: string, hint?: string): { title: string; text: st
     if (idx !== -1) {
       const start = Math.max(0, idx - 500);
       const end = Math.min(rawText.length, idx + MAX_CONTENT_LENGTH - 500);
-      return { title, text: rawText.slice(start, end) };
+      return { title, text: rawText.slice(start, end), links };
     }
   }
 
-  return { title, text: rawText.slice(0, MAX_CONTENT_LENGTH) };
+  return { title, text: rawText.slice(0, MAX_CONTENT_LENGTH), links };
 }
 
 async function fetchWithTimeout(url: string): Promise<Response> {
@@ -126,12 +165,13 @@ export const fetchUrlTool: ChatToolDefinition = {
       }
 
       const html = await response.text();
-      const { title, text } = extractMainText(html, hint);
+      const { title, text, links } = extractMainText(html, url, hint);
 
       return {
         url,
         title,
         content: text,
+        links,
         truncated: text.length >= MAX_CONTENT_LENGTH,
       };
     } catch (err) {

@@ -14,6 +14,7 @@
 import type { AssistantMessage, ImageCard } from "./rich-message";
 import { cardToText, toPlainText } from "./rich-message";
 import { isValidImageUrl } from "./safety";
+import { getPublicBaseUrl } from "@/lib/media/cache";
 
 // ── Provider capability flags ──────────────────────────────────────────────
 
@@ -53,6 +54,8 @@ export type ChannelSendInput = {
   recipientId: string;
   /** WhatsApp phone-number-id (different from recipientId) */
   phoneNumberId?: string;
+  /** Optional: DB id of the assistant message containing these blocks (enables /share previews) */
+  assistantMessageId?: string;
   message: AssistantMessage;
 };
 
@@ -116,6 +119,88 @@ function allImageCards(msg: AssistantMessage): ImageCard[] {
   return cards;
 }
 
+function shareUrlForIndex(input: {
+  assistantMessageId?: string;
+  index: number;
+}): string | null {
+  if (!input.assistantMessageId) return null;
+  const base = getPublicBaseUrl();
+  if (!base) return null;
+  if (!Number.isFinite(input.index) || input.index < 1) return null;
+  return `${base}/share/${encodeURIComponent(input.assistantMessageId)}/${input.index}`;
+}
+
+function enumerateCardsForShare(msg: AssistantMessage): Array<{ index: number; card: ImageCard }> {
+  const out: Array<{ index: number; card: ImageCard }> = [];
+  if (!msg.blocks) return out;
+  let idx = 1;
+  for (const block of msg.blocks) {
+    if (block.type === "image_card") {
+      out.push({ index: idx++, card: block });
+    } else if (block.type === "image_gallery") {
+      for (const item of block.items) out.push({ index: idx++, card: item });
+    } else if (block.type === "option_set") {
+      for (const item of block.items) out.push({ index: idx++, card: item.card });
+    }
+  }
+  return out;
+}
+
+function cardToTextWithLink(card: ImageCard, link?: string): string {
+  const lines: string[] = [card.title];
+  if (card.subtitle) lines.push(card.subtitle);
+  if (card.meta) {
+    const chips = Object.entries(card.meta)
+      .map(([, v]) => String(v))
+      .filter(Boolean)
+      .join(" · ");
+    if (chips) lines.push(chips);
+  }
+  if (link) lines.push(link);
+  if (card.sourceName) lines.push(`via ${card.sourceName}`);
+  return lines.join("\n");
+}
+
+function toPlainTextWithShare(msg: AssistantMessage, assistantMessageId?: string): string {
+  if (!msg.blocks?.length) return msg.text;
+
+  const parts: string[] = [msg.text];
+  let shareIndex = 1;
+
+  const linkForCard = (card: ImageCard) => {
+    const share = card.actionUrl
+      ? shareUrlForIndex({ assistantMessageId, index: shareIndex })
+      : null;
+    const url = share ?? card.actionUrl ?? card.imageUrl;
+    shareIndex += 1;
+    return url;
+  };
+
+  for (const block of msg.blocks) {
+    switch (block.type) {
+      case "text_block":
+        parts.push(block.text);
+        break;
+      case "image_card":
+        parts.push(cardToTextWithLink(block, linkForCard(block)));
+        break;
+      case "image_gallery":
+        block.items.forEach((item, i) => {
+          parts.push(`[${i + 1}] ${cardToTextWithLink(item, linkForCard(item))}`);
+        });
+        break;
+      case "option_set":
+        if (block.prompt) parts.push(block.prompt);
+        block.items.forEach(({ index, card }) => {
+          parts.push(`[${index}] ${cardToTextWithLink(card, linkForCard(card))}`);
+        });
+        break;
+    }
+  }
+
+  return parts.filter(Boolean).join("\n\n");
+}
+
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   return s.slice(0, max - 1) + "…";
@@ -128,7 +213,7 @@ const TELEGRAM_API = "https://api.telegram.org";
 async function sendViaTelegram(
   input: ChannelSendInput,
 ): Promise<ChannelSendResult> {
-  const { accessToken, recipientId, message } = input;
+  const { accessToken, recipientId, message, assistantMessageId } = input;
   const caps = CAPABILITIES.telegram;
   const base = `${TELEGRAM_API}/bot${accessToken}`;
   const messageIds: string[] = [];
@@ -140,7 +225,10 @@ async function sendViaTelegram(
   );
 
   // The full plain-text representation always includes the option list.
-  const fullText = truncate(toPlainText(message), caps.captionMaxLen * 4);
+  const fullText = truncate(
+    assistantMessageId ? toPlainTextWithShare(message, assistantMessageId) : toPlainText(message),
+    caps.captionMaxLen * 4,
+  );
 
   try {
     if (cards.length > 1 && caps.mediaGroup) {
@@ -303,7 +391,7 @@ const WA_API = `https://graph.facebook.com/${WA_GRAPH_VERSION}`;
 async function sendViaWhatsApp(
   input: ChannelSendInput,
 ): Promise<ChannelSendResult> {
-  const { accessToken, recipientId, phoneNumberId, message } = input;
+  const { accessToken, recipientId, phoneNumberId, message, assistantMessageId } = input;
   const caps = CAPABILITIES.whatsapp;
 
   if (!phoneNumberId) {
@@ -328,14 +416,29 @@ async function sendViaWhatsApp(
       );
       if (imgId) messageIds.push(imgId);
 
+      const shareItems = enumerateCardsForShare(message);
+      const extraItems = shareItems
+        .filter((item) => item.card.actionUrl && item.card.actionUrl !== card.actionUrl)
+        .slice(0, 4);
+
       const extraCards = realCards.slice(1, 5);
-      if (extraCards.length > 0) {
+      if (extraItems.length > 0 || extraCards.length > 0) {
         const lines = [
           "More options:",
-          ...extraCards.map((c, i) => {
-            const line = `${i + 2}. ${c.title}`;
-            return c.actionUrl ? `${line}\n${c.actionUrl}` : line;
-          }),
+          ...(extraItems.length > 0
+            ? extraItems.map((item, i) => {
+                const share = shareUrlForIndex({
+                  assistantMessageId,
+                  index: item.index,
+                });
+                const url = share ?? item.card.actionUrl;
+                const line = `${item.index}. ${item.card.title}`;
+                return url ? `${line}\n${url}` : line;
+              })
+            : extraCards.map((c, i) => {
+                const line = `${i + 2}. ${c.title}`;
+                return c.actionUrl ? `${line}\n${c.actionUrl}` : line;
+              })),
         ];
         const textId = await waSendText(
           accessToken,
@@ -346,7 +449,10 @@ async function sendViaWhatsApp(
         if (textId) messageIds.push(textId);
       }
     } else {
-      const plain = truncate(toPlainText(message), caps.captionMaxLen * 4);
+      const plain = truncate(
+        assistantMessageId ? toPlainTextWithShare(message, assistantMessageId) : toPlainText(message),
+        caps.captionMaxLen * 4,
+      );
       const textId = await waSendText(
         accessToken,
         phoneNumberId,

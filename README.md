@@ -1,6 +1,12 @@
 # 🪲 Beetlebot — Your Autonomous Life Agent
 
 <p align="center">
+  <img src="public/beetlebot-logo.png" alt="Beetlebot logo" width="720" />
+</p>
+
+
+
+<p align="center">
   <br />
   <strong>IT DOESN'T SUGGEST PLANS. IT HANDLES THEM.</strong>
   <br />
@@ -350,7 +356,7 @@ Deep reference docs live in `docs/`:
 - **[API Routes](docs/API_ROUTES.md)** — full endpoint reference
 - **[CLI](docs/CLI.md)** — commands, TUI, integration setup
 
-## The Colony
+## The Colony 🪲🪲🪲
 
 Beetlebot isn't a product with a waitlist. It's a movement with a repo.
 

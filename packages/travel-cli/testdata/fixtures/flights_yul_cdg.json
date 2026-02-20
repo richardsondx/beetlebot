@@ -1,0 +1,58 @@
+{
+  "query": {
+    "from": "YUL",
+    "to": "CDG",
+    "departDate": "2026-06-12",
+    "returnDate": "2026-06-20",
+    "adults": 1,
+    "cabinClass": "economy",
+    "maxResults": 10
+  },
+  "mode": "mock",
+  "providers": ["mock_flights"],
+  "flights": [
+    {
+      "id": "f_AC_1000",
+      "source": "mock_flights",
+      "airline": "Air Canada",
+      "flightNumber": "AC412",
+      "from": "YUL",
+      "to": "CDG",
+      "departTime": "2026-06-12T08:00:00Z",
+      "arriveTime": "2026-06-12T20:30:00Z",
+      "durationMinutes": 450,
+      "stops": 0,
+      "cabinClass": "economy",
+      "priceUSD": 645.00,
+      "currency": "USD",
+      "deepLink": "https://example.com/book/f_AC_1000",
+      "confidence": 0.95,
+      "isBookable": false,
+      "repriceRequired": true,
+      "fetchedAt": "2026-02-19T12:00:00Z"
+    },
+    {
+      "id": "f_AF_1001",
+      "source": "mock_flights",
+      "airline": "Air France",
+      "flightNumber": "AF345",
+      "from": "YUL",
+      "to": "CDG",
+      "departTime": "2026-06-12T18:30:00Z",
+      "arriveTime": "2026-06-13T07:15:00Z",
+      "durationMinutes": 465,
+      "stops": 0,
+      "cabinClass": "economy",
+      "priceUSD": 580.00,
+      "currency": "USD",
+      "deepLink": "https://example.com/book/f_AF_1001",
+      "confidence": 0.95,
+      "isBookable": false,
+      "repriceRequired": true,
+      "fetchedAt": "2026-02-19T12:00:00Z"
+    }
+  ],
+  "totalFound": 2,
+  "errors": [],
+  "fetchedAt": "2026-02-19T12:00:00Z"
+}

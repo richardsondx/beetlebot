@@ -6,7 +6,7 @@ const FEATURES = [
     title: "Autopilots",
     headline: "Set a goal. It runs itself.",
     description:
-      '"Empty Weekend + Weather" fires every Friday at noon. If Saturday is open and rain is coming, Beetlebot proposes an indoor plan — before you even think about it.',
+      '"Empty Weekend + Weather" fires every Friday at noon. If Saturday is open and rain is coming, Beetlebot books an indoor plan — before you even think about it.',
   },
   {
     icon: "📦",
@@ -20,14 +20,14 @@ const FEATURES = [
     title: "Modes",
     headline: "Context shapes everything.",
     description:
-      "Date night. Family. Social. Travel. Relax. Focus. Switch modes and the entire agent adapts — different priorities, different suggestions, same intelligence.",
+      "Date night. Family. Social. Travel. Relax. Focus. Switch modes and the entire agent adapts — different priorities, different actions, same intelligence.",
   },
   {
-    icon: "🤝",
-    title: "Consent-first",
-    headline: "Surprise with consent.",
+    icon: "🛡️",
+    title: "Smart guardrails",
+    headline: "Autonomous, not reckless.",
     description:
-      "Every reservation, every calendar hold, every dollar requires your explicit approval. Beetlebot proposes. You decide. No surprises you didn't ask for.",
+      "You decide what runs fully on autopilot and what needs a thumbs-up. Full audit trail on every action. The beetle moves fast — but only as fast as you let it.",
   },
 ];
 
@@ -45,7 +45,7 @@ const COMPARISONS = [
   {
     label: "Beetlebot",
     vibe: "bright",
-    text: "Plans proactively. Checks your calendar. Watches the weather. Tracks your budget. Acts only with your consent. Then actually follows through.",
+    text: "Plans autonomously. Reads your calendar. Knows the season. Watches the weather. Tracks your budget. Then actually follows through.",
   },
 ];
 
@@ -67,7 +67,7 @@ export default function LandingPage() {
               The Colony
             </a>
             <a
-              href="https://github.com"
+              href="https://github.com/richardsondx/beetlebot"
               target="_blank"
               rel="noopener noreferrer"
               className="transition-colors hover:text-slate-200"
@@ -75,7 +75,7 @@ export default function LandingPage() {
               GitHub
             </a>
             <a
-              href="https://discord.gg"
+              href="https://discord.gg/beetlebot"
               target="_blank"
               rel="noopener noreferrer"
               className="transition-colors hover:text-slate-200"
@@ -101,7 +101,7 @@ export default function LandingPage() {
           {/* Badge */}
           <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-amber-300/20 bg-amber-300/[0.06] px-4 py-1.5 text-sm text-amber-200/80">
             <span className="h-1.5 w-1.5 rounded-full bg-amber-400 landing-pulse" />
-            Open source &middot; Consent-first &middot; Community-driven
+            Open source &middot; Autonomous &middot; Community-driven
           </div>
 
           {/* Beetle icon */}
@@ -120,9 +120,9 @@ export default function LandingPage() {
 
           {/* Sub */}
           <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-slate-400 sm:text-xl">
-            The open-source AI that proactively plans your life — date nights,
-            weekend adventures, rainy day rescues — with your calendar, budget,
-            and consent.
+            The open-source AI that autonomously plans your life — date nights,
+            weekend adventures, rainy day rescues. It reads your calendar, knows
+            the season, watches the weather, and handles the rest.
           </p>
 
           {/* CTAs */}
@@ -143,7 +143,7 @@ export default function LandingPage() {
               </svg>
             </Link>
             <a
-              href="https://discord.gg"
+              href="https://discord.gg/beetlebot"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-7 py-3.5 text-base font-medium text-slate-300 transition-all hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
@@ -214,10 +214,10 @@ export default function LandingPage() {
         <div className="mx-auto max-w-6xl">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Set it. Approve it. Live it.
+              Set it. Forget it. Live it.
             </h2>
             <p className="mt-4 text-lg text-slate-400">
-              Four primitives that turn an AI into a life operations agent.
+              Four primitives that turn an AI into your personal life assistant.
             </p>
           </div>
 
@@ -318,12 +318,12 @@ export default function LandingPage() {
               <p>
                 <span className="text-amber-300">$</span>{" "}
                 <span className="text-slate-300">
-                  npx create-beetlebot my-agent
+                  git clone github.com/richardsondx/beetlebot
                 </span>
               </p>
               <p>
                 <span className="text-amber-300">$</span>{" "}
-                <span className="text-slate-300">cd my-agent</span>
+                <span className="text-slate-300">cd beetlebot && npm install</span>
               </p>
               <p>
                 <span className="text-amber-300">$</span>{" "}
@@ -338,7 +338,7 @@ export default function LandingPage() {
           {/* Resource links */}
           <div className="mt-12 flex flex-wrap items-center justify-center gap-6">
             <a
-              href="https://discord.gg"
+              href="https://discord.gg/beetlebot"
               target="_blank"
               rel="noopener noreferrer"
               className="group flex items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] px-5 py-3 text-sm text-slate-400 transition-all hover:border-white/[0.15] hover:text-white"
@@ -358,7 +358,7 @@ export default function LandingPage() {
               Documentation
             </a>
             <a
-              href="https://github.com"
+              href="https://github.com/richardsondx/beetlebot"
               target="_blank"
               rel="noopener noreferrer"
               className="group flex items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] px-5 py-3 text-sm text-slate-400 transition-all hover:border-white/[0.15] hover:text-white"
@@ -412,7 +412,7 @@ export default function LandingPage() {
             {/* Links */}
             <div className="flex items-center gap-6 text-sm text-slate-600">
               <a
-                href="https://github.com"
+                href="https://github.com/richardsondx/beetlebot"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="transition-colors hover:text-slate-400"
@@ -420,7 +420,7 @@ export default function LandingPage() {
                 GitHub
               </a>
               <a
-                href="https://discord.gg"
+                href="https://discord.gg/beetlebot"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="transition-colors hover:text-slate-400"
@@ -438,7 +438,7 @@ export default function LandingPage() {
             <p className="text-sm text-slate-600">
               Handcrafted by{" "}
               <a
-                href="https://twitter.com"
+                href="https://x.com/richardsondx"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-slate-400 transition-colors hover:text-amber-300"

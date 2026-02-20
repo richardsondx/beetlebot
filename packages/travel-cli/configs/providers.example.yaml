@@ -1,0 +1,54 @@
+mode: mock  # mock | live | hybrid
+
+providers:
+  mock_flights:
+    enabled: true
+    priority: 100
+
+  mock_stays:
+    enabled: true
+    priority: 100
+
+  # --- Live flight providers ---
+
+  duffel:
+    enabled: true
+    priority: 80
+    envKeys:
+      apiToken: DUFFEL_API_TOKEN
+
+  # --- Live stays providers ---
+
+  expedia:
+    enabled: true
+    priority: 70
+    envKeys:
+      apiKey: EXPEDIA_API_KEY
+      apiSecret: EXPEDIA_API_SECRET
+
+  airbnb:
+    enabled: true
+    priority: 60
+    envKeys:
+      affiliateId: AIRBNB_AFFILIATE_ID
+
+  # --- Future providers (uncomment when ready) ---
+  #
+  # amadeus:
+  #   enabled: false
+  #   priority: 75
+  #   envKeys:
+  #     clientId: AMADEUS_CLIENT_ID
+  #     clientSecret: AMADEUS_CLIENT_SECRET
+  #
+  # hipcamp:
+  #   enabled: false
+  #   priority: 50
+  #   envKeys:
+  #     apiKey: HIPCAMP_API_KEY
+  #
+  # booking:
+  #   enabled: false
+  #   priority: 65
+  #   envKeys:
+  #     affiliateId: BOOKING_AFFILIATE_ID

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { decryptConnection, encryptConnectionFields } from "@/lib/repositories/integration-crypto";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
@@ -111,12 +112,13 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
 }
 
 async function getGoogleAuthContext(): Promise<GoogleAuthContext> {
-  const integration = await db.integrationConnection.findUnique({
+  const raw = await db.integrationConnection.findUnique({
     where: { provider: "google_calendar" },
   });
-  if (!integration || integration.status !== "connected") {
+  if (!raw || raw.status !== "connected") {
     throw new Error("Google Calendar is not connected.");
   }
+  const integration = decryptConnection(raw);
 
   const config = parseConfig(integration.configJson);
   const clientId = config.clientId || process.env.GOOGLE_CLIENT_ID;
@@ -165,14 +167,14 @@ async function refreshGoogleAccessToken(ctx: GoogleAuthContext) {
 
   await db.integrationConnection.update({
     where: { id: ctx.integrationId },
-    data: {
+    data: encryptConnectionFields({
       accessToken: payload.access_token,
       refreshToken: payload.refresh_token ?? ctx.refreshToken,
       tokenExpiresAt,
       lastCheckedAt: new Date(),
       lastError: null,
       status: "connected",
-    },
+    }),
   });
 
   return {

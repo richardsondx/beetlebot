@@ -9,6 +9,10 @@ import {
   IntegrationScope,
 } from "@/lib/integrations/types";
 import { ensureSeedData } from "@/lib/repositories/seed";
+import {
+  decryptConnection,
+  encryptConnectionFields,
+} from "@/lib/repositories/integration-crypto";
 
 const CATALOG: Record<IntegrationProvider, IntegrationCatalogItem> = {
   telegram: {
@@ -127,7 +131,7 @@ function toPublic(connection: Awaited<ReturnType<typeof ensureConnection>>) {
 async function ensureConnection(provider: IntegrationProvider) {
   await ensureSeedData();
   const existing = await db.integrationConnection.findUnique({ where: { provider } });
-  if (existing) return existing;
+  if (existing) return decryptConnection(existing);
   const meta = CATALOG[provider];
   return db.integrationConnection.create({
     data: {
@@ -141,7 +145,7 @@ async function ensureConnection(provider: IntegrationProvider) {
 }
 
 function applyAdapterResult(input: AdapterConnectResult) {
-  return {
+  const data = {
     status: input.status,
     externalAccountId: input.externalAccountId ?? null,
     externalAccountLabel: input.externalAccountLabel ?? null,
@@ -152,6 +156,7 @@ function applyAdapterResult(input: AdapterConnectResult) {
     lastError: input.lastError ?? null,
     lastCheckedAt: new Date(),
   };
+  return encryptConnectionFields(data);
 }
 
 export async function listIntegrationConnections() {
@@ -159,7 +164,7 @@ export async function listIntegrationConnections() {
   const rows = await db.integrationConnection.findMany({
     orderBy: [{ kind: "asc" }, { createdAt: "asc" }],
   });
-  return rows.map((row) => toPublic(row));
+  return rows.map((row) => toPublic(decryptConnection(row)));
 }
 
 export async function getIntegrationConnection(provider: IntegrationProvider) {
@@ -176,17 +181,19 @@ export async function connectIntegration<P extends IntegrationProvider>(
   try {
     const result = await adapter.connect(input, existing);
     const currentScopes = getEffectiveScopes(existing);
+    const mergedConfig = mergeConfigWithScopes(
+      result.config ? JSON.stringify(result.config) : existing.configJson,
+      currentScopes.length ? currentScopes : CATALOG[provider].defaultScopes,
+    );
+    const writeData = {
+      ...applyAdapterResult(result),
+      kind: CATALOG[provider].kind,
+      displayName: CATALOG[provider].displayName,
+      configJson: mergedConfig,
+    };
     const updated = await db.integrationConnection.update({
       where: { provider },
-      data: {
-        ...applyAdapterResult(result),
-        kind: CATALOG[provider].kind,
-        displayName: CATALOG[provider].displayName,
-        configJson: mergeConfigWithScopes(
-          result.config ? JSON.stringify(result.config) : existing.configJson,
-          currentScopes.length ? currentScopes : CATALOG[provider].defaultScopes,
-        ),
-      },
+      data: encryptConnectionFields(writeData),
     });
     await db.auditEvent.create({
       data: {
@@ -240,19 +247,20 @@ export async function testIntegration(provider: IntegrationProvider) {
   const existing = await ensureConnection(provider);
   const adapter = integrationAdapters[provider];
   const health = await adapter.health(existing);
+  const writeData = {
+    status: health.status,
+    lastError: health.lastError ?? null,
+    lastCheckedAt: health.checkedAt,
+    externalAccountLabel: health.externalAccountLabel ?? existing.externalAccountLabel,
+    accessToken: health.secrets?.accessToken ?? existing.accessToken,
+    refreshToken: health.secrets?.refreshToken ?? existing.refreshToken,
+    tokenExpiresAt: health.secrets?.tokenExpiresAt ?? existing.tokenExpiresAt,
+  };
   const updated = await db.integrationConnection.update({
     where: { provider },
-    data: {
-      status: health.status,
-      lastError: health.lastError ?? null,
-      lastCheckedAt: health.checkedAt,
-      externalAccountLabel: health.externalAccountLabel ?? existing.externalAccountLabel,
-      accessToken: health.secrets?.accessToken ?? existing.accessToken,
-      refreshToken: health.secrets?.refreshToken ?? existing.refreshToken,
-      tokenExpiresAt: health.secrets?.tokenExpiresAt ?? existing.tokenExpiresAt,
-    },
+    data: encryptConnectionFields(writeData),
   });
-  return toPublic(updated);
+  return toPublic(decryptConnection(updated));
 }
 
 export function isIntegrationProvider(value: string): value is IntegrationProvider {
@@ -283,11 +291,12 @@ export async function updateIntegrationScopes(
   const catalogEntry = CATALOG[provider];
   const validated = scopes.filter((s) => catalogEntry.availableScopes.includes(s));
   const existing = await ensureConnection(provider);
+  const writeData = {
+    configJson: mergeConfigWithScopes(existing.configJson, validated),
+  };
   const updated = await db.integrationConnection.update({
     where: { provider },
-    data: {
-      configJson: mergeConfigWithScopes(existing.configJson, validated),
-    },
+    data: encryptConnectionFields(writeData),
   });
   await db.auditEvent.create({
     data: {
@@ -296,7 +305,7 @@ export async function updateIntegrationScopes(
       details: `${provider}: ${validated.join(", ")}`,
     },
   });
-  return toPublic(updated);
+  return toPublic(decryptConnection(updated));
 }
 
 export function getCatalogEntry(provider: IntegrationProvider) {

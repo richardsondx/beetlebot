@@ -1,0 +1,62 @@
+{
+  "query": {
+    "city": "Paris",
+    "checkIn": "2026-06-12",
+    "checkOut": "2026-06-20",
+    "guests": 2,
+    "rooms": 1,
+    "stayType": "any",
+    "maxResults": 10
+  },
+  "mode": "mock",
+  "providers": ["mock_stays"],
+  "stays": [
+    {
+      "id": "s_hot_2000",
+      "source": "mock_stays",
+      "name": "Grand Hotel Central Paris",
+      "type": "hotel",
+      "city": "Paris",
+      "address": "42 Main Street, Paris",
+      "checkIn": "2026-06-12",
+      "checkOut": "2026-06-20",
+      "nightsCount": 8,
+      "pricePerNight": 195.50,
+      "totalPriceUSD": 1564.00,
+      "currency": "USD",
+      "rating": 4.5,
+      "reviewCount": 1234,
+      "amenities": ["wifi", "pool", "gym", "restaurant", "room_service"],
+      "deepLink": "https://example.com/stay/s_hot_2000",
+      "confidence": 0.90,
+      "isBookable": false,
+      "repriceRequired": true,
+      "fetchedAt": "2026-02-19T12:00:00Z"
+    },
+    {
+      "id": "s_apa_2001",
+      "source": "mock_stays",
+      "name": "Cozy Downtown Apartment Paris",
+      "type": "apartment",
+      "city": "Paris",
+      "address": "157 Oak Street, Paris",
+      "checkIn": "2026-06-12",
+      "checkOut": "2026-06-20",
+      "nightsCount": 8,
+      "pricePerNight": 88.75,
+      "totalPriceUSD": 710.00,
+      "currency": "USD",
+      "rating": 4.7,
+      "reviewCount": 312,
+      "amenities": ["wifi", "kitchen", "washer", "balcony"],
+      "deepLink": "https://example.com/stay/s_apa_2001",
+      "confidence": 0.90,
+      "isBookable": false,
+      "repriceRequired": true,
+      "fetchedAt": "2026-02-19T12:00:00Z"
+    }
+  ],
+  "totalFound": 2,
+  "errors": [],
+  "fetchedAt": "2026-02-19T12:00:00Z"
+}

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { decryptConnection } from "@/lib/repositories/integration-crypto";
 
 export type WeatherContextInput = {
   location?: string;
@@ -111,9 +112,10 @@ async function fetchOpenMeteoForecast(params: { latitude: number; longitude: num
 }
 
 export async function getWeatherContext(input: WeatherContextInput = {}): Promise<WeatherContext> {
-  const connection = await db.integrationConnection.findUnique({
+  const rawConnection = await db.integrationConnection.findUnique({
     where: { provider: "weather" },
   });
+  const connection = rawConnection ? decryptConnection(rawConnection) : null;
   const config = parseConfig(connection?.configJson);
   const connected = connection?.status === "connected";
 

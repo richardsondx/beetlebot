@@ -4,6 +4,7 @@ import { sendToChannel } from "@/lib/chat/channel-sender";
 import type { RichBlock } from "@/lib/chat/rich-message";
 import { db } from "@/lib/db";
 import { MODE_IDS } from "@/lib/constants";
+import { decryptConnection, encryptConnectionFields } from "@/lib/repositories/integration-crypto";
 
 type TelegramUpdate = {
   update_id?: number;
@@ -66,9 +67,10 @@ export async function POST(request: Request) {
   const incoming = parseIncoming(update);
   if (!incoming) return ok({ received: true, ignored: true, reason: "no_text_message" });
 
-  const telegram = await db.integrationConnection.findUnique({
+  const rawTelegram = await db.integrationConnection.findUnique({
     where: { provider: "telegram" },
   });
+  const telegram = rawTelegram ? decryptConnection(rawTelegram) : null;
   if (!telegram?.accessToken || telegram.status !== "connected") {
     return ok({ received: true, ignored: true, reason: "telegram_not_connected" });
   }
@@ -122,12 +124,12 @@ export async function POST(request: Request) {
     };
     await db.integrationConnection.update({
       where: { provider: "telegram" },
-      data: {
+      data: encryptConnectionFields({
         configJson: JSON.stringify({
           ...config,
           chats: nextChats,
         }),
-      },
+      }),
     });
   }
 

@@ -1,0 +1,25 @@
+---
+description: Enforce model-intent-driven orchestration (no keyword/regex routing)
+globs: "{app/api/chat/**/*.ts,lib/chat/**/*.ts,lib/tools/**/*.ts,lib/repositories/**/*.ts}"
+alwaysApply: false
+---
+
+# Intent-Driven Orchestration
+
+- Never use keyword or regex matching to decide user intent routing.
+- Do not gate action-vs-read flows on word lists like "add", "update", "calendar", "next", etc.
+- Use model intent classification with a strict structured schema for orchestration decisions.
+- Treat classifier output as source-of-truth for route selection (read/query vs write/execute vs research).
+- If classifier is uncertain, ask a concise clarification question instead of regex fallback routing.
+- Keep regex usage limited to parsing/normalization tasks (format cleanup, tokenization, validation), not intent policy.
+
+## Required Pattern
+
+- Define an explicit intent object with boolean fields used directly by orchestration.
+- Examples: `isActionCommand`, `isCalendarWrite`, `isCalendarQuery`, `isUpcomingQuery`, `isResearchRequest`.
+- Route using those fields only; avoid mixed logic where regex can override classifier intent.
+
+## PR Check
+
+- Any PR that adds regex/keyword intent routing in AI orchestration files must be rejected.
+- Replace with classifier schema updates + tests that cover the intended route behavior.

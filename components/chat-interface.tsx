@@ -430,9 +430,9 @@ function InlineSuggestionsView({
   return (
     <div>
       {preamble && (
-        <p className="whitespace-pre-wrap text-slate-100">{preamble}</p>
+        <p className="whitespace-pre-wrap break-words text-slate-100">{preamble}</p>
       )}
-      <p className="whitespace-pre-wrap text-slate-100 mt-0">{parsed.text}</p>
+      <p className="whitespace-pre-wrap break-words text-slate-100 mt-0">{parsed.text}</p>
       <div className="mt-3">
         <p className="mb-3 text-xs font-medium text-slate-500">Here are your options — tap one to explore further:</p>
         <div className={`grid gap-3 ${parsed.options.length === 1 ? "grid-cols-1" : parsed.options.length === 2 ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2"}`}>
@@ -475,7 +475,7 @@ function RichBlockRenderer({
   switch (block.type) {
     case "text_block":
       return (
-        <p className="mt-2 text-sm leading-relaxed text-slate-300">
+        <p className="mt-2 break-words text-sm leading-relaxed text-slate-300">
           {block.text}
         </p>
       );
@@ -509,7 +509,7 @@ function AssistantMessageBody({
   if (hasBlocks) {
     return (
       <>
-        <p className="whitespace-pre-wrap text-slate-100">{message.text}</p>
+        <p className="whitespace-pre-wrap break-words text-slate-100">{message.text}</p>
         {message.blocks!.map((block, bi) => (
           <RichBlockRenderer key={bi} block={block} onSelect={onSelect} />
         ))}
@@ -526,7 +526,7 @@ function AssistantMessageBody({
   }
 
   // Plain text
-  return <p className="whitespace-pre-wrap text-slate-100">{message.text}</p>;
+  return <p className="whitespace-pre-wrap break-words text-slate-100">{message.text}</p>;
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -726,11 +726,11 @@ export function ChatInterface() {
                           {MODES.find((m) => m.id === message.mode)?.label}
                         </p>
                       )}
-                      <p className="whitespace-pre-wrap">{message.text}</p>
+                      <p className="whitespace-pre-wrap break-words">{message.text}</p>
                     </div>
                   ) : (
                     /* Assistant bubble — may contain rich blocks or inline suggestions */
-                    <div className="rounded-2xl rounded-bl-sm bg-[#131c2e] px-4 py-3 text-sm leading-relaxed">
+                    <div className="overflow-hidden rounded-2xl rounded-bl-sm bg-[#131c2e] px-4 py-3 text-sm leading-relaxed">
                       <AssistantMessageBody
                         message={message}
                         onSelect={handleCardSelect}

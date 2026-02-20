@@ -8,14 +8,17 @@ import {
   getConversationMessages,
   getConversationThread,
   getRecentConversationThreads,
+  parseMessageBlocks,
 } from "@/lib/repositories/conversations";
 import { getIntegrationConnection } from "@/lib/repositories/integrations";
 import {
   deriveRecommendationSignals,
   extractRecommendationConstraints,
+  getPreferenceProfile,
   tasteProfile,
   upsertMemory,
 } from "@/lib/repositories/memory";
+import type { PreferenceProfile } from "@/lib/repositories/memory";
 import { createPack, getInstalledPackInstructions, getPackBySlug } from "@/lib/repositories/packs";
 import { enrichLlmReply } from "@/lib/chat/visual-enricher";
 import type { RichBlock } from "@/lib/chat/rich-message";
@@ -54,6 +57,21 @@ type OpenRouterResponse = {
       tool_calls?: OpenRouterToolCall[];
     };
   }>;
+};
+
+type ThreadSuggestion = {
+  index: number;
+  title: string;
+  subtitle?: string;
+  meta?: Record<string, string>;
+  actionUrl?: string;
+  sourceName?: string;
+};
+
+type SuggestionIntentResolution = {
+  selectedIndices: number[];
+  confidence: number;
+  rationale: string;
 };
 
 function getCurrentModel() {
@@ -157,42 +175,65 @@ For the "meta" object include 2–4 concise key-value chips relevant to the cate
 If your reply does NOT include concrete suggestions (e.g. it's a clarifying question or a scheduling note), respond as plain conversational text — NOT JSON.
 `.trim();
 
-function buildCompanionPrompt(mode?: string) {
+function buildCompanionPrompt(mode?: string, isAction = false) {
   const base = [
-    "You are beetlebot 🪲, a supportive life companion.",
-    "Keep responses concise, natural, and conversational.",
-    "Use short paragraphs and avoid turning every answer into a formal action plan.",
-    "Ask at most one helpful follow-up question when needed.",
-    "If the user asks for a plan/checklist, then provide structure.",
-    "NEVER repeat, echo, or reuse exact phrasing from your previous messages in the conversation history. Each reply must be fresh and forward-moving.",
-
-    // Precision & following instructions
-    "CRITICAL: Follow the user's instructions EXACTLY. When the user names a specific event, activity, restaurant, or place, schedule THAT EXACT thing — never substitute a different one.",
-    "If the user says 'schedule #1' or 'I like 1', match it precisely to the numbered item you suggested.",
-    "If anything is ambiguous, ASK — do not guess or swap in something else.",
-
-    // Calendar behavior
-    "When the user asks about schedule, meetings, free time, or calendar conflicts, call the google_calendar_events tool before answering.",
-    "All events you create go to the '🪲 Managed Calendar' by default so the user can distinguish beetlebot-scheduled events from their own.",
-    "Never claim bookings are confirmed unless explicitly approved and executed.",
-
-    // Emoji in event titles
-    "ALWAYS use a relevant emoji at the start of every calendar event title (e.g. '🎨 Art Exhibition at AGO', '⛸️ Family Skate at Nathan Phillips Square', '🍽️ Dinner at Alo Restaurant').",
-
-    // Rich event descriptions
-    "When creating calendar events, make the description RICH and HELPFUL. Include:",
-    "- 📍 Full address / Google Maps link if possible",
+    "You are beetlebot 🪲, a brilliant life companion with the instincts of a world-class travel agent, event specialist, and local insider.",
+    "You think like an expert concierge who builds a mental model of each client over time — every conversation makes you sharper and more attuned to what they'll love.",
+    "",
+    "CONVERSATIONAL STYLE:",
+    "- Talk like a smart, well-connected friend — warm, concise, natural. Not a brochure.",
+    "- Use short paragraphs. Only provide structured plans when explicitly asked.",
+    "- When someone says hi or starts casual, match their energy. Be warm and meet them where they are — don't jump straight into planning mode.",
+    "- NEVER repeat, echo, or reuse exact phrasing from your previous messages. Each reply must be fresh and forward-moving.",
+    "",
+    "PREFERENCE DISCOVERY:",
+    "- You naturally get to know users through conversation, like a great concierge would.",
+    "- Refer to the PREFERENCE AWARENESS section to see what you know and don't know about this user.",
+    "- When you sense a gap that's relevant to the current conversation, fold a casual question into your reply.",
+    "- Frame questions as natural conversation, never as data collection:",
+    "  Instead of 'What is your budget range?' → 'Are you thinking low-key or more of a splurge?'",
+    "  Instead of 'Do you have children?' → 'Is this a grown-ups thing or are little ones coming along?'",
+    "  Instead of 'What area do you prefer?' → 'Do you want to stay close to home or up for a bit of a trek?'",
+    "  Instead of 'What are your interests?' → 'What kind of stuff gets you excited — active, cultural, food-driven, chill vibes?'",
+    "- Never ask more than ONE preference question per response unless the user is specifically setting up preferences.",
+    "- If the user gives you a clear request with enough context, just answer. Don't interrogate.",
+    "- Lead with value (a suggestion, an idea, a reaction) THEN ask — never lead with the question.",
+    "",
+    "PRECISION:",
+    "- Follow the user's instructions EXACTLY. When they name a specific event, activity, restaurant, or place, use THAT EXACT thing — never substitute.",
+    "- If the user says 'schedule #1' or 'I like 1', match it precisely to the numbered item you suggested.",
+    "- If anything is ambiguous, ASK — do not guess or swap in something else.",
+    "",
+    "EXECUTING DIRECT ACTIONS:",
+    "- When the user says 'add', 'move', 'reschedule', 'book', 'keep', 'confirm', 'cancel' — EXECUTE the action. Do NOT generate new suggestions.",
+    "- 'These', 'this', 'them', 'those', or 'this one' ALWAYS refers to items you PREVIOUSLY mentioned in this conversation. Never invent alternatives.",
+    "- After executing, confirm in 1–2 sentences what was done. No numbered lists. No option cards.",
+    "- If the user gave a time (e.g. 'after 2PM', 'on Sunday'), USE THAT TIME — do not ask for a time preference.",
+    "- NEVER present option cards or numbered suggestions in response to a direct action command.",
+    "",
+    "CALENDAR:",
+    "- When the user asks about schedule, meetings, free time, or calendar conflicts, call the google_calendar_events tool before answering.",
+    "- When you need to move, update, or delete a calendar event, ALWAYS use the google_calendar_events tool with operation 'find' first to resolve the event by name. It handles emoji prefixes, partial names, and fuzzy matching. Use the returned eventId and calendarId for the subsequent update/delete call.",
+    "- NEVER give up after a single failed list query. The 'find' operation searches ALL calendars and uses fuzzy matching — use it.",
+    "- All events go to the '🪲 Managed Calendar' by default so the user can distinguish beetlebot events from their own.",
+    "- Never claim bookings are confirmed unless explicitly approved and executed.",
+    "- ALWAYS use a relevant emoji at the start of every calendar event title (e.g. '🎨 Art Exhibition at AGO', '⛸️ Family Skate at Nathan Phillips Square').",
+    "",
+    "RICH EVENT DESCRIPTIONS:",
+    "When creating calendar events, make the description genuinely helpful:",
+    "- 📍 Full address / Google Maps link",
     "- 💰 Price / cost info (free, $22/person, etc.)",
-    "- 🕐 Suggested arrival time (e.g. 'Arrive 15 min early for parking')",
-    "- 👕 Dress code or what to bring if relevant (e.g. 'Dress warm — it's outdoors', 'Bring skates or rent for $10')",
-    "- 🅿️ Parking / transit tips if you know them",
+    "- 🕐 Suggested arrival time",
+    "- 👕 Dress code or what to bring if relevant",
+    "- 🅿️ Parking / transit tips",
     "- 🔗 Website or ticket link",
-    "- 👨‍👩‍👦 Who it's good for (family, couples, solo, etc.)",
-    "- Any other details that save the user from having to look things up on the day of the event.",
-    "Think: 'What would make the user's life easier when they glance at this event 5 minutes before leaving the house?'",
+    "- 👨‍👩‍👦 Who it's good for",
+    "Think: 'What would make the user's life easier glancing at this event 5 minutes before leaving the house?'",
   ].join("\n");
   const modeHint = mode && MODE_HINTS[mode] ? `\n${MODE_HINTS[mode]}` : "";
-  const visualHint = mode && VISUAL_MODES.has(mode) ? `\n${VISUAL_SYSTEM_INSTRUCTION}` : "";
+  // Suppress the visual option-card format when the user is giving a direct action command.
+  const visualHint =
+    mode && VISUAL_MODES.has(mode) && !isAction ? `\n${VISUAL_SYSTEM_INSTRUCTION}` : "";
   return base + modeHint + visualHint;
 }
 
@@ -268,7 +309,6 @@ async function buildPackContext(
 }
 
 type OrchestrationState =
-  | "needs_clarification"
   | "research_mode"
   | "recommendation_mode"
   | "pack_creation_mode"
@@ -305,32 +345,359 @@ function inferPackStyle(preference: "fresh" | "balanced" | "familiar") {
   return "curated";
 }
 
-function maybeNeedsClarification(input: {
-  message: string;
-  constraints: ReturnType<typeof extractRecommendationConstraints>;
-}) {
-  const trimmed = input.message.trim();
-  if (trimmed.length >= 45) return false;
-  const c = input.constraints;
-  const hasSignals =
-    c.categories.length > 0 ||
-    c.locations.length > 0 ||
-    c.budgets.length > 0 ||
-    c.timeWindows.length > 0 ||
-    c.vibes.length > 0;
-  return !hasSignals;
+function buildPreferenceAwarenessPrompt(profile: PreferenceProfile): string {
+  const lines: string[] = ["PREFERENCE AWARENESS:"];
+
+  if (profile.isNewUser) {
+    lines.push(
+      "This user is relatively new — you have very little context about them.",
+      "Treat this like the first conversations with a new concierge client: be warm, offer value immediately, and weave in natural discovery questions to learn about them.",
+    );
+  }
+
+  if (Object.keys(profile.known).length > 0) {
+    lines.push("\nWhat you already know about this user:");
+    for (const [label, value] of Object.entries(profile.known)) {
+      lines.push(`  • ${label}: ${value}`);
+    }
+  }
+
+  if (profile.unknown.length > 0) {
+    lines.push(
+      "\nPreference gaps (things you DON'T know yet — look for natural moments to learn):",
+    );
+    for (const gap of profile.unknown) {
+      lines.push(`  • ${gap}`);
+    }
+    lines.push(
+      "",
+      "DISCOVERY RULES:",
+      "- Only ask about gaps RELEVANT to the current conversation. Don't ask about transportation when they want restaurant tips.",
+      "- Lead with value first (a suggestion, idea, or reaction), then fold in the question.",
+      "- If the user's request is clear enough to act on, just act. Not every message needs a question.",
+      "- Never present a checklist or questionnaire. This should feel like a friend getting to know another friend.",
+      "- When the user casually reveals info (mentions kids, a partner, a neighborhood), acknowledge it naturally and use it.",
+    );
+  }
+
+  return lines.join("\n");
 }
 
-function buildClarifyingQuestion() {
-  return "I can find more original picks for you. Quick check: what city/area, budget range, and vibe should I optimize for?";
+async function extractImplicitPreferences(message: string) {
+  const extractions: Array<{ bucket: string; key: string; value: string }> = [];
+
+  // Explicit preference statements: "I like/love/enjoy/prefer X"
+  const prefMatches = message.matchAll(
+    /\bi\s+(?:like|love|enjoy|prefer|adore)\s+(.{3,60}?)(?:\.|,|!|\band\b|$)/gi,
+  );
+  for (const match of prefMatches) {
+    const value = match[1]?.trim();
+    if (value && value.length > 2) {
+      extractions.push({ bucket: "taste_memory", key: "explicit_preference", value });
+    }
+  }
+
+  // Partner preference statements: "my wife/husband likes X"
+  const partnerPrefMatches = message.matchAll(
+    /\bmy\s+(?:wife|husband|partner|spouse|girlfriend|boyfriend)\s+(?:likes?|loves?|enjoys?|prefers?)\s+(.{3,60}?)(?:\.|,|!|$)/gi,
+  );
+  for (const match of partnerPrefMatches) {
+    const value = match[1]?.trim();
+    if (value && value.length > 2) {
+      extractions.push({ bucket: "taste_memory", key: "partner_preference", value });
+    }
+  }
+
+  // Household signal: partner
+  if (/\bmy\s+(?:wife|husband|partner|spouse|girlfriend|boyfriend|fiancée?)\b/i.test(message)) {
+    extractions.push({ bucket: "profile_memory", key: "household", value: "has partner" });
+  }
+
+  // Household signal: children
+  if (/\bmy\s+(?:kids?|children|son|daughter|baby|toddler|little\s+ones?)\b/i.test(message)) {
+    extractions.push({ bucket: "profile_memory", key: "household", value: "has children" });
+  }
+
+  // Location signals: "I'm in X", "I live in X", "we're in X"
+  const locationMatch = message.match(
+    /\b(?:i'?m\s+in|i\s+live\s+in|we'?re\s+in|based\s+in)\s+([A-Z][a-zA-Z\s]{2,30}?)(?:\.|,|!|$)/i,
+  );
+  if (locationMatch?.[1]) {
+    extractions.push({ bucket: "profile_memory", key: "city", value: locationMatch[1].trim() });
+  }
+
+  // Budget signals
+  const budgetMatch =
+    message.match(/budget\s*(?:is|of|around)?\s*\$?\s*(\d+)/i) ??
+    message.match(/under\s+\$?\s*(\d+)/i) ??
+    message.match(/\$(\d+)\s*[-–]\s*\$?(\d+)/i);
+  if (budgetMatch) {
+    const value = budgetMatch[2]
+      ? `$${budgetMatch[1]}-$${budgetMatch[2]}`
+      : `under $${budgetMatch[1]}`;
+    extractions.push({ bucket: "logistics_memory", key: "budget_range", value });
+  }
+
+  const seen = new Set<string>();
+  for (const item of extractions) {
+    const dedupeKey = `${item.bucket}:${item.key}:${item.value}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    const existing = await db.memoryEntry.findFirst({
+      where: { bucket: item.bucket, key: item.key, value: item.value },
+    });
+    if (existing) continue;
+
+    await upsertMemory({
+      bucket: item.bucket,
+      key: item.key,
+      value: item.value,
+      source: "inferred",
+      confidence: 0.8,
+    });
+  }
 }
 
-const CALENDAR_INTENT_REGEX =
-  /\b(calendar|schedule|events?|free time|meeting|appointment|what'?s on my calendar)\b/i;
-const TRAVEL_INTENT_REGEX =
-  /\b(travel|trip|vacation|flight|hotel|getaway|travel plans?)\b/i;
-const NEXT_LOOKUP_REGEX = /\b(next|upcoming|coming up|soon)\b/i;
 const TRAVEL_QUERY = "travel trip vacation flight hotel getaway";
+
+/**
+ * Intent classification result for a user message.
+ * Determined via a fast LLM call rather than brittle regex pattern matching.
+ */
+type MessageIntent = {
+  /** User wants to EXECUTE something (add/move/book/confirm) — not discover new options. */
+  isActionCommand: boolean;
+  /** Message implies a calendar write operation (create/update/delete an event). */
+  isCalendarWrite: boolean;
+  /** Message asks to read/query calendar details (next event, schedule, availability). */
+  isCalendarQuery: boolean;
+  /** Message references prior suggestions ("these", "this one", "that option", etc.). */
+  referencesPriorSuggestions: boolean;
+  /** Message is specifically about travel plans/trips. */
+  isTravelQuery: boolean;
+  /** Message asks for upcoming/next items. */
+  isUpcomingQuery: boolean;
+  /** Message asks for fresh/deep research rather than immediate execution. */
+  isResearchRequest: boolean;
+};
+
+/**
+ * Classifies the user's message intent via a fast, zero-temperature LLM call.
+ * Providing the last assistant message as context improves accuracy when the
+ * user uses pronouns ("add these", "book that one", etc.).
+ */
+async function classifyMessageIntent(
+  message: string,
+  lastAssistantMessage?: string,
+): Promise<MessageIntent> {
+  const fallback: MessageIntent = {
+    isActionCommand: false,
+    isCalendarWrite: false,
+    isCalendarQuery: false,
+    referencesPriorSuggestions: false,
+    isTravelQuery: false,
+    isUpcomingQuery: false,
+    isResearchRequest: false,
+  };
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return fallback;
+
+  const contextLine = lastAssistantMessage
+    ? `Previous assistant message (for context): """${lastAssistantMessage.slice(0, 300)}"""`
+    : "";
+
+  const prompt = [
+    "Classify the user message below. Reply with valid JSON only — no prose, no markdown.",
+    "",
+    contextLine,
+    `User message: """${message}"""`,
+    "",
+    "Return exactly:",
+    '{ "isActionCommand": boolean, "isCalendarWrite": boolean, "isCalendarQuery": boolean, "referencesPriorSuggestions": boolean, "isTravelQuery": boolean, "isUpcomingQuery": boolean, "isResearchRequest": boolean }',
+    "",
+    "Definitions:",
+    "isActionCommand  — true when the user wants to EXECUTE something (add to calendar, move/reschedule an event, book, confirm a choice, keep a suggestion, cancel something) rather than explore or get new ideas.",
+    "isCalendarWrite  — true when the intent involves creating, editing, moving, fixing duplicates, merging, or removing a calendar event.",
+    "isCalendarQuery — true when the user asks to read/check schedule info (calendar, meetings, upcoming events, next event, availability, free time).",
+    "referencesPriorSuggestions — true when the user refers to options already shown (e.g. 'these', 'this one', 'that option', 'option 2', 'the first one').",
+    "isTravelQuery — true when the user asks about travel/trips/vacation plans.",
+    "isUpcomingQuery — true when the user asks for what is next/upcoming/coming soon.",
+    "isResearchRequest — true when user asks for fresh/new/deep research or discovery from new sources.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:3001",
+        "X-Title": "beetlebot",
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini",
+        temperature: 0,
+        max_tokens: 80,
+        messages: [{ role: "user", content: prompt }],
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!response.ok) return fallback;
+
+    const payload = (await response.json()) as OpenRouterResponse;
+    const text = payload.choices?.[0]?.message?.content?.trim() ?? "";
+
+    // Strip optional markdown fences before parsing
+    const clean = text.replace(/^```[a-z]*\n?/, "").replace(/\n?```$/, "").trim();
+    const parsed = JSON.parse(clean) as Partial<MessageIntent>;
+    return {
+      isActionCommand: Boolean(parsed.isActionCommand),
+      isCalendarWrite: Boolean(parsed.isCalendarWrite),
+      isCalendarQuery: Boolean(parsed.isCalendarQuery),
+      referencesPriorSuggestions: Boolean(parsed.referencesPriorSuggestions),
+      isTravelQuery: Boolean(parsed.isTravelQuery),
+      isUpcomingQuery: Boolean(parsed.isUpcomingQuery),
+      isResearchRequest: Boolean(parsed.isResearchRequest),
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+export function extractThreadSuggestionsForIntent(
+  messages: Array<{ role: string; blocksJson?: string | null }>,
+): ThreadSuggestion[] {
+  const fromMostRecent = [...messages].reverse();
+  const collected: ThreadSuggestion[] = [];
+  const dedupe = new Set<string>();
+  let idx = 1;
+
+  for (const message of fromMostRecent) {
+    if (message.role !== "assistant") continue;
+    const blocks = parseMessageBlocks(message.blocksJson ?? null);
+    if (!blocks?.length) continue;
+
+    for (const block of blocks) {
+      const cards =
+        block.type === "image_card"
+          ? [block]
+          : block.type === "image_gallery"
+            ? block.items
+            : block.type === "option_set"
+              ? block.items.map((item) => item.card)
+              : [];
+
+      for (const card of cards) {
+        const key = `${card.title.toLowerCase()}::${card.actionUrl ?? ""}`;
+        if (dedupe.has(key)) continue;
+        dedupe.add(key);
+        collected.push({
+          index: idx++,
+          title: card.title,
+          subtitle: card.subtitle,
+          meta: card.meta,
+          actionUrl: card.actionUrl,
+          sourceName: card.sourceName,
+        });
+        if (collected.length >= 8) return collected;
+      }
+    }
+  }
+
+  return collected;
+}
+
+function formatSuggestionsForPrompt(suggestions: ThreadSuggestion[]): string {
+  if (!suggestions.length) return "No prior structured suggestions found in thread blocks.";
+  return suggestions
+    .map((suggestion) => {
+      const meta =
+        suggestion.meta && Object.keys(suggestion.meta).length
+          ? ` | meta=${JSON.stringify(suggestion.meta)}`
+          : "";
+      const link = suggestion.actionUrl ? ` | url=${suggestion.actionUrl}` : "";
+      return `[${suggestion.index}] ${suggestion.title}${suggestion.subtitle ? ` — ${suggestion.subtitle}` : ""}${meta}${link}`;
+    })
+    .join("\n");
+}
+
+async function resolveSuggestionIntentFromThread(input: {
+  message: string;
+  lastAssistantMessage?: string;
+  suggestions: ThreadSuggestion[];
+}): Promise<SuggestionIntentResolution | null> {
+  if (!input.suggestions.length) return null;
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return null;
+
+  const contextLine = input.lastAssistantMessage
+    ? `Last assistant text: """${input.lastAssistantMessage.slice(0, 500)}"""`
+    : "";
+  const prompt = [
+    "You resolve what prior suggestions the user is referring to.",
+    "Reply with strict JSON only.",
+    "",
+    contextLine,
+    `User message: """${input.message}"""`,
+    "Thread suggestions:",
+    formatSuggestionsForPrompt(input.suggestions),
+    "",
+    "Return exactly:",
+    '{ "selectedIndices": number[], "confidence": number, "rationale": string }',
+    "",
+    "Rules:",
+    "- selectedIndices must contain index values from the provided suggestion list.",
+    "- confidence must be between 0 and 1.",
+    "- If reference is ambiguous, return an empty selectedIndices array with low confidence.",
+    "- Prefer selecting explicitly mentioned numbers (e.g., option 2), otherwise infer from semantics.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:3001",
+        "X-Title": "beetlebot",
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini",
+        temperature: 0,
+        max_tokens: 180,
+        messages: [{ role: "user", content: prompt }],
+      }),
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as OpenRouterResponse;
+    const text = payload.choices?.[0]?.message?.content?.trim() ?? "";
+    const clean = text.replace(/^```[a-z]*\n?/, "").replace(/\n?```$/, "").trim();
+    const parsed = JSON.parse(clean) as Partial<SuggestionIntentResolution>;
+    const selectedIndices = Array.isArray(parsed.selectedIndices)
+      ? parsed.selectedIndices
+          .map((value) => (typeof value === "number" ? Math.round(value) : NaN))
+          .filter((value) => Number.isFinite(value))
+      : [];
+    const allowed = new Set(input.suggestions.map((suggestion) => suggestion.index));
+    const filtered = selectedIndices.filter((value) => allowed.has(value));
+    const confidence = typeof parsed.confidence === "number" ? Math.min(Math.max(parsed.confidence, 0), 1) : 0;
+    return {
+      selectedIndices: Array.from(new Set(filtered)),
+      confidence,
+      rationale: typeof parsed.rationale === "string" ? parsed.rationale.slice(0, 300) : "",
+    };
+  } catch {
+    return null;
+  }
+}
 
 type CalendarToolEvent = {
   id: string;
@@ -345,17 +712,17 @@ type CalendarToolEvent = {
   primary?: boolean;
 };
 
-function isCalendarIntentMessage(message: string) {
-  return CALENDAR_INTENT_REGEX.test(message);
-}
-
-function isTravelIntentMessage(message: string) {
-  return TRAVEL_INTENT_REGEX.test(message);
-}
-
-function isNextLookupMessage(message: string) {
-  return NEXT_LOOKUP_REGEX.test(message);
-}
+type CalendarCreateLikeArgs = {
+  operation: "create";
+  summary: string;
+  start: string;
+  end: string;
+  description?: string;
+  location?: string;
+  timeZone?: string;
+  attendees?: string[];
+  calendarId?: string;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -387,6 +754,132 @@ function parseCalendarToolEvents(payload: Record<string, unknown>): CalendarTool
   return parsed;
 }
 
+function normalizeTextForMatch(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 1);
+}
+
+function jaccardSimilarity(a: string, b: string): number {
+  const aTokens = new Set(normalizeTextForMatch(a));
+  const bTokens = new Set(normalizeTextForMatch(b));
+  if (!aTokens.size || !bTokens.size) return 0;
+  let overlap = 0;
+  for (const token of aTokens) {
+    if (bTokens.has(token)) overlap += 1;
+  }
+  const union = new Set([...aTokens, ...bTokens]).size;
+  return union > 0 ? overlap / union : 0;
+}
+
+function toDateMs(iso: string): number | null {
+  const value = new Date(iso).getTime();
+  return Number.isFinite(value) ? value : null;
+}
+
+function overlapsWithTolerance(input: {
+  aStart: string;
+  aEnd: string;
+  bStart: string;
+  bEnd: string;
+  toleranceMinutes?: number;
+}) {
+  const toleranceMs = (input.toleranceMinutes ?? 90) * 60 * 1000;
+  const aStart = toDateMs(input.aStart);
+  const aEnd = toDateMs(input.aEnd);
+  const bStart = toDateMs(input.bStart);
+  const bEnd = toDateMs(input.bEnd);
+  if (aStart == null || aEnd == null || bStart == null || bEnd == null) return false;
+  return aStart <= bEnd + toleranceMs && bStart <= aEnd + toleranceMs;
+}
+
+function locationSimilarity(a?: string, b?: string): number {
+  if (!a || !b) return 0;
+  return jaccardSimilarity(a, b);
+}
+
+function buildSuggestionDetailsBlock(suggestions: ThreadSuggestion[]): string {
+  if (!suggestions.length) return "";
+  const lines = suggestions.map((suggestion) => {
+    const parts = [suggestion.title];
+    if (suggestion.subtitle) parts.push(suggestion.subtitle);
+    if (suggestion.actionUrl) parts.push(suggestion.actionUrl);
+    return `- ${parts.join(" | ")}`;
+  });
+  return ["Suggested venues from thread:", ...lines].join("\n");
+}
+
+function ensureDescriptionIncludesSuggestions(
+  description: string | undefined,
+  suggestions: ThreadSuggestion[],
+): string | undefined {
+  if (!suggestions.length) return description;
+  const base = (description ?? "").trim();
+  const lower = base.toLowerCase();
+  const missing = suggestions.filter((suggestion) => !lower.includes(suggestion.title.toLowerCase()));
+  if (!missing.length) return description;
+  const details = buildSuggestionDetailsBlock(missing);
+  return base ? `${base}\n\n${details}` : details;
+}
+
+function scoreDuplicateCandidate(input: {
+  createArgs: CalendarCreateLikeArgs;
+  existing: CalendarToolEvent;
+}): number {
+  const textA = `${input.createArgs.summary} ${input.createArgs.description ?? ""}`;
+  const textB = `${input.existing.summary} ${input.existing.description ?? ""}`;
+  const titleScore = jaccardSimilarity(input.createArgs.summary, input.existing.summary);
+  const detailScore = jaccardSimilarity(textA, textB);
+  const timeScore = overlapsWithTolerance({
+    aStart: input.createArgs.start,
+    aEnd: input.createArgs.end,
+    bStart: input.existing.start,
+    bEnd: input.existing.end,
+  })
+    ? 1
+    : 0;
+  const placeScore = locationSimilarity(input.createArgs.location, input.existing.location);
+  return titleScore * 0.4 + detailScore * 0.2 + timeScore * 0.3 + placeScore * 0.1;
+}
+
+async function findPotentialDuplicateForCreate(input: {
+  tool: ChatToolDefinition;
+  createArgs: CalendarCreateLikeArgs;
+}) {
+  const startMs = toDateMs(input.createArgs.start);
+  const endMs = toDateMs(input.createArgs.end);
+  if (startMs == null || endMs == null) return { candidate: null as CalendarToolEvent | null, score: 0, secondScore: 0 };
+
+  const timeMin = new Date(startMs - 6 * 60 * 60 * 1000).toISOString();
+  const timeMax = new Date(endMs + 6 * 60 * 60 * 1000).toISOString();
+  const listResult = await input.tool.execute({
+    operation: "list_multi",
+    timeMin,
+    timeMax,
+    query: input.createArgs.summary,
+    maxResultsPerCalendar: 40,
+  });
+  const events = parseCalendarToolEvents(
+    (listResult && typeof listResult === "object" ? listResult : {}) as Record<string, unknown>,
+  );
+  if (!events.length) return { candidate: null as CalendarToolEvent | null, score: 0, secondScore: 0 };
+
+  const scored = events
+    .map((event) => ({
+      event,
+      score: scoreDuplicateCandidate({ createArgs: input.createArgs, existing: event }),
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  return {
+    candidate: scored[0]?.event ?? null,
+    score: scored[0]?.score ?? 0,
+    secondScore: scored[1]?.score ?? 0,
+  };
+}
+
 function plusDaysIso(days: number) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 }
@@ -401,8 +894,8 @@ function countKeywordMatches(text: string, keywords: string[]) {
   return keywords.reduce((total, keyword) => (normalized.includes(keyword) ? total + 1 : total), 0);
 }
 
-function rankCalendarEvents(events: CalendarToolEvent[], message: string) {
-  const isTravelIntent = isTravelIntentMessage(message);
+function rankCalendarEvents(events: CalendarToolEvent[], intent: MessageIntent) {
+  const isTravelIntent = intent.isTravelQuery;
   const keywords = ["travel", "trip", "vacation", "flight", "hotel", "getaway", "journey"];
   const now = Date.now();
 
@@ -450,13 +943,9 @@ function formatEventDate(dateIso: string, timezone?: string) {
 }
 
 async function tryAnswerCalendarIntent(input: {
-  message: string;
+  intent: MessageIntent;
   timezone?: string;
 }) {
-  if (!isCalendarIntentMessage(input.message)) {
-    return { handled: false as const };
-  }
-
   const conn = await getIntegrationConnection("google_calendar");
   const hasReadScope = conn.status === "connected" && conn.grantedScopes.includes("read");
   if (!hasReadScope) {
@@ -469,13 +958,14 @@ async function tryAnswerCalendarIntent(input: {
   }
 
   const baseTimeMin = new Date().toISOString();
-  const travelIntent = isTravelIntentMessage(input.message);
-  const nextLookup = isNextLookupMessage(input.message) || travelIntent;
+  const travelIntent = input.intent.isTravelQuery;
+  const nextLookup = input.intent.isUpcomingQuery || travelIntent;
   const windows = nextLookup ? [14, 90] : [90];
   const query = travelIntent ? TRAVEL_QUERY : undefined;
 
   let events: CalendarToolEvent[] = [];
   let windowUsed = windows[windows.length - 1];
+  let lastToolError: string | null = null;
 
   for (const window of windows) {
     const result = await tool.execute({
@@ -485,6 +975,11 @@ async function tryAnswerCalendarIntent(input: {
       query,
       maxResultsPerCalendar: 30,
     });
+    if (isRecord(result) && typeof result.error === "string" && result.error.trim().length > 0) {
+      lastToolError = result.error.trim();
+      windowUsed = window;
+      continue;
+    }
     const parsed = parseCalendarToolEvents(result);
     if (parsed.length > 0) {
       events = parsed;
@@ -494,8 +989,16 @@ async function tryAnswerCalendarIntent(input: {
     windowUsed = window;
   }
 
-  const ranked = rankCalendarEvents(events, input.message);
+  const ranked = rankCalendarEvents(events, input.intent);
   if (!ranked.length) {
+    if (lastToolError) {
+      return {
+        handled: true as const,
+        replyText:
+          "I couldn't read your calendar right now because the calendar tool returned an error. Please reconnect Google Calendar in Settings, then try again.",
+        trace: `calendar_intent_tool_error scope=all window_days=${windowUsed} error=${lastToolError.slice(0, 120)}`,
+      };
+    }
     const qualifier = travelIntent ? "travel-related events" : "events";
     return {
       handled: true as const,
@@ -525,46 +1028,6 @@ async function tryAnswerCalendarIntent(input: {
     handled: true as const,
     replyText: `Here are your next events:\n${lines.join("\n")}`,
     trace: `calendar_intent_detected scope=all window_days=${windowUsed} matches=${ranked.length}`,
-  };
-}
-
-async function buildClarifyingQuestionWithModel(input: {
-  systemMessages: OpenRouterMessage[];
-  conversationHistory: OpenRouterMessage[];
-  userMessage: string;
-}) {
-  try {
-    const modelReply = await generateModelReply({
-      messages: [
-        ...input.systemMessages,
-        {
-          role: "system",
-          content:
-            "The latest user request is underspecified. Ask exactly one concise clarifying question and do not provide recommendations yet.",
-        },
-        ...input.conversationHistory,
-        { role: "user", content: input.userMessage },
-      ],
-    });
-    const text = modelReply.text.trim();
-    if (text) {
-      return {
-        text,
-        responseModel: modelReply.responseModel,
-        requestedModel: modelReply.requestedModel,
-        responseId: modelReply.responseId,
-      };
-    }
-  } catch {
-    // Fall back to deterministic question when the model call fails.
-  }
-
-  const currentModel = getCurrentModel();
-  return {
-    text: buildClarifyingQuestion(),
-    responseModel: currentModel,
-    requestedModel: currentModel,
-    responseId: null as string | null,
   };
 }
 
@@ -598,24 +1061,13 @@ async function createUniquePackSlug(base: string) {
 export async function POST(request: Request) {
   try {
     const body = chatSchema.parse(await request.json());
+    await extractImplicitPreferences(body.message);
+    const preferenceProfile = await getPreferenceProfile();
     const taste = await tasteProfile();
     const recentRuns = await db.autopilotRun.findMany({
       orderBy: { createdAt: "desc" },
       take: 3,
     });
-
-    if (body.message.toLowerCase().includes("i like ")) {
-      const preference = body.message.slice(body.message.toLowerCase().indexOf("i like ") + 7).trim();
-      if (preference.length > 1) {
-        await upsertMemory({
-          bucket: "taste_memory",
-          key: "explicit_preference",
-          value: preference,
-          source: "user_input",
-          confidence: 1,
-        });
-      }
-    }
 
     const existingThread = body.threadId ? await getConversationThread(body.threadId) : null;
     const thread = existingThread ?? (await createConversationThread(body.message.slice(0, 100)));
@@ -633,24 +1085,76 @@ export async function POST(request: Request) {
       message: body.message,
       tasteHints: taste.topPreferences,
     });
-    const messageOnlyConstraints = extractRecommendationConstraints({
-      message: body.message,
-    });
     const signals = deriveRecommendationSignals({
       message: body.message,
       tasteHints: taste.topPreferences,
     });
     const shouldCreatePack = isPackCreationCommand(body.message);
-    const calendarIntent = isCalendarIntentMessage(body.message);
+
+    // Classify intent via LLM — run in parallel with the narrow regex checks.
+    const lastAssistantMessage = recentConversation
+      .filter((m) => m.role === "assistant")
+      .at(-1)?.content;
+    const [intent] = await Promise.all([
+      classifyMessageIntent(body.message, lastAssistantMessage),
+    ]);
+
+    const isActionCmd = intent.isActionCommand;
+    const calendarIntent = intent.isCalendarQuery || intent.isCalendarWrite;
+    const calendarWriteIntent = intent.isCalendarWrite;
     const shouldRunResearch =
-      signals.boredomSignal ||
-      /original|fresh|new sources?|deep research|discover/i.test(body.message);
+      !isActionCmd &&
+      (signals.boredomSignal || intent.isResearchRequest);
+    const threadSuggestions = extractThreadSuggestionsForIntent(recentConversation);
+    const shouldResolveThreadSuggestions =
+      threadSuggestions.length > 0 &&
+      (intent.referencesPriorSuggestions || isActionCmd || calendarWriteIntent);
+    // #region agent log
+    fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        runId: "calendar-routing",
+        hypothesisId: "N1",
+        location: "app/api/chat/route.ts:intent_resolution",
+        message: "intent classification output",
+        data: {
+          isActionCommand: intent.isActionCommand,
+          isCalendarWrite: intent.isCalendarWrite,
+          isCalendarQuery: intent.isCalendarQuery,
+          referencesPriorSuggestions: intent.referencesPriorSuggestions,
+          isUpcomingQuery: intent.isUpcomingQuery,
+          isResearchRequest: intent.isResearchRequest,
+          derivedCalendarIntent: calendarIntent,
+          derivedCalendarWriteIntent: calendarWriteIntent,
+          messagePreview: body.message.slice(0, 120),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    const suggestionIntent =
+      shouldResolveThreadSuggestions
+        ? await resolveSuggestionIntentFromThread({
+            message: body.message,
+            lastAssistantMessage,
+            suggestions: threadSuggestions,
+          })
+        : null;
+    const resolvedSuggestions =
+      suggestionIntent?.selectedIndices.length
+        ? threadSuggestions.filter((suggestion) =>
+            suggestionIntent.selectedIndices.includes(suggestion.index),
+          )
+        : [];
+
     let orchestrationState: OrchestrationState = "recommendation_mode";
 
     const systemMessages: OpenRouterMessage[] = [
       { role: "system", content: buildTemporalContext(body.timezone) },
       { role: "system", content: buildSeasonContext(body.timezone) },
-      { role: "system", content: buildCompanionPrompt(body.mode) },
+      { role: "system", content: buildCompanionPrompt(body.mode, isActionCmd) },
+      { role: "system", content: buildPreferenceAwarenessPrompt(preferenceProfile) },
       {
         role: "system",
         content: buildRuntimeContext({
@@ -662,18 +1166,83 @@ export async function POST(request: Request) {
     if (packContext) {
       systemMessages.push({ role: "system", content: packContext });
     }
-    if (calendarIntent) {
+    if (isActionCmd) {
       systemMessages.push({
         role: "system",
         content:
-          "If the user explicitly asks for calendar data, retrieve it first with tools and answer directly. Do not ask for permission to check the calendar when they already asked you to check it.",
+          "CRITICAL: The user is issuing a direct action command. Execute it immediately using the appropriate tool. Do NOT generate new suggestions or option cards. Do NOT ask for time preferences if a time was given. Respond with 1–2 sentences confirming what was done.",
       });
+    }
+    if (threadSuggestions.length > 0 && shouldResolveThreadSuggestions) {
+      const selectedSummary =
+        resolvedSuggestions.length > 0
+          ? resolvedSuggestions
+              .map((suggestion) => {
+                const url = suggestion.actionUrl ? ` (${suggestion.actionUrl})` : "";
+                return `${suggestion.title}${url}`;
+              })
+              .join(" | ")
+          : "none";
+      systemMessages.push({
+        role: "system",
+        content: [
+          "THREAD_SUGGESTIONS (source of truth for follow-up commands):",
+          formatSuggestionsForPrompt(threadSuggestions),
+          "",
+          `Intent-resolved selection: ${selectedSummary}`,
+          `Selection confidence: ${suggestionIntent?.confidence ?? 0}`,
+          "If user follow-up references prior suggestions, use these thread suggestions rather than inventing new venues.",
+          "For calendar writes based on prior suggestions, include selected venue names in event description.",
+        ].join("\n"),
+      });
+    }
+    if (calendarIntent) {
+      if (calendarWriteIntent) {
+        systemMessages.push({
+          role: "system",
+          content:
+            "The user is asking to modify their calendar. To update or delete an existing event, FIRST call google_calendar_events with operation 'find' and the event name as query — this resolves emoji-prefixed titles and partial names. Then use the returned eventId and calendarId for the update/delete call. For new events use 'create'. If required fields are missing, ask one concise clarification question and do not switch to listing unrelated events. If this action references prior suggestions in thread context, carry those exact venues into description (names + practical details) instead of broad summaries. If a tool result returns { requiresUserConfirmation: true }, ask the user the provided prompt and do not perform additional calendar writes until they answer.",
+        });
+      } else {
+        systemMessages.push({
+          role: "system",
+          content:
+            "If the user explicitly asks for calendar data, retrieve it first with tools and answer directly. Do not ask for permission to check the calendar when they already asked you to check it.",
+        });
+      }
     }
 
     let replyText = "";
     let responseModel = getCurrentModel();
     let requestedModel = getCurrentModel();
     let responseId: string | null = null;
+
+    const shouldAskSuggestionClarification =
+      calendarWriteIntent &&
+      intent.referencesPriorSuggestions &&
+      threadSuggestions.length > 0 &&
+      (!suggestionIntent ||
+        suggestionIntent.selectedIndices.length === 0 ||
+        suggestionIntent.confidence < 0.55);
+
+    if (shouldAskSuggestionClarification) {
+      const quickChoices = threadSuggestions.slice(0, 4).map((suggestion) => `[${suggestion.index}] ${suggestion.title}`).join("\n");
+      replyText = [
+        "Quick check so I place the right one on your calendar:",
+        quickChoices,
+        "Which option should I add?",
+      ].join("\n");
+      responseModel = "resolver/suggestion_intent";
+      requestedModel = "resolver/suggestion_intent";
+      responseId = null;
+      await db.debugTrace.create({
+        data: {
+          scope: "chat",
+          message: `thread_suggestion_resolution unresolved confidence=${suggestionIntent?.confidence ?? 0} options=${threadSuggestions.length}`,
+        },
+      });
+    }
+
     const runRecommendationMode = async () => {
       orchestrationState = "recommendation_mode";
       const modelMessages: OpenRouterMessage[] = [
@@ -682,6 +1251,12 @@ export async function POST(request: Request) {
         { role: "user", content: body.message },
       ];
       const openRouterTools = await getScopedOpenRouterTools();
+      let calendarWriteExecuted = false;
+      let calendarFindSucceeded = false;
+      let calendarWriteVerificationFailed = false;
+      let toolCallsExecuted = 0;
+      let toolCallErrors = 0;
+      let lastToolErrorMessage: string | null = null;
 
       for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
         const modelReply = await generateModelReply({
@@ -694,6 +1269,36 @@ export async function POST(request: Request) {
 
         const toolCalls = modelReply.message.tool_calls ?? [];
         if (!toolCalls.length) {
+          if (calendarWriteIntent && !calendarWriteExecuted && round < MAX_TOOL_ROUNDS) {
+            // #region agent log
+            fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                runId: "calendar-enforcement",
+                hypothesisId: "N4",
+                location: "app/api/chat/route.ts:runRecommendationMode",
+                message: "no tool call for calendar write intent; forcing tool usage retry",
+                data: {
+                  round: round + 1,
+                  maxRounds: MAX_TOOL_ROUNDS + 1,
+                  modelTextPreview: (modelReply.text ?? "").slice(0, 120),
+                },
+                timestamp: Date.now(),
+              }),
+            }).catch(() => {});
+            // #endregion
+            modelMessages.push({
+              role: "assistant",
+              content: modelReply.message.content ?? modelReply.text ?? "",
+            });
+            modelMessages.push({
+              role: "system",
+              content:
+                "ENFORCEMENT: The user requested a calendar write. You must call google_calendar_events tools to execute it. Do not reply with completion text until at least one write operation (create/update/delete) has been executed and verified.",
+            });
+            continue;
+          }
           replyText = modelReply.text;
           break;
         }
@@ -705,9 +1310,42 @@ export async function POST(request: Request) {
         });
 
         for (const toolCall of toolCalls) {
+          toolCallsExecuted += 1;
           const toolName = toolCall.function?.name ?? "unknown";
           const tool = getChatToolByName(toolName);
           const args = parseToolArguments(toolCall.function?.arguments ?? "");
+          if (
+            toolName === "google_calendar_events" &&
+            isRecord(args) &&
+            (args.operation === "find" || args.operation === "update")
+          ) {
+            // #region agent log
+            fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                runId: "calendar-find-miss",
+                hypothesisId: "H1",
+                location: "app/api/chat/route.ts:tool_call_pre_execute",
+                message: "google_calendar_events call prepared",
+                data: {
+                  operation: args.operation,
+                  query: typeof args.query === "string" ? args.query : null,
+                  eventIdProvided: typeof args.eventId === "string" && args.eventId.trim().length > 0,
+                  calendarIdProvided:
+                    typeof args.calendarId === "string" && args.calendarId.trim().length > 0,
+                  summaryProvided:
+                    typeof args.summary === "string" && args.summary.trim().length > 0,
+                  descriptionLength:
+                    typeof args.description === "string" ? args.description.length : 0,
+                  locationProvided:
+                    typeof args.location === "string" && args.location.trim().length > 0,
+                },
+                timestamp: Date.now(),
+              }),
+            }).catch(() => {});
+            // #endregion
+          }
 
           await db.debugTrace.create({
             data: {
@@ -717,6 +1355,8 @@ export async function POST(request: Request) {
           });
 
           if (!tool) {
+            toolCallErrors += 1;
+            lastToolErrorMessage = `Tool '${toolName}' is not available.`;
             modelMessages.push({
               role: "tool",
               name: toolName,
@@ -733,13 +1373,228 @@ export async function POST(request: Request) {
           }
 
           try {
-            const result = await tool.execute(args);
+            let result: unknown;
+            if (tool.name === "google_calendar_events" && args.operation === "create") {
+              const createArgs = {
+                ...args,
+                operation: "create",
+              } as CalendarCreateLikeArgs;
+
+              if (
+                typeof createArgs.summary === "string" &&
+                typeof createArgs.start === "string" &&
+                typeof createArgs.end === "string"
+              ) {
+                const suggestionsForWrite =
+                  resolvedSuggestions.length > 0 ? resolvedSuggestions : threadSuggestions;
+                createArgs.description = ensureDescriptionIncludesSuggestions(
+                  createArgs.description,
+                  suggestionsForWrite,
+                );
+
+                const duplicate = await findPotentialDuplicateForCreate({
+                  tool,
+                  createArgs,
+                });
+                const hasDuplicateCandidate = Boolean(duplicate.candidate && duplicate.score >= 0.58);
+                const clearIntent =
+                  !intent.referencesPriorSuggestions ||
+                  Boolean(
+                    suggestionIntent &&
+                      suggestionIntent.selectedIndices.length > 0 &&
+                      suggestionIntent.confidence >= 0.62,
+                  );
+                const clearDuplicate =
+                  hasDuplicateCandidate &&
+                  duplicate.score >= 0.72 &&
+                  duplicate.score - duplicate.secondScore >= 0.12;
+
+                if (hasDuplicateCandidate && clearDuplicate && clearIntent && duplicate.candidate) {
+                  const mergedDescription = ensureDescriptionIncludesSuggestions(
+                    duplicate.candidate.description ?? createArgs.description,
+                    suggestionsForWrite,
+                  );
+                  result = await tool.execute({
+                    operation: "update",
+                    eventId: duplicate.candidate.id,
+                    calendarId: duplicate.candidate.calendarId,
+                    description: mergedDescription,
+                    location: createArgs.location ?? duplicate.candidate.location,
+                  });
+                  await db.debugTrace.create({
+                    data: {
+                      scope: "chat",
+                      message: `calendar_dedupe action=update_existing score=${duplicate.score.toFixed(2)} event=${duplicate.candidate.id}`,
+                    },
+                  });
+                } else if (hasDuplicateCandidate && duplicate.candidate) {
+                  result = {
+                    requiresUserConfirmation: true,
+                    reason: "potential_duplicate_event",
+                    duplicateEvent: {
+                      eventId: duplicate.candidate.id,
+                      summary: duplicate.candidate.summary,
+                      start: duplicate.candidate.start,
+                      end: duplicate.candidate.end,
+                      calendarId: duplicate.candidate.calendarId,
+                      calendarName: duplicate.candidate.calendarName,
+                      score: Number(duplicate.score.toFixed(2)),
+                    },
+                    prompt:
+                      "I found a matching event already on your calendar. Should I update it with the suggestion details, or create a separate entry?",
+                  };
+                  await db.debugTrace.create({
+                    data: {
+                      scope: "chat",
+                      message: `calendar_dedupe action=ask_user score=${duplicate.score.toFixed(2)} event=${duplicate.candidate.id}`,
+                    },
+                  });
+                } else {
+                  result = await tool.execute(createArgs);
+                }
+              } else {
+                result = await tool.execute(args);
+              }
+            } else {
+              result = await tool.execute(args);
+            }
+            let resultForModel = result;
+            if (tool.name === "google_calendar_events" && isRecord(args)) {
+              const operation = typeof args.operation === "string" ? args.operation : "";
+              const isWriteOperation = operation === "create" || operation === "update" || operation === "delete";
+              if (isWriteOperation) {
+                const resultRecord = isRecord(result) ? result : {};
+                const calendarIdForVerify =
+                  typeof resultRecord.calendarId === "string"
+                    ? resultRecord.calendarId
+                    : typeof args.calendarId === "string"
+                      ? args.calendarId
+                      : undefined;
+                const eventRecord = isRecord(resultRecord.event) ? resultRecord.event : null;
+                const eventIdForVerify =
+                  typeof resultRecord.eventId === "string"
+                    ? resultRecord.eventId
+                    : typeof eventRecord?.id === "string"
+                      ? eventRecord.id
+                      : typeof args.eventId === "string"
+                        ? args.eventId
+                        : undefined;
+                let writeVerified = false;
+                let verificationReadback: unknown = null;
+
+                if (eventIdForVerify) {
+                  verificationReadback = await tool.execute({
+                    operation: "get",
+                    calendarId: calendarIdForVerify,
+                    eventId: eventIdForVerify,
+                  });
+                  const verificationRecord = isRecord(verificationReadback)
+                    ? verificationReadback
+                    : {};
+                  if (operation === "delete") {
+                    const verifyError =
+                      typeof verificationRecord.error === "string"
+                        ? verificationRecord.error.toLowerCase()
+                        : "";
+                    writeVerified =
+                      verifyError.includes("not found") || verifyError.includes("404");
+                  } else {
+                    writeVerified =
+                      !verificationRecord.error &&
+                      isRecord(verificationRecord.event) &&
+                      typeof verificationRecord.event.id === "string";
+                  }
+                }
+
+                // #region agent log
+                fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    runId: "calendar-posthook",
+                    hypothesisId: "F2",
+                    location: "app/api/chat/route.ts:post_write_verify",
+                    message: "calendar write verification completed",
+                    data: {
+                      operation,
+                      eventIdForVerify: eventIdForVerify ?? null,
+                      calendarIdForVerify: calendarIdForVerify ?? null,
+                      writeVerified,
+                      verificationHasError:
+                        isRecord(verificationReadback) &&
+                        typeof verificationReadback.error === "string",
+                    },
+                    timestamp: Date.now(),
+                  }),
+                }).catch(() => {});
+                // #endregion
+
+                if (isRecord(resultRecord)) {
+                  resultForModel = {
+                    ...resultRecord,
+                    writeVerified,
+                    verificationReadback,
+                  };
+                }
+                if (!writeVerified) {
+                  calendarWriteVerificationFailed = true;
+                }
+              }
+            }
             modelMessages.push({
               role: "tool",
               name: tool.name,
               tool_call_id: toolCall.id,
-              content: JSON.stringify(result),
+              content: JSON.stringify(resultForModel),
             });
+            if (tool.name === "google_calendar_events" && isRecord(args)) {
+              const op = typeof args.operation === "string" ? args.operation : "";
+              if (op === "create" || op === "update" || op === "delete") {
+                calendarWriteExecuted = true;
+              }
+              if (op === "find" && isRecord(result) && result.found === true) {
+                calendarFindSucceeded = true;
+              }
+            }
+            if (
+              tool.name === "google_calendar_events" &&
+              isRecord(args) &&
+              (args.operation === "find" || args.operation === "update")
+            ) {
+              const resultRecord = isRecord(result) ? result : {};
+              // #region agent log
+              fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  runId: "calendar-find-miss",
+                  hypothesisId: "H4",
+                  location: "app/api/chat/route.ts:tool_call_post_execute",
+                  message: "google_calendar_events call completed",
+                  data: {
+                    operation: args.operation,
+                    hasError: typeof resultRecord.error === "string",
+                    found:
+                      typeof resultRecord.found === "boolean"
+                        ? resultRecord.found
+                        : null,
+                    strategy:
+                      typeof resultRecord.strategy === "string"
+                        ? resultRecord.strategy
+                        : null,
+                    confidence:
+                      typeof resultRecord.confidence === "number"
+                        ? resultRecord.confidence
+                        : null,
+                    closestCandidatesCount: Array.isArray(resultRecord.closestCandidates)
+                      ? resultRecord.closestCandidates.length
+                      : 0,
+                  },
+                  timestamp: Date.now(),
+                }),
+              }).catch(() => {});
+              // #endregion
+            }
             await db.debugTrace.create({
               data: {
                 scope: "chat",
@@ -747,6 +1602,9 @@ export async function POST(request: Request) {
               },
             });
           } catch (toolError) {
+            toolCallErrors += 1;
+            lastToolErrorMessage =
+              toolError instanceof Error ? toolError.message : "Tool execution failed";
             modelMessages.push({
               role: "tool",
               name: tool.name,
@@ -764,8 +1622,93 @@ export async function POST(request: Request) {
           }
         }
       }
+      if (!replyText && toolCallsExecuted > 0) {
+        try {
+          const finalReply = await generateModelReply({
+            messages: [
+              ...modelMessages,
+              {
+                role: "system",
+                content:
+                  "Tool execution has finished. Provide a concise final user-facing status based strictly on tool results. If any tool returned an error, state that clearly and do not claim success.",
+              },
+            ],
+            tools: [],
+          });
+          replyText = finalReply.text.trim();
+          // #region agent log
+          fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              runId: "lookup-fallback",
+              hypothesisId: "N6",
+              location: "app/api/chat/route.ts:runRecommendationMode",
+              message: "generated final status after tool rounds",
+              data: {
+                toolCallsExecuted,
+                toolCallErrors,
+                replyLength: replyText.length,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
+        } catch {
+          // If final synthesis fails, below guard fallback will produce explicit error text.
+        }
+      }
+      if (calendarWriteIntent && !calendarWriteExecuted) {
+        // #region agent log
+        fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            runId: "calendar-write-guard",
+            hypothesisId: "F1",
+            location: "app/api/chat/route.ts:runRecommendationMode",
+            message: "calendar write guard activated",
+            data: {
+              calendarFindSucceeded,
+              calendarWriteExecuted,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        replyText = calendarFindSucceeded
+          ? "I found your event, but I haven't applied the calendar edit yet. I can do it now if you confirm exactly what to change in the event details."
+          : "I couldn't complete the calendar change yet because no write action was executed. Please repeat the exact edit you want, and I'll apply it directly.";
+      } else if (calendarWriteIntent && calendarWriteExecuted && calendarWriteVerificationFailed) {
+        replyText =
+          "I attempted the calendar edit, but post-update verification failed, so I can't confirm it was applied. Please retry once and I'll verify the event state before confirming.";
+      } else if (!replyText && toolCallsExecuted > 0) {
+        replyText = lastToolErrorMessage
+          ? `I couldn't complete the live tool lookup because a tool call failed: ${lastToolErrorMessage}`
+          : "I couldn't complete the live tool lookup because no final tool-backed status was produced. Please retry once.";
+        // #region agent log
+        fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            runId: "lookup-fallback",
+            hypothesisId: "N7",
+            location: "app/api/chat/route.ts:runRecommendationMode",
+            message: "explicit fallback reason emitted",
+            data: {
+              toolCallsExecuted,
+              toolCallErrors,
+              lastToolErrorMessage,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+      }
     };
-    if (shouldCreatePack) {
+    if (replyText) {
+      // Pre-resolved clarification response from intent-linking stage.
+    } else if (shouldCreatePack) {
       orchestrationState = "pack_creation_mode";
       const recentAssistantText =
         recentConversation
@@ -804,13 +1747,48 @@ export async function POST(request: Request) {
         dataSources,
       });
       replyText = `Done — I created a new pack: "${createdPack.name}" (${createdPack.slug}). Open /packs/${createdPack.slug} to review or edit it.`;
-    } else if (calendarIntent) {
+    } else if (calendarIntent && !calendarWriteIntent) {
+      // #region agent log
+      fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          runId: "calendar-routing",
+          hypothesisId: "N1",
+          location: "app/api/chat/route.ts:routing_branch",
+          message: "entered calendar query branch",
+          data: {
+            calendarIntent,
+            calendarWriteIntent,
+            isActionCmd,
+            messagePreview: body.message.slice(0, 120),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       orchestrationState = "calendar_intent_mode";
       const calendarReply = await tryAnswerCalendarIntent({
-        message: body.message,
+        intent,
         timezone: body.timezone,
       });
       if (calendarReply.handled) {
+        // #region agent log
+        fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            runId: "calendar-routing",
+            hypothesisId: "N1",
+            location: "app/api/chat/route.ts:routing_branch",
+            message: "calendar query branch handled",
+            data: {
+              trace: calendarReply.trace,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         replyText = calendarReply.replyText;
         responseModel = "tool/google_calendar_events";
         requestedModel = "tool/google_calendar_events";
@@ -824,17 +1802,6 @@ export async function POST(request: Request) {
       } else {
         await runRecommendationMode();
       }
-    } else if (maybeNeedsClarification({ message: body.message, constraints: messageOnlyConstraints })) {
-      orchestrationState = "needs_clarification";
-      const clarifying = await buildClarifyingQuestionWithModel({
-        systemMessages,
-        conversationHistory,
-        userMessage: body.message,
-      });
-      replyText = clarifying.text;
-      responseModel = clarifying.responseModel;
-      requestedModel = clarifying.requestedModel;
-      responseId = clarifying.responseId;
     } else if (shouldRunResearch) {
       orchestrationState = "research_mode";
       const research = await runResearchLoop({
@@ -916,6 +1883,14 @@ export async function POST(request: Request) {
         message: traceMessage,
       },
     });
+    if (shouldResolveThreadSuggestions) {
+      await db.debugTrace.create({
+        data: {
+          scope: "chat",
+          message: `thread_suggestion_resolution selected=${resolvedSuggestions.length} confidence=${suggestionIntent?.confidence ?? 0}`,
+        },
+      });
+    }
 
     return ok({
       reply: enriched.text,

@@ -191,6 +191,83 @@ export async function forgetMemory(id?: string, key?: string) {
   return db.memoryEntry.delete({ where: { id: match.id } });
 }
 
+// ── Preference awareness ────────────────────────────────────────────────────
+// Maps all memory buckets into a "known vs unknown" profile so the LLM knows
+// what it still needs to learn about the user.
+
+export type PreferenceProfile = {
+  known: Record<string, string>;
+  unknown: string[];
+  totalEntries: number;
+  isNewUser: boolean;
+};
+
+const PREFERENCE_DIMENSIONS: Array<{
+  key: string;
+  label: string;
+  aliases: string[];
+}> = [
+  { key: "city", label: "home city or area", aliases: ["city", "location", "neighborhood", "home_city"] },
+  { key: "household", label: "who they usually plan with (partner, kids, friends, solo)", aliases: ["household", "family", "partner", "kids", "children"] },
+  { key: "budget_range", label: "typical budget comfort zone", aliases: ["budget_range", "budget", "spending", "price_range"] },
+  { key: "max_travel_minutes", label: "how far they're willing to travel", aliases: ["max_travel_minutes", "travel_time", "commute"] },
+  { key: "transportation", label: "how they get around (car, transit, walking)", aliases: ["transportation", "transit", "car", "driving"] },
+  { key: "dietary", label: "dietary needs or food preferences", aliases: ["dietary", "food_restrictions", "allergies", "diet"] },
+  { key: "activity_vibe", label: "preferred vibe (adventurous, chill, cultural, outdoorsy)", aliases: ["activity_vibe", "vibe", "style_preference"] },
+  { key: "favorite_cuisines", label: "favorite cuisines or restaurant styles", aliases: ["favorite_cuisines", "cuisines", "food_preference"] },
+  { key: "favorite_activity", label: "favorite types of activities", aliases: ["favorite_activity", "activities", "hobbies"] },
+  { key: "schedule_pattern", label: "typical availability (weekends, evenings, flexible)", aliases: ["schedule_pattern", "availability", "schedule"] },
+];
+
+export async function getPreferenceProfile(): Promise<PreferenceProfile> {
+  const entries = await db.memoryEntry.findMany({
+    where: {
+      bucket: { in: ["profile_memory", "taste_memory", "logistics_memory"] },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const known: Record<string, string> = {};
+  const unknown: string[] = [];
+
+  for (const dim of PREFERENCE_DIMENSIONS) {
+    const match = entries.find((e) => {
+      const entryKey = e.key.toLowerCase();
+      return dim.aliases.some(
+        (alias) => entryKey === alias || entryKey.includes(alias),
+      );
+    });
+    if (match) {
+      known[dim.label] = match.value;
+    } else {
+      unknown.push(dim.label);
+    }
+  }
+
+  for (const entry of entries) {
+    const alreadyCovered = PREFERENCE_DIMENSIONS.some((d) =>
+      d.aliases.some(
+        (alias) =>
+          entry.key.toLowerCase() === alias ||
+          entry.key.toLowerCase().includes(alias),
+      ),
+    );
+    if (!alreadyCovered) {
+      const label = entry.key.replace(/_/g, " ");
+      if (!known[label]) {
+        known[label] = entry.value;
+      }
+    }
+  }
+
+  return {
+    known,
+    unknown,
+    totalEntries: entries.length,
+    isNewUser: entries.length <= 2,
+  };
+}
+
 export async function tasteProfile() {
   const entries = await db.memoryEntry.findMany({
     where: { bucket: "taste_memory" },

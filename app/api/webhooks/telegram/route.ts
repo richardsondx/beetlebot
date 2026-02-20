@@ -26,6 +26,7 @@ type TelegramChatState = {
 type TelegramConfig = {
   grantedScopes?: string[];
   chats?: Record<string, TelegramChatState>;
+  lastProcessedUpdateId?: number;
 };
 
 function parseTelegramConfig(configJson: string | null | undefined): TelegramConfig {
@@ -60,6 +61,70 @@ function parseIncoming(update: TelegramUpdate) {
   return { text, chatId: String(chatId) };
 }
 
+function getUpdateId(update: TelegramUpdate): number | null {
+  if (typeof update.update_id !== "number" || !Number.isFinite(update.update_id)) return null;
+  return update.update_id;
+}
+
+function getLastProcessedUpdateId(config: TelegramConfig): number | null {
+  if (typeof config.lastProcessedUpdateId !== "number") return null;
+  if (!Number.isFinite(config.lastProcessedUpdateId)) return null;
+  return config.lastProcessedUpdateId;
+}
+
+async function reserveUpdateIdIfNew(
+  rawTelegram: NonNullable<Awaited<ReturnType<typeof db.integrationConnection.findUnique>>>,
+  config: TelegramConfig,
+  updateId: number,
+): Promise<{ accepted: boolean; nextConfig: TelegramConfig }> {
+  const lastProcessedUpdateId = getLastProcessedUpdateId(config);
+  if (lastProcessedUpdateId != null && updateId <= lastProcessedUpdateId) {
+    return { accepted: false, nextConfig: config };
+  }
+
+  const nextConfig: TelegramConfig = {
+    ...config,
+    lastProcessedUpdateId: updateId,
+  };
+
+  // Optimistic CAS on updatedAt prevents concurrent duplicate deliveries from
+  // both reserving and sending for the same Telegram update.
+  const casResult = await db.integrationConnection.updateMany({
+    where: {
+      provider: "telegram",
+      updatedAt: rawTelegram.updatedAt,
+    },
+    data: encryptConnectionFields({
+      configJson: JSON.stringify(nextConfig),
+    }),
+  });
+  if (casResult.count > 0) {
+    return { accepted: true, nextConfig };
+  }
+
+  const latestRawTelegram = await db.integrationConnection.findUnique({
+    where: { provider: "telegram" },
+  });
+  const latestTelegram = latestRawTelegram ? decryptConnection(latestRawTelegram) : null;
+  const latestConfig = parseTelegramConfig(latestTelegram?.configJson);
+  const latestProcessedUpdateId = getLastProcessedUpdateId(latestConfig);
+  if (latestProcessedUpdateId != null && updateId <= latestProcessedUpdateId) {
+    return { accepted: false, nextConfig: latestConfig };
+  }
+
+  const latestNextConfig: TelegramConfig = {
+    ...latestConfig,
+    lastProcessedUpdateId: updateId,
+  };
+  await db.integrationConnection.update({
+    where: { provider: "telegram" },
+    data: encryptConnectionFields({
+      configJson: JSON.stringify(latestNextConfig),
+    }),
+  });
+  return { accepted: true, nextConfig: latestNextConfig };
+}
+
 export async function POST(request: Request) {
   const update = (await request.json().catch(() => null)) as TelegramUpdate | null;
   if (!update) return ok({ received: false, ignored: true, reason: "invalid_json" });
@@ -74,8 +139,25 @@ export async function POST(request: Request) {
   if (!telegram?.accessToken || telegram.status !== "connected") {
     return ok({ received: true, ignored: true, reason: "telegram_not_connected" });
   }
+  if (!rawTelegram) {
+    return ok({ received: true, ignored: true, reason: "telegram_not_connected" });
+  }
 
-  const config = parseTelegramConfig(telegram.configJson);
+  let config = parseTelegramConfig(telegram.configJson);
+  const updateId = getUpdateId(update);
+  if (updateId != null) {
+    const reservation = await reserveUpdateIdIfNew(rawTelegram, config, updateId);
+    if (!reservation.accepted) {
+      return ok({
+        received: true,
+        ignored: true,
+        reason: "duplicate_update",
+        updateId,
+      });
+    }
+    config = reservation.nextConfig;
+  }
+
   const chats = config.chats ?? {};
   const prior = chats[incoming.chatId] ?? {};
   const modeOverride = extractModeOverride(incoming.text);

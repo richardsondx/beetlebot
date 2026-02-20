@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "binary"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Autopilot {
+  id           String         @id @default(cuid())
+  name         String
+  goal         String
+  triggerType  String
+  trigger      String
+  action       String
+  approvalRule String
+  status       String
+  nextCheckIn  DateTime
+  mode         String
+  budgetCap    Int
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  runs         AutopilotRun[]
+  scheduler    SchedulerJob[]
+}
+
+model Pack {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  city         String
+  modes        String
+  style        String
+  budgetRange  String
+  needs        String
+  description  String
+  instructions String   @default("")
+  tags         String   @default("[]")
+  dataSources  String   @default("[]")
+  installed    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model SoftHold {
+  id        String   @id @default(cuid())
+  title     String
+  startAt   DateTime
+  endAt     DateTime
+  status    String
+  createdAt DateTime @default(now())
+}
+
+model Approval {
+  id        String   @id @default(cuid())
+  title     String
+  amount    Float
+  status    String
+  reason    String?
+  createdAt DateTime @default(now())
+}
+
+model AuditEvent {
+  id      String   @id @default(cuid())
+  at      DateTime @default(now())
+  actor   String
+  action  String
+  details String
+}
+
+model DebugTrace {
+  id      String   @id @default(cuid())
+  at      DateTime @default(now())
+  scope   String
+  message String
+}
+
+model MemoryEntry {
+  id         String   @id @default(cuid())
+  bucket     String
+  key        String
+  value      String
+  source     String
+  confidence Float
+  ttl        DateTime?
+  pinned     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model AutopilotRun {
+  id             String    @id @default(cuid())
+  autopilotId    String
+  autopilot      Autopilot @relation(fields: [autopilotId], references: [id], onDelete: Cascade)
+  scheduledAt    DateTime
+  startedAt      DateTime?
+  status         String
+  decisionTrace  String
+  actions        String
+  approvalState  String
+  idempotencyKey String    @unique
+  retryCount     Int       @default(0)
+  googleEventId  String?
+  holdStartAt    DateTime?
+  holdEndAt      DateTime?
+  createdAt      DateTime  @default(now())
+}
+
+model SchedulerJob {
+  id          String    @id @default(cuid())
+  autopilotId String
+  autopilot   Autopilot @relation(fields: [autopilotId], references: [id], onDelete: Cascade)
+  triggerType String
+  cron        String?
+  watcher     String?
+  status      String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model IntegrationConnection {
+  id                   String   @id @default(cuid())
+  provider             String   @unique
+  kind                 String
+  status               String
+  displayName          String?
+  externalAccountId    String?
+  externalAccountLabel String?
+  configJson           String?
+  accessToken          String?
+  refreshToken         String?
+  tokenExpiresAt       DateTime?
+  lastCheckedAt        DateTime?
+  lastError            String?
+  grantedScopes        String   @default("[]")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model Settings {
+  id              String @id @default("singleton")
+  defaultApproval String @default("ask_first")
+  spendCap        Int    @default(150)
+  quietStart      String @default("22:00")
+  quietEnd        String @default("08:00")
+  updatedAt       DateTime @updatedAt
+}
+
+model ConversationThread {
+  id        String                @id @default(cuid())
+  title     String?
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+  messages  ConversationMessage[]
+}
+
+model ConversationMessage {
+  id         String             @id @default(cuid())
+  threadId   String
+  role       String
+  content    String
+  /// Serialised RichBlock[] — null for legacy text-only messages
+  blocksJson String?
+  createdAt  DateTime           @default(now())
+  thread     ConversationThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+}
+

@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #060b12;
+  --card: #0d1422;
+  --text: #e6edf6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    sans-serif;
+}
+
+/* Hide scrollbar for gallery carousels while keeping scroll functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Landing page animations */
+@keyframes landingFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landingPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes landingBounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(6px);
+  }
+}
+
+.landing-fade-in {
+  animation: landingFadeIn 0.8s ease-out both;
+}
+
+.landing-pulse {
+  animation: landingPulse 2s ease-in-out infinite;
+}
+
+.landing-bounce {
+  animation: landingBounce 2s ease-in-out infinite;
+}
+

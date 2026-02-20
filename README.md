@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# beetlebot
 
-## Getting Started
+beetlebot is an open-source, chat-first life operations agent that helps plan social time, free-time activities, and travel experiences with weather and calendar context.
 
-First, run the development server:
+## Core Concepts
+
+- **Autopilots**: Goal + Trigger + Action + Approval.
+- **Packs**: capability bundles for city/niche planning.
+- **Soft-holds**: reserve time first, execute after approval.
+- **Memory**: long-term local-first profile, taste, logistics, and history memory.
+
+## Stack
+
+- Next.js App Router + TypeScript + Tailwind
+- API routes for planner runtime surfaces
+- CLI package in `packages/cli`
+- Runtime contracts in `docs/`
+
+## Quickstart
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## CLI
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Run:
 
-## Learn More
+```bash
+npm run cli -- --help
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Key Docs
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `docs/PRD.md`
+- `docs/ARCHITECTURE.md`
+- `docs/PLAN_OBJECT_SCHEMA.md`
+- `docs/PACK_SPEC.md`
+- `docs/MEMORY_MODEL.md`
+- `docs/AUTOPILOT_RUNTIME.md`
+- `docs/API_ROUTES.md`
+- `docs/CLI.md`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Community Direction
 
-## Deploy on Vercel
+The project is designed to support a builder tribe around the beetlebot mascot with practical, reusable Packs and transparent audit-first agent behavior.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

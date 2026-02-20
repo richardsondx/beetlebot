@@ -101,7 +101,7 @@ export async function POST(request: Request) {
     chatPayload.data?.reply?.trim() ||
     (chatPayload.error ? `I hit an error: ${chatPayload.error}` : "I didn't catch that — try again?");
 
-  await sendToChannel({
+  const sendResult = await sendToChannel({
     provider: "telegram",
     accessToken: telegram.accessToken,
     recipientId: incoming.chatId,
@@ -110,6 +110,9 @@ export async function POST(request: Request) {
       blocks: chatPayload.data?.blocks,
     },
   });
+  if (!sendResult.ok) {
+    console.error(`[telegram-webhook] send failed: ${sendResult.error}`);
+  }
 
   const nextThreadId = chatPayload.data?.threadId;
   const shouldSaveThread = typeof nextThreadId === "string" && nextThreadId.length >= 8;

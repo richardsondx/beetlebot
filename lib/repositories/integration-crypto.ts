@@ -11,7 +11,10 @@ export function decryptConnection<T extends Partial<Pick<IntegrationConnection, 
   const copy = { ...row };
   for (const field of ENCRYPTED_FIELDS) {
     if (field in copy && copy[field] != null) {
-      (copy as Record<string, unknown>)[field] = decryptIfPresent(copy[field] as string);
+      let decrypted = decryptIfPresent(copy[field] as string);
+      // Backward compatibility: old writes could double-encrypt integration secrets.
+      decrypted = decryptIfPresent(decrypted as string);
+      (copy as Record<string, unknown>)[field] = decrypted;
     }
   }
   return copy;

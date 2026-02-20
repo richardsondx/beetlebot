@@ -658,9 +658,12 @@ export function IntegrationCard({
   const [state, setState] = useState(integration);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showSetup, setShowSetup] = useState(state.status !== "connected");
+  const [showSetup, setShowSetup] = useState(
+    state.status !== "connected" && state.status !== "error",
+  );
 
   const isConnected = state.status === "connected";
+  const hasSession = isConnected || state.status === "error";
 
   async function handleConnect(body: Record<string, unknown>) {
     setLoading(true);
@@ -693,6 +696,9 @@ export function IntegrationCard({
         "POST",
       );
       setState(result);
+      if (result.status !== "connected") {
+        setError(result.lastError ?? "Health check failed");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Test failed");
     } finally {
@@ -757,7 +763,7 @@ export function IntegrationCard({
       </div>
 
       {/* Connected view */}
-      {isConnected && !showSetup && (
+      {hasSession && !showSetup && (
         <div className="mt-4 space-y-3">
           <div className="space-y-1 rounded-lg border border-white/5 bg-white/[0.02] p-3 text-xs text-slate-300">
             <p>
@@ -810,9 +816,9 @@ export function IntegrationCard({
       )}
 
       {/* Setup form */}
-      {(!isConnected || showSetup) && (
+      {(!hasSession || showSetup) && (
         <div className="mt-4 border-t border-white/5 pt-4">
-          {isConnected && (
+          {hasSession && (
             <button
               type="button"
               onClick={() => setShowSetup(false)}

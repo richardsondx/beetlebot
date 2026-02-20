@@ -189,17 +189,21 @@ async function telegramSendMessage(
   text: string,
   caps: ProviderCapabilities,
 ): Promise<string | null> {
-  const body: Record<string, unknown> = {
-    chat_id: chatId,
-    text: truncate(text, caps.captionMaxLen * 4),
-    parse_mode: "HTML",
-  };
+  const truncated = truncate(text, caps.captionMaxLen * 4);
+  const body: Record<string, unknown> = { chat_id: chatId, text: truncated };
   const res = await fetch(`${base}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const data = (await res.json()) as { ok?: boolean; result?: { message_id?: number } };
+  const data = (await res.json()) as {
+    ok?: boolean;
+    result?: { message_id?: number };
+    description?: string;
+  };
+  if (!data.ok) {
+    throw new Error(data.description ?? "Telegram sendMessage failed");
+  }
   return data.result?.message_id != null ? String(data.result.message_id) : null;
 }
 
@@ -229,7 +233,14 @@ async function telegramSendPhoto(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const data = (await res.json()) as { ok?: boolean; result?: { message_id?: number } };
+  const data = (await res.json()) as {
+    ok?: boolean;
+    result?: { message_id?: number };
+    description?: string;
+  };
+  if (!data.ok) {
+    throw new Error(data.description ?? "Telegram sendPhoto failed");
+  }
   return data.result?.message_id != null ? String(data.result.message_id) : null;
 }
 
@@ -257,7 +268,11 @@ async function telegramSendMediaGroup(
   const data = (await res.json()) as {
     ok?: boolean;
     result?: Array<{ message_id?: number }>;
+    description?: string;
   };
+  if (!data.ok) {
+    console.warn(`[telegram] sendMediaGroup failed: ${data.description}`);
+  }
   return (data.result ?? [])
     .map((m) => (m.message_id != null ? String(m.message_id) : null))
     .filter((id): id is string => id !== null);

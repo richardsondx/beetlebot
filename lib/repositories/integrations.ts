@@ -154,7 +154,7 @@ async function ensureConnection(provider: IntegrationProvider) {
 }
 
 function applyAdapterResult(input: AdapterConnectResult) {
-  const data = {
+  return {
     status: input.status,
     externalAccountId: input.externalAccountId ?? null,
     externalAccountLabel: input.externalAccountLabel ?? null,
@@ -165,7 +165,6 @@ function applyAdapterResult(input: AdapterConnectResult) {
     lastError: input.lastError ?? null,
     lastCheckedAt: new Date(),
   };
-  return encryptConnectionFields(data);
 }
 
 export async function listIntegrationConnections() {
@@ -211,7 +210,11 @@ export async function connectIntegration<P extends IntegrationProvider>(
         details: provider,
       },
     });
-    return { ...toPublic(updated), authorizeUrl: result.authorizeUrl ?? null, message: result.message ?? null };
+    return {
+      ...toPublic(decryptConnection(updated)),
+      authorizeUrl: result.authorizeUrl ?? null,
+      message: result.message ?? null,
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Integration connect failed";
     await db.integrationConnection.update({

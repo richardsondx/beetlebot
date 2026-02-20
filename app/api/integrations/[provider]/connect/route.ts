@@ -1,5 +1,6 @@
 import {
   googleCalendarConnectSchema,
+  mapsConnectSchema,
   opentableConnectSchema,
   telegramConnectSchema,
   weatherConnectSchema,
@@ -57,6 +58,10 @@ export async function POST(request: Request, { params }: Params) {
     if (provider === "opentable") {
       const body = opentableConnectSchema.parse(payload);
       return ok(await connectIntegration("opentable", body));
+    }
+    if (provider === "maps") {
+      const body = mapsConnectSchema.parse(payload);
+      return ok(await connectIntegration("maps", body));
     }
 
     const body = googleCalendarConnectSchema.parse(payload);

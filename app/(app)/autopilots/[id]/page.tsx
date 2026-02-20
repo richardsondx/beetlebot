@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { ensureSeedData } from "@/lib/repositories/seed";
 import { fmtDateTime, fmtDateShort, fmtTime } from "@/lib/format";
 import { AutopilotActions } from "@/components/autopilots/autopilot-actions";
+import { SoftHoldActions } from "@/components/calendar/soft-hold-actions";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -123,23 +124,34 @@ export default async function AutopilotDetailPage({ params }: PageProps) {
                 return (
                   <div
                     key={hold.id}
-                    className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#0d1422] px-4 py-3"
+                    className="rounded-xl border border-white/10 bg-[#0d1422] px-4 py-3"
                   >
-                    <div>
-                      <p className="text-sm font-medium text-slate-100">{hold.title}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        {fmtDateShort(hold.startAt)} · {fmtTime(hold.startAt)}
-                        {" – "}
-                        {sameDay
-                          ? fmtTime(hold.endAt)
-                          : `${fmtDateShort(hold.endAt)} ${fmtTime(hold.endAt)}`}
-                      </p>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-100">{hold.title}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {fmtDateShort(hold.startAt)} · {fmtTime(hold.startAt)}
+                          {" – "}
+                          {sameDay
+                            ? fmtTime(hold.endAt)
+                            : `${fmtDateShort(hold.endAt)} ${fmtTime(hold.endAt)}`}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs ${hs.badge}`}
+                      >
+                        {hold.status}
+                      </span>
                     </div>
-                    <span
-                      className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs ${hs.badge}`}
-                    >
-                      {hold.status}
-                    </span>
+                    <SoftHoldActions
+                      hold={{
+                        id: hold.id,
+                        title: hold.title,
+                        startAtIso: hold.startAt.toISOString(),
+                        endAtIso: hold.endAt.toISOString(),
+                        status: hold.status === "released" ? "released" : "held",
+                      }}
+                    />
                   </div>
                 );
               })}

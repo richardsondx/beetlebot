@@ -104,6 +104,14 @@ export async function releaseSoftHold(id: string) {
   return hold;
 }
 
+export async function deleteSoftHold(id: string) {
+  const hold = await db.softHold.delete({ where: { id } });
+  await db.auditEvent.create({
+    data: { actor: "api:calendar", action: "soft_hold_deleted", details: hold.title },
+  });
+  return hold;
+}
+
 export async function updateSoftHold(
   id: string,
   input: { title?: string; startAt?: string; endAt?: string; status?: "held" | "released" },

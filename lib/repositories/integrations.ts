@@ -55,6 +55,15 @@ const CATALOG: Record<IntegrationProvider, IntegrationCatalogItem> = {
     availableScopes: ["read", "write"],
     defaultScopes: ["read"],
   },
+  maps: {
+    provider: "maps",
+    kind: "context",
+    displayName: "Maps",
+    description:
+      "Directions, travel time, and distance estimates for smarter buffers and logistics.",
+    availableScopes: ["read"],
+    defaultScopes: ["read"],
+  },
 };
 
 function parseConfig(configJson?: string | null): Record<string, unknown> {

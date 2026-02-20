@@ -61,7 +61,7 @@ export default async function SettingsPage() {
           <div>
             <h2 className="text-lg font-semibold">Integrations</h2>
             <p className="mt-0.5 text-sm text-slate-400">
-              Connect channels and calendar providers so beetlebot can coordinate in chat.
+              Connect services so beetlebot can message, schedule, and plan from chat.
             </p>
           </div>
 

@@ -116,6 +116,159 @@ export async function ensureSeedData() {
       installed: true,
     },
     {
+      slug: "toronto-scandinavian-spa-trail",
+      name: "Toronto Scandinavian Spa Trail",
+      city: "Toronto + Nearby",
+      modes: JSON.stringify(["relax", "explore", "dating", "social"]),
+      style: "curated",
+      budgetRange: "$45-$350",
+      needs: JSON.stringify(["calendar:read", "weather:read", "maps:read"]),
+      description:
+        "Curates trendy Toronto sauna spots plus top Nordic spa day trips near the city with practical booking guidance.",
+      instructions:
+        "You are a Toronto Nordic/Scandinavian spa concierge. Prioritize this roster when users ask for saunas, cold plunge, or Nordic spa plans. Core Toronto and inner-suburb options: Löyly Floating Sauna (Harbourfront), Othership Adelaide, Element Outdoor Sauna, SANA (Geary Ave), Alter Wellness (College St), and Go Place (Markham, large day-spa format). Top short-drive options: Thermea Spa Village Whitby, Vetta Nordic Spa (Horseshoe Valley), Scandinave Spa Blue Mountain, Glen Oro Farm (private sauna/cold plunge context), and The Liberty Inn Caledon (overnight-guest spa model). Build 2-4 options based on budget, social vibe vs quiet recovery, and travel tolerance. Flag booking urgency for weekends. Include practical context: session format (guided/social/private), likely duration, and whether the venue is better for quick reset vs full-day experience. If a venue is not strictly Scandinavian in branding but still relevant for sauna/cold-plunge intent, clearly label it as adjacent.",
+      tags: JSON.stringify([
+        "scandinavian-spa",
+        "nordic-spa",
+        "sauna",
+        "cold-plunge",
+        "toronto",
+        "day-trip",
+      ]),
+      dataSources: JSON.stringify([
+        {
+          url: "https://www.loylyfloatingsauna.ca/toronto",
+          label: "Loyly Floating Sauna Toronto",
+          hint: "Floating sauna sessions at Harbourfront",
+        },
+        {
+          url: "https://www.othership.us/adelaide",
+          label: "Othership Adelaide",
+          hint: "Guided social sauna and ice bath classes",
+        },
+        {
+          url: "https://www.elementoutdoorsauna.com/",
+          label: "Element Outdoor Sauna",
+          hint: "Private rooftop Finnish-style sauna and cold plunge",
+        },
+        {
+          url: "https://www.sanasana.ca/",
+          label: "SANA",
+          hint: "Geary Ave banya-inspired sauna and bathhouse",
+        },
+        {
+          url: "https://www.alterwellness.ca/",
+          label: "Alter Wellness",
+          hint: "College West sauna and cold plunge studio",
+        },
+        {
+          url: "https://www.goplace.com/",
+          label: "Go Place",
+          hint: "Large 24/7 Markham spa with multiple sauna rooms",
+        },
+        {
+          url: "https://thermea.com/whitby",
+          label: "Thermea Spa Village Whitby",
+          hint: "Large Nordic-inspired spa village near Toronto",
+        },
+        {
+          url: "https://vettaspa.com/",
+          label: "Vetta Nordic Spa",
+          hint: "Finnish hydrotherapy-style spa at Horseshoe Valley",
+        },
+        {
+          url: "https://www.scandinave.com/blue-mountain",
+          label: "Scandinave Spa Blue Mountain",
+          hint: "Classic thermal journey destination",
+        },
+        {
+          url: "https://www.glenoro.com/",
+          label: "Glen Oro Farm",
+          hint: "Farm retreat with private sauna/cold plunge context",
+        },
+        {
+          url: "https://www.thelibertyinn.ca/",
+          label: "The Liberty Inn Caledon",
+          hint: "Overnight-focused Nordic spa hotel",
+        },
+      ]),
+      installed: false,
+    },
+    {
+      slug: "toronto-group-wellness-experiences",
+      name: "Toronto Group Wellness Experiences",
+      city: "Toronto + GTA",
+      modes: JSON.stringify(["social", "relax", "dating", "explore"]),
+      style: "spontaneous",
+      budgetRange: "$25-$450",
+      needs: JSON.stringify(["calendar:read", "weather:read", "maps:read"]),
+      description:
+        "Finds fun, group-friendly contrast therapy and social wellness experiences like Othership and Alter, from quick sessions to full social outings.",
+      instructions:
+        "You are a Toronto group wellness planner focused on fun social experiences similar to Othership or Alter. Prioritize experiences that work well for 2-8 people and clearly state whether each option is guided class, private suite, open-format, or full venue buyout. Core roster to prioritize: Othership (Adelaide + Yorkville), Alter Wellness, Element Outdoor Sauna, SANA, Sweat Zero, Ritual Beauty & Wellness, OMEDOME, Trove Wellbeing (group packages), and Go Place. Recommend 3-5 options with: price band, best group size, energy profile (high-energy social vs calm reset), and booking friction (easy, moderate, hard). For weekend plans, suggest at least one backup option in case preferred slots are sold out. If options are adjacent wellness rather than strict Nordic sauna, label them clearly as adjacent.",
+      tags: JSON.stringify([
+        "group-activity",
+        "social-wellness",
+        "sauna",
+        "cold-plunge",
+        "breathwork",
+        "toronto",
+      ]),
+      dataSources: JSON.stringify([
+        {
+          url: "https://www.othership.us/adelaide",
+          label: "Othership Adelaide",
+          hint: "Flagship social sauna, ice bath, and guided classes",
+        },
+        {
+          url: "https://www.othership.us/yorkville",
+          label: "Othership Yorkville",
+          hint: "Second Toronto location with guided and free-flow sessions",
+        },
+        {
+          url: "https://www.alterwellness.ca/",
+          label: "Alter Wellness",
+          hint: "College West sauna and cold plunge studio",
+        },
+        {
+          url: "https://www.elementoutdoorsauna.com/",
+          label: "Element Outdoor Sauna",
+          hint: "Private rooftop contrast therapy experience",
+        },
+        {
+          url: "https://www.sanasana.ca/",
+          label: "SANA",
+          hint: "Banya-inspired social bathhouse in Toronto",
+        },
+        {
+          url: "https://www.sweatzero.ca/",
+          label: "Sweat Zero",
+          hint: "Private suites with sauna and cold plunge, group-friendly",
+        },
+        {
+          url: "https://ritual.ca/sauna-%26-cold-plunge",
+          label: "Ritual Beauty & Wellness",
+          hint: "Private infrared sauna and cold plunge sessions",
+        },
+        {
+          url: "https://omedome.com/",
+          label: "OMEDOME",
+          hint: "Recovery room format with sauna/cold plunge focus",
+        },
+        {
+          url: "https://trovewellbeing.com/group-bookings/",
+          label: "Trove Wellbeing Group Bookings",
+          hint: "Structured private classes and space buyouts for groups",
+        },
+        {
+          url: "https://www.goplace.com/",
+          label: "Go Place",
+          hint: "Large 24/7 spa venue suited to longer group hangouts",
+        },
+      ]),
+      installed: false,
+    },
+    {
       slug: "ontario-parks-camping-reservations",
       name: "Ontario Parks Camping Reservations",
       city: "Ontario",
@@ -249,7 +402,41 @@ export async function ensureSeedData() {
           displayName: "OpenTable",
           grantedScopes: JSON.stringify(["read"]),
         },
+        {
+          provider: "maps",
+          kind: "context",
+          status: "connected",
+          displayName: "Maps",
+          grantedScopes: JSON.stringify(["read"]),
+          configJson: JSON.stringify({
+            mapsProvider: "approx",
+            units: "metric",
+            grantedScopes: ["read"],
+          }),
+        },
       ],
+    });
+  }
+
+  // Ensure new integrations exist even if older seed already ran.
+  const mapsExisting = await db.integrationConnection.findUnique({
+    where: { provider: "maps" },
+    select: { provider: true },
+  });
+  if (!mapsExisting) {
+    await db.integrationConnection.create({
+      data: {
+        provider: "maps",
+        kind: "context",
+        status: "connected",
+        displayName: "Maps",
+        grantedScopes: JSON.stringify(["read"]),
+        configJson: JSON.stringify({
+          mapsProvider: "approx",
+          units: "metric",
+          grantedScopes: ["read"],
+        }),
+      },
     });
   }
 

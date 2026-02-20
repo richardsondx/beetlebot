@@ -12,7 +12,7 @@ export const MODES: ModeDefinition[] = [
     id: "explore",
     label: "Explore",
     icon: "\u{1F5FA}\uFE0F",
-    description: "Open discovery, see what's possible.",
+    description: "General planning mode.",
     color: "text-slate-300",
     activeColor: "text-amber-200 border-amber-300/30 bg-amber-300/10",
   },

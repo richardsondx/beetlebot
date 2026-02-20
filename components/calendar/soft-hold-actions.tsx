@@ -27,9 +27,10 @@ function localInputToIso(value: string) {
 
 export function SoftHoldActions({ hold }: Props) {
   const router = useRouter();
-  const [mode, setMode] = useState<"view" | "edit" | "release">("view");
+  const [mode, setMode] = useState<"view" | "edit" | "release" | "delete">("view");
   const [saving, setSaving] = useState(false);
   const [releasing, setReleasing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     title: hold.title,
@@ -78,7 +79,11 @@ export function SoftHoldActions({ hold }: Props) {
     setReleasing(true);
     setError("");
     try {
-      const res = await fetch(`/api/calendar/soft-holds/${hold.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/calendar/soft-holds/${hold.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "released" }),
+      });
       if (!res.ok) {
         const payload = (await res.json()) as { error?: string };
         throw new Error(payload.error ?? "Could not release hold.");
@@ -90,6 +95,50 @@ export function SoftHoldActions({ hold }: Props) {
     } finally {
       setReleasing(false);
     }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/calendar/soft-holds/${hold.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const payload = (await res.json()) as { error?: string };
+        throw new Error(payload.error ?? "Could not delete hold.");
+      }
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  if (mode === "delete") {
+    return (
+      <div className="mt-3 rounded-lg border border-rose-300/20 bg-rose-300/8 p-3">
+        <p className="text-xs text-rose-200">Permanently delete this hold?</p>
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            onClick={() => void handleDelete()}
+            disabled={deleting}
+            className="rounded-md border border-rose-300/30 bg-rose-300/15 px-2.5 py-1 text-xs text-rose-200 hover:bg-rose-300/25 disabled:opacity-50"
+          >
+            {deleting ? "Deleting..." : "Yes, delete"}
+          </button>
+          <button
+            onClick={() => {
+              setMode("view");
+              setError("");
+            }}
+            className="text-xs text-slate-500 hover:text-slate-300"
+          >
+            Cancel
+          </button>
+        </div>
+        {error && <p className="mt-2 text-xs text-rose-300">{error}</p>}
+      </div>
+    );
   }
 
   if (mode === "release") {

@@ -75,7 +75,7 @@ export default function LandingPage() {
               GitHub
             </a>
             <a
-              href="https://discord.gg/beetlebot"
+              href="https://discord.gg/TWuKqaZxuc"
               target="_blank"
               rel="noopener noreferrer"
               className="transition-colors hover:text-slate-200"
@@ -143,7 +143,7 @@ export default function LandingPage() {
               </svg>
             </Link>
             <a
-              href="https://discord.gg/beetlebot"
+              href="https://discord.gg/TWuKqaZxuc"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-7 py-3.5 text-base font-medium text-slate-300 transition-all hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
@@ -338,7 +338,7 @@ export default function LandingPage() {
           {/* Resource links */}
           <div className="mt-12 flex flex-wrap items-center justify-center gap-6">
             <a
-              href="https://discord.gg/beetlebot"
+              href="https://discord.gg/TWuKqaZxuc"
               target="_blank"
               rel="noopener noreferrer"
               className="group flex items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] px-5 py-3 text-sm text-slate-400 transition-all hover:border-white/[0.15] hover:text-white"
@@ -420,7 +420,7 @@ export default function LandingPage() {
                 GitHub
               </a>
               <a
-                href="https://discord.gg/beetlebot"
+                href="https://discord.gg/TWuKqaZxuc"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="transition-colors hover:text-slate-400"

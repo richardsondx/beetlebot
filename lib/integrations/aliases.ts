@@ -7,6 +7,7 @@ const NEED_ALIAS_MAP: Record<string, IntegrationProvider> = {
   weather: "weather",
   telegram: "telegram",
   whatsapp: "whatsapp",
+  maps: "maps",
 };
 
 export function resolveNeedAlias(alias: string): IntegrationProvider | null {

@@ -127,7 +127,14 @@ export const updateSafetySettingsSchema = z
     message: "At least one field is required.",
   });
 
-export const integrationProviderSchema = z.enum(["telegram", "whatsapp", "google_calendar", "weather", "opentable"]);
+export const integrationProviderSchema = z.enum([
+  "telegram",
+  "whatsapp",
+  "google_calendar",
+  "weather",
+  "opentable",
+  "maps",
+]);
 
 export const telegramConnectSchema = z.object({
   botToken: z.string().min(10),
@@ -161,3 +168,9 @@ export const opentableConnectSchema = z.object({
   defaultPartySize: z.coerce.number().int().min(1).max(20).default(2),
 });
 
+export const mapsConnectSchema = z.object({
+  mapsProvider: z.enum(["approx", "openrouteservice"]).default("approx"),
+  apiKey: z.string().min(10).optional(),
+  defaultLocation: z.string().min(2).optional(),
+  units: z.enum(["metric", "imperial"]).default("metric"),
+});

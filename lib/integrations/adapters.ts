@@ -490,6 +490,105 @@ const googleCalendarAdapter: IntegrationAdapter<"google_calendar"> = {
   },
 };
 
+const OPENROUTESERVICE_DIRECTIONS_URL =
+  "https://api.openrouteservice.org/v2/directions/driving-car";
+
+const mapsAdapter: IntegrationAdapter<"maps"> = {
+  async connect(input, existing) {
+    const previousConfig = parseConfig(existing?.configJson);
+    const mapsProvider = input.mapsProvider ?? (previousConfig.mapsProvider as string) ?? "approx";
+    if (mapsProvider !== "approx" && mapsProvider !== "openrouteservice") {
+      throw new Error(`Unsupported maps provider: ${mapsProvider}`);
+    }
+
+    const units =
+      input.units ??
+      ((previousConfig.units as "metric" | "imperial" | undefined) ?? "metric");
+
+    const defaultLocation =
+      input.defaultLocation?.trim() || (previousConfig.defaultLocation as string | undefined);
+
+    let locationConfig: Record<string, string> = {};
+    if (defaultLocation) {
+      const resolved = await resolveOpenMeteoLocation(defaultLocation);
+      locationConfig = {
+        defaultLocation,
+        latitude: String(resolved.latitude),
+        longitude: String(resolved.longitude),
+        locationLabel: resolved.label || defaultLocation,
+      };
+    }
+
+    const apiKey = input.apiKey?.trim() || existing?.accessToken || null;
+    if (mapsProvider === "openrouteservice" && !apiKey) {
+      throw new Error(
+        "Missing OpenRouteService API key. Create a free key at openrouteservice.org and paste it here.",
+      );
+    }
+
+    return {
+      status: "connected",
+      externalAccountId: mapsProvider,
+      externalAccountLabel:
+        mapsProvider === "openrouteservice" ? "OpenRouteService" : "Maps (Approx)",
+      config: {
+        mapsProvider,
+        units,
+        ...locationConfig,
+      },
+      secrets:
+        mapsProvider === "openrouteservice"
+          ? { accessToken: apiKey }
+          : { accessToken: null },
+      lastError: null,
+    };
+  },
+  async health(existing) {
+    const config = parseConfig(existing.configJson);
+    const mapsProvider = (config.mapsProvider as string) ?? "approx";
+    if (mapsProvider !== "openrouteservice") {
+      return {
+        status: "connected",
+        checkedAt: new Date(),
+        lastError: null,
+        externalAccountLabel: "Maps (Approx)",
+      };
+    }
+
+    const token = existing.accessToken;
+    if (!token) {
+      return {
+        status: "error",
+        lastError: "Missing OpenRouteService API key",
+        checkedAt: new Date(),
+      };
+    }
+
+    try {
+      const response = await fetch(
+        `${OPENROUTESERVICE_DIRECTIONS_URL}?${new URLSearchParams({
+          start: "8.681495,49.41461",
+          end: "8.687872,49.420318",
+        }).toString()}`,
+        { headers: { Authorization: token } },
+      );
+      await parseJsonResponse(response);
+      return {
+        status: "connected",
+        checkedAt: new Date(),
+        lastError: null,
+        externalAccountLabel: "OpenRouteService",
+      };
+    } catch (error) {
+      return {
+        status: "error",
+        checkedAt: new Date(),
+        lastError: error instanceof Error ? error.message : "Maps health check failed",
+      };
+    }
+  },
+};
+
 const opentableAdapter: IntegrationAdapter<"opentable"> = {
   async connect(input) {
     const defaultCity = input.defaultCity?.trim() || "Toronto";
@@ -543,5 +642,6 @@ export const integrationAdapters: {
   whatsapp: whatsappAdapter,
   google_calendar: googleCalendarAdapter,
   weather: weatherAdapter,
+  maps: mapsAdapter,
   opentable: opentableAdapter,
 };

@@ -676,7 +676,7 @@ export function ChatInterface() {
                 How can I help you today?
               </h2>
               <p className="mt-2 text-sm text-slate-400">
-                Plan your free time with consent and context.
+                Autonomous planning for your social life.
               </p>
             </div>
             <div className="grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">

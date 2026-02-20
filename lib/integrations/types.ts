@@ -5,7 +5,8 @@ export type IntegrationProvider =
   | "whatsapp"
   | "google_calendar"
   | "weather"
-  | "opentable";
+  | "opentable"
+  | "maps";
 
 export type IntegrationKind = "channel" | "calendar" | "context" | "reservation";
 
@@ -47,6 +48,12 @@ export type ConnectInputByProvider = {
   opentable: {
     defaultCity?: string;
     defaultPartySize?: number;
+  };
+  maps: {
+    mapsProvider?: "approx" | "openrouteservice";
+    apiKey?: string;
+    defaultLocation?: string;
+    units?: "metric" | "imperial";
   };
 };
 

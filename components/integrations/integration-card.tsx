@@ -423,6 +423,108 @@ function WeatherSetup({
   );
 }
 
+function MapsSetup({
+  onSubmit,
+  loading,
+  config,
+}: {
+  onSubmit: (body: Record<string, unknown>) => void;
+  loading: boolean;
+  config?: Record<string, string>;
+}) {
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const mapsProvider = (fd.get("mapsProvider") as string) || "approx";
+    const apiKey = (fd.get("apiKey") as string) || "";
+    const defaultLocation = (fd.get("defaultLocation") as string) || "";
+    const units = (fd.get("units") as string) || "metric";
+
+    onSubmit({
+      mapsProvider,
+      apiKey: apiKey.trim() ? apiKey.trim() : undefined,
+      defaultLocation: defaultLocation.trim() ? defaultLocation.trim() : undefined,
+      units,
+    });
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <SetupSteps
+        steps={[
+          "Choose Approx for free, no-key distance + ETA estimates",
+          "Optionally choose OpenRouteService for more accurate routing (free per-user API key)",
+          "Set a default location for travel buffers when origin isn't specified",
+        ]}
+        link="https://openrouteservice.org/dev/#/signup"
+        linkLabel="OpenRouteService signup (optional)"
+      />
+
+      <div className="space-y-3">
+        <div>
+          <label
+            htmlFor="mapsProvider"
+            className="mb-1 block text-xs font-medium text-slate-400"
+          >
+            Provider
+          </label>
+          <select
+            id="mapsProvider"
+            name="mapsProvider"
+            defaultValue={config?.mapsProvider ?? "approx"}
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 focus:border-teal-400/50 focus:outline-none focus:ring-1 focus:ring-teal-400/30 [&>option]:bg-[#0d1422]"
+          >
+            <option value="approx">Approx (no API key)</option>
+            <option value="openrouteservice">OpenRouteService (API key)</option>
+          </select>
+        </div>
+
+        <Field
+          label="OpenRouteService API Key"
+          name="apiKey"
+          type="password"
+          placeholder="Optional — only needed for OpenRouteService"
+          required={false}
+        />
+
+        <Field
+          label="Default Location"
+          name="defaultLocation"
+          placeholder="Toronto  or  43.6532,-79.3832"
+          required={false}
+          defaultValue={config?.defaultLocation}
+        />
+
+        <div>
+          <label
+            htmlFor="units"
+            className="mb-1 block text-xs font-medium text-slate-400"
+          >
+            Units
+          </label>
+          <select
+            id="units"
+            name="units"
+            defaultValue={config?.units ?? "metric"}
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 focus:border-teal-400/50 focus:outline-none focus:ring-1 focus:ring-teal-400/30 [&>option]:bg-[#0d1422]"
+          >
+            <option value="metric">Metric (km)</option>
+            <option value="imperial">Imperial (mi)</option>
+          </select>
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full rounded-lg bg-teal-500/20 px-4 py-2.5 text-sm font-medium text-teal-100 transition-colors hover:bg-teal-500/30 disabled:opacity-50"
+      >
+        {loading ? "Saving…" : "Save Maps Settings"}
+      </button>
+    </form>
+  );
+}
+
 function OpenTableSetup({
   onSubmit,
   loading,
@@ -628,6 +730,8 @@ export function IntegrationCard({
         return <WeatherSetup {...props} config={state.config} />;
       case "opentable":
         return <OpenTableSetup {...props} config={state.config} />;
+      case "maps":
+        return <MapsSetup {...props} config={state.config} />;
       default:
         return null;
     }

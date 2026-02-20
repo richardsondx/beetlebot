@@ -10,12 +10,12 @@
 <p align="center">
   <a href="#quickstart"><img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build" /></a>
   <a href="https://github.com/richardsondx/beetlebot/releases"><img src="https://img.shields.io/badge/release-v0.1.0-blue?style=flat-square" alt="Release" /></a>
-  <a href="https://discord.gg/beetlebot"><img src="https://img.shields.io/badge/Discord-The%20Colony-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord" /></a>
+  <a href="https://discord.gg/TWuKqaZxuc"><img src="https://img.shields.io/badge/Discord-The%20Colony-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-orange?style=flat-square" alt="License" /></a>
 </p>
 
 <p align="center">
-  <a href="#quickstart">Quickstart</a> · <a href="#how-it-works">How it works</a> · <a href="#cli">CLI</a> · <a href="docs/">Docs</a> · <a href="#the-colony">The Colony</a> · <a href="https://discord.gg/beetlebot">Discord</a>
+  <a href="#quickstart">Quickstart</a> · <a href="#how-it-works">How it works</a> · <a href="#cli">CLI</a> · <a href="docs/">Docs</a> · <a href="#the-colony">The Colony</a> · <a href="https://discord.gg/TWuKqaZxuc">Discord</a>
 </p>
 
 ---
@@ -366,7 +366,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ### Community channels
 
-- **[Discord](https://discord.gg/beetlebot)** — join The Colony
+- **[Discord](https://discord.gg/TWuKqaZxuc)** — join The Colony
 - **[GitHub Issues](https://github.com/richardsondx/beetlebot/issues)** — bugs, features, ideas
 - **[GitHub Discussions](https://github.com/richardsondx/beetlebot/discussions)** — questions, show & tell
 

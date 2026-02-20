@@ -326,7 +326,7 @@ function buildClarifyingQuestion() {
 }
 
 const CALENDAR_INTENT_REGEX =
-  /\b(calendar|schedule|events?|free time|meeting|appointment|what'?s on my calendar|next plan|trip|travel)\b/i;
+  /\b(calendar|schedule|events?|free time|meeting|appointment|what'?s on my calendar)\b/i;
 const TRAVEL_INTENT_REGEX =
   /\b(travel|trip|vacation|flight|hotel|getaway|travel plans?)\b/i;
 const NEXT_LOOKUP_REGEX = /\b(next|upcoming|coming up|soon)\b/i;

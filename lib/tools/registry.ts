@@ -1,5 +1,6 @@
 import { fetchUrlTool } from "@/lib/tools/fetch-url";
 import { googleCalendarEventsTool } from "@/lib/tools/google-calendar";
+import { mapsTool } from "@/lib/tools/maps";
 import { opentableTool } from "@/lib/tools/opentable";
 import { weatherContextTool } from "@/lib/tools/weather";
 import { getIntegrationConnection } from "@/lib/repositories/integrations";
@@ -10,6 +11,7 @@ const TOOLS: ChatToolDefinition[] = [
   weatherContextTool,
   googleCalendarEventsTool,
   opentableTool,
+  mapsTool,
   fetchUrlTool,
 ];
 

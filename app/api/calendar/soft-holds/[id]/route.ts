@@ -1,13 +1,13 @@
 import { fromError, ok } from "@/lib/api/http";
 import { updateSoftHoldSchema } from "@/lib/api/schemas";
-import { releaseSoftHold, updateSoftHold } from "@/lib/repositories/misc";
+import { deleteSoftHold, updateSoftHold } from "@/lib/repositories/misc";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function DELETE(_: Request, { params }: Params) {
   try {
     const { id } = await params;
-    const hold = await releaseSoftHold(id);
+    const hold = await deleteSoftHold(id);
     return ok(hold);
   } catch (error) {
     return fromError(error);

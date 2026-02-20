@@ -7,12 +7,12 @@ export type ModeDefinition = {
   activeColor: string;
 };
 
-export const MODES: ModeDefinition[] = [
+export const PLANNING_MODES: ModeDefinition[] = [
   {
     id: "explore",
     label: "Explore",
     icon: "\u{1F5FA}\uFE0F",
-    description: "General planning mode.",
+    description: "Discover new things in your city.",
     color: "text-slate-300",
     activeColor: "text-amber-200 border-amber-300/30 bg-amber-300/10",
   },
@@ -66,7 +66,22 @@ export const MODES: ModeDefinition[] = [
   },
 ];
 
-export const MODE_IDS = MODES.map((m) => m.id);
+export const CHAT_MODES: ModeDefinition[] = [
+  {
+    id: "auto",
+    label: "Auto",
+    icon: "\u2728",
+    description: "We'll pick the best plan type for you.",
+    color: "text-slate-300",
+    activeColor: "text-cyan-200 border-cyan-300/30 bg-cyan-300/10",
+  },
+  ...PLANNING_MODES,
+];
+
+export const DEFAULT_CHAT_MODE = CHAT_MODES[0];
+
+export const MODE_IDS = PLANNING_MODES.map((m) => m.id);
+export const CHAT_MODE_IDS = CHAT_MODES.map((m) => m.id);
 
 export type StyleDefinition = {
   id: string;

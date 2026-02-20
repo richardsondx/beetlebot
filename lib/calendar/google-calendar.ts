@@ -42,6 +42,18 @@ export type CalendarListEntry = {
   primary: boolean;
 };
 
+type CalendarNameCandidate = {
+  id: string;
+  summary: string;
+  score: number;
+};
+
+export type CalendarNameMatchResult = {
+  matchedId: string | null;
+  confidence: number;
+  suggestions: string[];
+};
+
 export type CreateCalendarEventInput = {
   summary: string;
   start: string;
@@ -306,6 +318,143 @@ export async function listGoogleCalendars() {
   };
 }
 
+function normalizeCalendarName(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function levenshteinDistance(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i += 1) dp[i][0] = i;
+  for (let j = 0; j <= n; j += 1) dp[0][j] = j;
+
+  for (let i = 1; i <= m; i += 1) {
+    for (let j = 1; j <= n; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost,
+      );
+    }
+  }
+
+  return dp[m][n];
+}
+
+function stringSimilarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 1;
+  const distance = levenshteinDistance(a, b);
+  return Math.max(0, 1 - distance / maxLen);
+}
+
+function scoreCalendarNameMatch(query: string, candidate: string): number {
+  if (!query || !candidate) return 0;
+  if (query === candidate) return 1;
+  if (candidate.includes(query) || query.includes(candidate)) return 0.95;
+
+  const queryTokens = query.split(" ").filter(Boolean);
+  const candidateTokens = candidate.split(" ").filter(Boolean);
+  if (!queryTokens.length || !candidateTokens.length) {
+    return stringSimilarity(query, candidate);
+  }
+
+  const tokenScore =
+    queryTokens.reduce((sum, token) => {
+      let best = 0;
+      for (const candidateToken of candidateTokens) {
+        best = Math.max(best, stringSimilarity(token, candidateToken));
+      }
+      return sum + best;
+    }, 0) / queryTokens.length;
+
+  const fullStringScore = stringSimilarity(query, candidate);
+  return fullStringScore * 0.45 + tokenScore * 0.55;
+}
+
+async function resolveCalendarIdentifier(requestedCalendar: string): Promise<string> {
+  const requested = requestedCalendar.trim();
+  if (!requested) {
+    throw new Error("calendarId cannot be empty.");
+  }
+
+  const calendarsResult = await listGoogleCalendars();
+  const calendars = calendarsResult.calendars;
+  if (!calendars.length) {
+    throw new Error("No readable calendars were found in this Google account.");
+  }
+
+  const exactIdMatch = calendars.find((calendar) => calendar.id === requested);
+  if (exactIdMatch) return exactIdMatch.id;
+
+  const match = selectBestCalendarNameMatch(requested, calendars);
+  if (match.matchedId) return match.matchedId;
+
+  const suggestions = match.suggestions.map((name) => `"${name}"`);
+  const suggestionText = suggestions.length
+    ? ` Did you mean ${suggestions.join(", ")}?`
+    : "";
+
+  throw new Error(
+    `Calendar "${requested}" was not found.${suggestionText} Use operation "list_calendars" to view available calendars.`,
+  );
+}
+
+export function selectBestCalendarNameMatch(
+  requestedCalendar: string,
+  calendars: CalendarListEntry[],
+): CalendarNameMatchResult {
+  const requested = requestedCalendar.trim();
+  if (!requested || calendars.length === 0) {
+    return { matchedId: null, confidence: 0, suggestions: [] };
+  }
+
+  const normalizedRequested = normalizeCalendarName(requested);
+  const exactNameMatch = calendars.find(
+    (calendar) => normalizeCalendarName(calendar.summary) === normalizedRequested,
+  );
+  if (exactNameMatch) {
+    return {
+      matchedId: exactNameMatch.id,
+      confidence: 1,
+      suggestions: [exactNameMatch.summary],
+    };
+  }
+
+  const ranked: CalendarNameCandidate[] = calendars
+    .map((calendar) => ({
+      id: calendar.id,
+      summary: calendar.summary,
+      score: scoreCalendarNameMatch(
+        normalizedRequested,
+        normalizeCalendarName(calendar.summary),
+      ),
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const best = ranked[0];
+  const suggestions = ranked
+    .slice(0, 3)
+    .map((candidate) => candidate.summary);
+
+  return {
+    matchedId: null,
+    confidence: best?.score ?? 0,
+    suggestions,
+  };
+}
+
 function normalizeGoogleEvent(event: Record<string, unknown>): CalendarEventSummary | null {
   const id = typeof event.id === "string" ? event.id : null;
   const startObj =
@@ -345,7 +494,9 @@ export async function listGoogleCalendarEvents(input?: {
   query?: string;
 }) {
   const ctx = await getGoogleAuthContext();
-  const calendarId = input?.calendarId || ctx.calendarId || "primary";
+  const calendarId = input?.calendarId
+    ? await resolveCalendarIdentifier(input.calendarId)
+    : ctx.calendarId || "primary";
   const now = new Date();
   const timeMin = input?.timeMin ? toIso(input.timeMin, "timeMin") : now.toISOString();
   const timeMax = input?.timeMax
@@ -382,7 +533,9 @@ export async function listGoogleCalendarEvents(input?: {
 
 export async function getGoogleCalendarEvent(input: { eventId: string; calendarId?: string }) {
   const ctx = await getGoogleAuthContext();
-  const calendarId = input.calendarId || ctx.calendarId || "primary";
+  const calendarId = input.calendarId
+    ? await resolveCalendarIdentifier(input.calendarId)
+    : ctx.calendarId || "primary";
   const eventId = input.eventId?.trim();
   if (!eventId) throw new Error("eventId is required.");
 
@@ -492,25 +645,6 @@ export async function resolveCalendarEvent(
     : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
   const calendars = await listGoogleCalendars();
-  // #region agent log
-  fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      runId: "calendar-find-miss",
-      hypothesisId: "H3",
-      location: "lib/calendar/google-calendar.ts:resolveCalendarEvent",
-      message: "resolveCalendarEvent started",
-      data: {
-        calendarCount: calendars.count,
-        queryLength: input.query.length,
-        timeMin,
-        timeMax,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
 
   type AnnotatedEvent = CalendarEventSummary & {
     calendarId: string;
@@ -551,32 +685,6 @@ export async function resolveCalendarEvent(
   const googleResults = await fetchAllFromCalendars(input.query);
   if (googleResults.length > 0) {
     const scored = scoreCandidates(googleResults);
-    // #region agent log
-    fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        runId: "calendar-find-miss",
-        hypothesisId: "H2",
-        location: "lib/calendar/google-calendar.ts:resolveCalendarEvent",
-        message: "google_q scoring complete",
-        data: {
-          googleResultsCount: googleResults.length,
-          scoredCount: scored.length,
-          topConfidence: scored[0]?.confidence ?? null,
-          topMatchedQueryTokens: scored[0]
-            ? tokenize(stripEmojis(input.query).toLowerCase()).filter((qt) =>
-                tokenize(stripEmojis(scored[0].summary).toLowerCase()).some(
-                  (st) => st.includes(qt) || qt.includes(st),
-                ),
-              ).length
-            : 0,
-          queryTokenCount: tokenize(stripEmojis(input.query).toLowerCase()).length,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     if (scored.length > 0 && scored[0].confidence >= 0.5) {
       return {
         match: scored[0],
@@ -589,25 +697,6 @@ export async function resolveCalendarEvent(
   // Pass 2: Fetch ALL events (no q filter) and fuzzy match locally
   const allEvents = await fetchAllFromCalendars();
   const scored = scoreCandidates(allEvents);
-  // #region agent log
-  fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      runId: "calendar-find-miss",
-      hypothesisId: "H2",
-      location: "lib/calendar/google-calendar.ts:resolveCalendarEvent",
-      message: "fuzzy_local scoring complete",
-      data: {
-        allEventsCount: allEvents.length,
-        scoredCount: scored.length,
-        topConfidence: scored[0]?.confidence ?? null,
-        secondConfidence: scored[1]?.confidence ?? null,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
 
   if (scored.length > 0 && scored[0].confidence >= 0.5) {
     return {
@@ -626,7 +715,9 @@ export async function resolveCalendarEvent(
 
 export async function createGoogleCalendarEvent(input: CreateCalendarEventInput) {
   const managedId = await ensureManagedCalendar();
-  const calendarId = input.calendarId || managedId;
+  const calendarId = input.calendarId
+    ? await resolveCalendarIdentifier(input.calendarId)
+    : managedId;
   const start = toIso(input.start, "start");
   const end = toIso(input.end, "end");
 
@@ -656,7 +747,9 @@ export async function createGoogleCalendarEvent(input: CreateCalendarEventInput)
 
 export async function updateGoogleCalendarEvent(input: UpdateCalendarEventInput) {
   const managedId = await ensureManagedCalendar();
-  const calendarId = input.calendarId || managedId;
+  const calendarId = input.calendarId
+    ? await resolveCalendarIdentifier(input.calendarId)
+    : managedId;
   const eventId = input.eventId?.trim();
   if (!eventId) throw new Error("eventId is required.");
 
@@ -676,26 +769,6 @@ export async function updateGoogleCalendarEvent(input: UpdateCalendarEventInput)
   if (Object.keys(patchBody).length === 0) {
     throw new Error("No update fields provided.");
   }
-  // #region agent log
-  fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      runId: "calendar-update-visibility",
-      hypothesisId: "N2",
-      location: "lib/calendar/google-calendar.ts:updateGoogleCalendarEvent",
-      message: "calendar update request prepared",
-      data: {
-        calendarId,
-        eventId,
-        patchKeys: Object.keys(patchBody),
-        descriptionLength:
-          typeof patchBody.description === "string" ? patchBody.description.length : 0,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
 
   const payload = await calendarRequest<Record<string, unknown>>(
     `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
@@ -707,32 +780,14 @@ export async function updateGoogleCalendarEvent(input: UpdateCalendarEventInput)
 
   const event = normalizeGoogleEvent(payload);
   if (!event) throw new Error("Google Calendar returned an invalid event payload.");
-  // #region agent log
-  fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      runId: "calendar-update-visibility",
-      hypothesisId: "N3",
-      location: "lib/calendar/google-calendar.ts:updateGoogleCalendarEvent",
-      message: "calendar update response received",
-      data: {
-        calendarId,
-        eventId: event.id,
-        summary: event.summary,
-        descriptionLength:
-          typeof event.description === "string" ? event.description.length : 0,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
   return { calendarId, event };
 }
 
 export async function deleteGoogleCalendarEvent(input: { eventId: string; calendarId?: string }) {
   const managedId = await ensureManagedCalendar();
-  const calendarId = input.calendarId || managedId;
+  const calendarId = input.calendarId
+    ? await resolveCalendarIdentifier(input.calendarId)
+    : managedId;
   const eventId = input.eventId?.trim();
   if (!eventId) throw new Error("eventId is required.");
 
@@ -751,7 +806,9 @@ export async function getGoogleCalendarAvailability(input?: {
   durationMinutes?: number;
 }) {
   const ctx = await getGoogleAuthContext();
-  const calendarId = input?.calendarId || ctx.calendarId || "primary";
+  const calendarId = input?.calendarId
+    ? await resolveCalendarIdentifier(input.calendarId)
+    : ctx.calendarId || "primary";
   const now = new Date();
   const timeMin = input?.timeMin ? toIso(input.timeMin, "timeMin") : now.toISOString();
   const timeMax = input?.timeMax

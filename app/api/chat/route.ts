@@ -26,6 +26,7 @@ import { getChatToolByName, getScopedOpenRouterTools } from "@/lib/tools/registr
 import { runResearchLoop } from "@/lib/chat/research-loop";
 import { buildSeasonContext } from "@/lib/season/context";
 import type { PackDataSource } from "@/lib/types";
+import { MODE_IDS } from "@/lib/constants";
 
 const DEFAULT_MODEL = "openai/gpt-5-nano";
 let runtimeModelOverride: string | null = null;
@@ -215,6 +216,7 @@ function buildCompanionPrompt(mode?: string, isAction = false) {
     "- When the user asks about schedule, meetings, free time, or calendar conflicts, call the google_calendar_events tool before answering.",
     "- When you need to move, update, or delete a calendar event, ALWAYS use the google_calendar_events tool with operation 'find' first to resolve the event by name. It handles emoji prefixes, partial names, and fuzzy matching. Use the returned eventId and calendarId for the subsequent update/delete call.",
     "- NEVER give up after a single failed list query. The 'find' operation searches ALL calendars and uses fuzzy matching — use it.",
+    "- If a calendar tool response includes { requiresUserConfirmation: true }, ask the user the provided prompt and wait for confirmation before doing additional calendar actions.",
     "- All events go to the '🪲 Managed Calendar' by default so the user can distinguish beetlebot events from their own.",
     "- Never claim bookings are confirmed unless explicitly approved and executed.",
     "- ALWAYS use a relevant emoji at the start of every calendar event title (e.g. '🎨 Art Exhibition at AGO', '⛸️ Family Skate at Nathan Phillips Square').",
@@ -481,6 +483,53 @@ type MessageIntent = {
   /** Message asks for fresh/deep research rather than immediate execution. */
   isResearchRequest: boolean;
 };
+
+function normalizeRequestedMode(raw?: string): string {
+  if (!raw) return "auto";
+  const normalized = raw.trim().toLowerCase();
+  if (!normalized) return "auto";
+  return normalized;
+}
+
+function inferPlanningModeFromMessage(message: string, intent: MessageIntent): string {
+  if (intent.isTravelQuery) return "travel";
+
+  const lower = message.toLowerCase();
+  if (/\b(date|romantic|anniversary|wife|husband|partner|boyfriend|girlfriend|couple)\b/.test(lower)) {
+    return "dating";
+  }
+  if (/\b(kid|kids|family|children|toddler|baby|son|daughter)\b/.test(lower)) {
+    return "family";
+  }
+  if (/\b(friends|group|party|hangout|team|everyone)\b/.test(lower)) {
+    return "social";
+  }
+  if (/\b(relax|chill|rest|recharge|self[-\s]?care|wellness|spa|slow)\b/.test(lower)) {
+    return "relax";
+  }
+  if (/\b(focus|deep work|work block|pomodoro|study|productive)\b/.test(lower)) {
+    return "focus";
+  }
+  if (/\b(explore|discover|adventure|events?|things to do|new)\b/.test(lower)) {
+    return "explore";
+  }
+  return "explore";
+}
+
+function resolveEffectiveMode(input: {
+  requestedMode?: string;
+  message: string;
+  intent: MessageIntent;
+}) {
+  const requestedMode = normalizeRequestedMode(input.requestedMode);
+  if (requestedMode !== "auto" && MODE_IDS.includes(requestedMode)) {
+    return { requestedMode, effectiveMode: requestedMode };
+  }
+  return {
+    requestedMode,
+    effectiveMode: inferPlanningModeFromMessage(input.message, input.intent),
+  };
+}
 
 /**
  * Classifies the user's message intent via a fast, zero-temperature LLM call.
@@ -1098,6 +1147,11 @@ export async function POST(request: Request) {
     const [intent] = await Promise.all([
       classifyMessageIntent(body.message, lastAssistantMessage),
     ]);
+    const { requestedMode, effectiveMode } = resolveEffectiveMode({
+      requestedMode: body.mode,
+      message: body.message,
+      intent,
+    });
 
     const isActionCmd = intent.isActionCommand;
     const calendarIntent = intent.isCalendarQuery || intent.isCalendarWrite;
@@ -1109,30 +1163,6 @@ export async function POST(request: Request) {
     const shouldResolveThreadSuggestions =
       threadSuggestions.length > 0 &&
       (intent.referencesPriorSuggestions || isActionCmd || calendarWriteIntent);
-    // #region agent log
-    fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        runId: "calendar-routing",
-        hypothesisId: "N1",
-        location: "app/api/chat/route.ts:intent_resolution",
-        message: "intent classification output",
-        data: {
-          isActionCommand: intent.isActionCommand,
-          isCalendarWrite: intent.isCalendarWrite,
-          isCalendarQuery: intent.isCalendarQuery,
-          referencesPriorSuggestions: intent.referencesPriorSuggestions,
-          isUpcomingQuery: intent.isUpcomingQuery,
-          isResearchRequest: intent.isResearchRequest,
-          derivedCalendarIntent: calendarIntent,
-          derivedCalendarWriteIntent: calendarWriteIntent,
-          messagePreview: body.message.slice(0, 120),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     const suggestionIntent =
       shouldResolveThreadSuggestions
         ? await resolveSuggestionIntentFromThread({
@@ -1153,7 +1183,7 @@ export async function POST(request: Request) {
     const systemMessages: OpenRouterMessage[] = [
       { role: "system", content: buildTemporalContext(body.timezone) },
       { role: "system", content: buildSeasonContext(body.timezone) },
-      { role: "system", content: buildCompanionPrompt(body.mode, isActionCmd) },
+      { role: "system", content: buildCompanionPrompt(effectiveMode, isActionCmd) },
       { role: "system", content: buildPreferenceAwarenessPrompt(preferenceProfile) },
       {
         role: "system",
@@ -1270,24 +1300,6 @@ export async function POST(request: Request) {
         const toolCalls = modelReply.message.tool_calls ?? [];
         if (!toolCalls.length) {
           if (calendarWriteIntent && !calendarWriteExecuted && round < MAX_TOOL_ROUNDS) {
-            // #region agent log
-            fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                runId: "calendar-enforcement",
-                hypothesisId: "N4",
-                location: "app/api/chat/route.ts:runRecommendationMode",
-                message: "no tool call for calendar write intent; forcing tool usage retry",
-                data: {
-                  round: round + 1,
-                  maxRounds: MAX_TOOL_ROUNDS + 1,
-                  modelTextPreview: (modelReply.text ?? "").slice(0, 120),
-                },
-                timestamp: Date.now(),
-              }),
-            }).catch(() => {});
-            // #endregion
             modelMessages.push({
               role: "assistant",
               content: modelReply.message.content ?? modelReply.text ?? "",
@@ -1314,38 +1326,6 @@ export async function POST(request: Request) {
           const toolName = toolCall.function?.name ?? "unknown";
           const tool = getChatToolByName(toolName);
           const args = parseToolArguments(toolCall.function?.arguments ?? "");
-          if (
-            toolName === "google_calendar_events" &&
-            isRecord(args) &&
-            (args.operation === "find" || args.operation === "update")
-          ) {
-            // #region agent log
-            fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                runId: "calendar-find-miss",
-                hypothesisId: "H1",
-                location: "app/api/chat/route.ts:tool_call_pre_execute",
-                message: "google_calendar_events call prepared",
-                data: {
-                  operation: args.operation,
-                  query: typeof args.query === "string" ? args.query : null,
-                  eventIdProvided: typeof args.eventId === "string" && args.eventId.trim().length > 0,
-                  calendarIdProvided:
-                    typeof args.calendarId === "string" && args.calendarId.trim().length > 0,
-                  summaryProvided:
-                    typeof args.summary === "string" && args.summary.trim().length > 0,
-                  descriptionLength:
-                    typeof args.description === "string" ? args.description.length : 0,
-                  locationProvided:
-                    typeof args.location === "string" && args.location.trim().length > 0,
-                },
-                timestamp: Date.now(),
-              }),
-            }).catch(() => {});
-            // #endregion
-          }
 
           await db.debugTrace.create({
             data: {
@@ -1506,29 +1486,6 @@ export async function POST(request: Request) {
                   }
                 }
 
-                // #region agent log
-                fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    runId: "calendar-posthook",
-                    hypothesisId: "F2",
-                    location: "app/api/chat/route.ts:post_write_verify",
-                    message: "calendar write verification completed",
-                    data: {
-                      operation,
-                      eventIdForVerify: eventIdForVerify ?? null,
-                      calendarIdForVerify: calendarIdForVerify ?? null,
-                      writeVerified,
-                      verificationHasError:
-                        isRecord(verificationReadback) &&
-                        typeof verificationReadback.error === "string",
-                    },
-                    timestamp: Date.now(),
-                  }),
-                }).catch(() => {});
-                // #endregion
-
                 if (isRecord(resultRecord)) {
                   resultForModel = {
                     ...resultRecord,
@@ -1561,39 +1518,6 @@ export async function POST(request: Request) {
               isRecord(args) &&
               (args.operation === "find" || args.operation === "update")
             ) {
-              const resultRecord = isRecord(result) ? result : {};
-              // #region agent log
-              fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  runId: "calendar-find-miss",
-                  hypothesisId: "H4",
-                  location: "app/api/chat/route.ts:tool_call_post_execute",
-                  message: "google_calendar_events call completed",
-                  data: {
-                    operation: args.operation,
-                    hasError: typeof resultRecord.error === "string",
-                    found:
-                      typeof resultRecord.found === "boolean"
-                        ? resultRecord.found
-                        : null,
-                    strategy:
-                      typeof resultRecord.strategy === "string"
-                        ? resultRecord.strategy
-                        : null,
-                    confidence:
-                      typeof resultRecord.confidence === "number"
-                        ? resultRecord.confidence
-                        : null,
-                    closestCandidatesCount: Array.isArray(resultRecord.closestCandidates)
-                      ? resultRecord.closestCandidates.length
-                      : 0,
-                  },
-                  timestamp: Date.now(),
-                }),
-              }).catch(() => {});
-              // #endregion
             }
             await db.debugTrace.create({
               data: {
@@ -1636,46 +1560,11 @@ export async function POST(request: Request) {
             tools: [],
           });
           replyText = finalReply.text.trim();
-          // #region agent log
-          fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              runId: "lookup-fallback",
-              hypothesisId: "N6",
-              location: "app/api/chat/route.ts:runRecommendationMode",
-              message: "generated final status after tool rounds",
-              data: {
-                toolCallsExecuted,
-                toolCallErrors,
-                replyLength: replyText.length,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
         } catch {
           // If final synthesis fails, below guard fallback will produce explicit error text.
         }
       }
       if (calendarWriteIntent && !calendarWriteExecuted) {
-        // #region agent log
-        fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            runId: "calendar-write-guard",
-            hypothesisId: "F1",
-            location: "app/api/chat/route.ts:runRecommendationMode",
-            message: "calendar write guard activated",
-            data: {
-              calendarFindSucceeded,
-              calendarWriteExecuted,
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         replyText = calendarFindSucceeded
           ? "I found your event, but I haven't applied the calendar edit yet. I can do it now if you confirm exactly what to change in the event details."
           : "I couldn't complete the calendar change yet because no write action was executed. Please repeat the exact edit you want, and I'll apply it directly.";
@@ -1686,24 +1575,6 @@ export async function POST(request: Request) {
         replyText = lastToolErrorMessage
           ? `I couldn't complete the live tool lookup because a tool call failed: ${lastToolErrorMessage}`
           : "I couldn't complete the live tool lookup because no final tool-backed status was produced. Please retry once.";
-        // #region agent log
-        fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            runId: "lookup-fallback",
-            hypothesisId: "N7",
-            location: "app/api/chat/route.ts:runRecommendationMode",
-            message: "explicit fallback reason emitted",
-            data: {
-              toolCallsExecuted,
-              toolCallErrors,
-              lastToolErrorMessage,
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
       }
     };
     if (replyText) {
@@ -1722,16 +1593,16 @@ export async function POST(request: Request) {
       }));
       const fallbackSources = installedPacks.flatMap((pack) => pack.dataSources).slice(0, 4);
       const dataSources = discoveredDataSources.length ? discoveredDataSources : fallbackSources;
-      const nameBase = `${body.mode ?? "explore"} custom recommendations`;
+      const nameBase = `${effectiveMode} custom recommendations`;
       const slug = await createUniquePackSlug(nameBase);
       const tags = Array.from(new Set([...constraints.categories, ...constraints.vibes])).slice(0, 6);
       const style = inferPackStyle(signals.noveltyPreference);
       const budgetRange = constraints.budgets[0] ? `${constraints.budgets[0]}+` : "$0-$300";
       const createdPack = await createPack({
         slug,
-        name: `${(body.mode ?? "explore").toUpperCase()} Personalized Pack`,
+        name: `${effectiveMode.toUpperCase()} Personalized Pack`,
         city: constraints.locations[0] ?? "Any",
-        modes: [body.mode ?? "explore"],
+        modes: [effectiveMode],
         style,
         budgetRange,
         needs: [],
@@ -1748,47 +1619,12 @@ export async function POST(request: Request) {
       });
       replyText = `Done — I created a new pack: "${createdPack.name}" (${createdPack.slug}). Open /packs/${createdPack.slug} to review or edit it.`;
     } else if (calendarIntent && !calendarWriteIntent) {
-      // #region agent log
-      fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          runId: "calendar-routing",
-          hypothesisId: "N1",
-          location: "app/api/chat/route.ts:routing_branch",
-          message: "entered calendar query branch",
-          data: {
-            calendarIntent,
-            calendarWriteIntent,
-            isActionCmd,
-            messagePreview: body.message.slice(0, 120),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       orchestrationState = "calendar_intent_mode";
       const calendarReply = await tryAnswerCalendarIntent({
         intent,
         timezone: body.timezone,
       });
       if (calendarReply.handled) {
-        // #region agent log
-        fetch("http://127.0.0.1:7247/ingest/47f72c19-1052-41f0-8ef0-115f189fc319", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            runId: "calendar-routing",
-            hypothesisId: "N1",
-            location: "app/api/chat/route.ts:routing_branch",
-            message: "calendar query branch handled",
-            data: {
-              trace: calendarReply.trace,
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         replyText = calendarReply.replyText;
         responseModel = "tool/google_calendar_events";
         requestedModel = "tool/google_calendar_events";
@@ -1868,13 +1704,13 @@ export async function POST(request: Request) {
     const blockSummary = Object.entries(blockTypeCounts)
       .map(([t, n]) => `${t}=${n}`)
       .join(" ");
-    const traceMessage = `chat_plan_response confidence=${confidence.toFixed(2)} model=${responseModel} mode=${body.mode ?? "none"} state=${orchestrationState} blocks=${blocks?.length ?? 0}${blockSummary ? ` [${blockSummary}]` : ""}`;
+    const traceMessage = `chat_plan_response confidence=${confidence.toFixed(2)} model=${responseModel} mode=${effectiveMode} requested_mode=${requestedMode} state=${orchestrationState} blocks=${blocks?.length ?? 0}${blockSummary ? ` [${blockSummary}]` : ""}`;
 
     await db.auditEvent.create({
       data: {
         actor: "api:chat",
         action: "chat_intent_parsed",
-        details: `mode=${body.mode ?? "explore"} blocks=${blocks?.length ?? 0} message=${body.message.slice(0, 120)}`,
+        details: `mode=${effectiveMode} requested_mode=${requestedMode} blocks=${blocks?.length ?? 0} message=${body.message.slice(0, 120)}`,
       },
     });
     await db.debugTrace.create({

@@ -67,19 +67,30 @@ export async function runAutopilot({ autopilotId, reason }: RunInput) {
   }
 
   const status = approvalState === "approved" ? "success" : "pending";
-  const actionsTaken = ["generated_suggestions", "created_soft_hold"];
+  const actionsTaken = ["generated_suggestions"];
 
   const holdStart = autopilot.nextCheckIn > startedAt ? autopilot.nextCheckIn : startedAt;
   const holdEnd = new Date(holdStart.getTime() + 2 * 60 * 60 * 1000);
-
-  const softHold = await db.softHold.create({
-    data: {
-      title: `Soft hold: ${autopilot.name}`,
-      startAt: holdStart,
-      endAt: holdEnd,
+  const holdTitle = `Soft hold: ${autopilot.name}`;
+  const existingActiveHold = await db.softHold.findFirst({
+    where: {
+      title: holdTitle,
       status: "held",
+      endAt: { gt: startedAt },
     },
+    orderBy: { createdAt: "desc" },
   });
+  const softHold =
+    existingActiveHold ??
+    (await db.softHold.create({
+      data: {
+        title: holdTitle,
+        startAt: holdStart,
+        endAt: holdEnd,
+        status: "held",
+      },
+    }));
+  actionsTaken.push(existingActiveHold ? "reused_existing_soft_hold" : "created_soft_hold");
 
   // Check if we already pushed a Google Calendar event for this autopilot
   // covering the same time window to avoid duplicates on restart.

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { MODES } from "@/lib/constants";
+import { PLANNING_MODES } from "@/lib/constants";
 
 type FormState = {
   name: string;
@@ -158,7 +158,7 @@ export default function NewAutopilotPage() {
               Which planning context does this autopilot operate in?
             </p>
             <div className="flex flex-wrap gap-2">
-              {MODES.map((mode) => {
+              {PLANNING_MODES.map((mode) => {
                 const selected = form.mode === mode.id;
                 return (
                   <button

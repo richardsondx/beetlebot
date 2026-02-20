@@ -31,7 +31,7 @@ Other tools give you text. Beetlebot gives you your time back.
 - **Autonomous by default** — Beetlebot doesn't wait for you to ask. It monitors your calendar, checks the forecast, and acts when the moment is right. You set the goal once — it takes it from there.
 - **Autopilots** — goal + trigger + action. "Empty Weekend + Rain" fires Friday at noon and books an indoor plan before you even open your phone.
 - **Packs** — community-built planning skills for your city. Toronto Date Night. Rainy Day Rescue. Cottage Weekend. Install a pack or build your own.
-- **Modes** — date night, family, social, travel, relax, focus. Switch modes and the entire agent adapts — different priorities, different actions, same intelligence.
+- **Modes** — Auto picks the best planning type by default, or switch to Explore, Date Night, Family, Social, Travel, Relax, or Focus. Different priorities, different actions, same intelligence.
 - **Memory** — learns your preferences, remembers your history, and gets better over time. Local-first — your data never leaves your machine.
 - **Multi-channel** — talks to you on web chat, Telegram, WhatsApp. Meets you where you already are.
 - **Soft-holds** — proactively reserves time on your calendar, then follows through. No more "I should have booked that."

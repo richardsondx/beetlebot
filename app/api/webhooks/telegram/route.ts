@@ -3,7 +3,7 @@ import { POST as chatPost } from "@/app/api/chat/route";
 import { sendToChannel } from "@/lib/chat/channel-sender";
 import type { RichBlock } from "@/lib/chat/rich-message";
 import { db } from "@/lib/db";
-import { MODE_IDS } from "@/lib/constants";
+import { CHAT_MODE_IDS } from "@/lib/constants";
 import { decryptConnection, encryptConnectionFields } from "@/lib/repositories/integration-crypto";
 
 type TelegramUpdate = {
@@ -16,7 +16,7 @@ type TelegramUpdate = {
   };
 };
 
-type ChatMode = (typeof MODE_IDS)[number];
+type ChatMode = (typeof CHAT_MODE_IDS)[number];
 
 type TelegramChatState = {
   threadId?: string;
@@ -45,11 +45,11 @@ function extractModeOverride(message: string): ChatMode | null {
   const commandMatch = normalized.match(/^\/mode\s+([a-z_]+)/);
   const explicit = commandMatch?.[1];
   const conversational = normalized.match(
-    /\b(?:switch to|set|use|go into|change to)\s+(explore|dating|family|social|relax|travel|focus)\s+mode\b/,
+    /\b(?:switch to|set|use|go into|change to)\s+(auto|explore|dating|family|social|relax|travel|focus)\s+mode\b/,
   )?.[1];
   const candidate = explicit ?? conversational;
   if (!candidate) return null;
-  return MODE_IDS.includes(candidate) ? (candidate as ChatMode) : null;
+  return CHAT_MODE_IDS.includes(candidate) ? (candidate as ChatMode) : null;
 }
 
 function parseIncoming(update: TelegramUpdate) {
@@ -161,7 +161,7 @@ export async function POST(request: Request) {
   const chats = config.chats ?? {};
   const prior = chats[incoming.chatId] ?? {};
   const modeOverride = extractModeOverride(incoming.text);
-  const mode = modeOverride ?? prior.mode ?? "explore";
+  const mode = modeOverride ?? prior.mode ?? "auto";
 
   const chatRequest = new Request("http://internal/api/chat", {
     method: "POST",

@@ -72,7 +72,14 @@ export async function updateAutopilot(id: string, data: Record<string, unknown>)
 }
 
 export async function deleteAutopilot(id: string) {
-  const autopilot = await db.autopilot.delete({ where: { id } });
+  const autopilot = await db.autopilot.findUnique({ where: { id } });
+  if (!autopilot) return null;
+
+  await db.softHold.deleteMany({
+    where: { title: `Soft hold: ${autopilot.name}` },
+  });
+
+  await db.autopilot.delete({ where: { id } });
   await db.auditEvent.create({
     data: {
       actor: "api:autopilots",

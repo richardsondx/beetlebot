@@ -20,7 +20,7 @@ const FEATURES = [
     title: "Modes",
     headline: "Context shapes everything.",
     description:
-      "Date night. Family. Social. Travel. Relax. Focus. Switch modes and the entire agent adapts — different priorities, different actions, same intelligence.",
+      "Auto picks for you by default. Or switch to Explore, Date Night, Family, Social, Travel, Relax, or Focus when you want explicit control.",
   },
   {
     icon: "🛡️",

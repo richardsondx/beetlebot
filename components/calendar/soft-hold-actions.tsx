@@ -247,6 +247,12 @@ export function SoftHoldActions({ hold }: Props) {
           Release
         </button>
       )}
+      <button
+        onClick={() => setMode("delete")}
+        className="rounded-md border border-rose-300/20 bg-rose-300/8 px-2 py-1 text-xs text-rose-300 hover:bg-rose-300/15"
+      >
+        Delete
+      </button>
     </div>
   );
 }

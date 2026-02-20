@@ -105,7 +105,10 @@ export async function releaseSoftHold(id: string) {
 }
 
 export async function deleteSoftHold(id: string) {
-  const hold = await db.softHold.delete({ where: { id } });
+  const hold = await db.softHold.findUnique({ where: { id } });
+  if (!hold) return null;
+
+  await db.softHold.delete({ where: { id } });
   await db.auditEvent.create({
     data: { actor: "api:calendar", action: "soft_hold_deleted", details: hold.title },
   });

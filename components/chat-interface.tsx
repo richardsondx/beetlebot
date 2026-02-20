@@ -10,11 +10,9 @@ import type {
 
 // ── Mode definitions ────────────────────────────────────────────────────────
 
-import { MODES, type ModeDefinition } from "@/lib/constants";
+import { CHAT_MODES, DEFAULT_CHAT_MODE, type ModeDefinition } from "@/lib/constants";
 
 type ChatMode = ModeDefinition;
-
-const DEFAULT_MODE = MODES[0];
 
 // ── Quick actions ───────────────────────────────────────────────────────────
 
@@ -121,7 +119,7 @@ function ModeDropdown({
             </p>
           </div>
           <div className="p-1.5">
-            {MODES.map((m) => (
+            {CHAT_MODES.map((m) => (
               <button
                 key={m.id}
                 type="button"
@@ -536,7 +534,7 @@ export function ChatInterface() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeMode, setActiveMode] = useState<ChatMode>(DEFAULT_MODE);
+  const [activeMode, setActiveMode] = useState<ChatMode>(DEFAULT_CHAT_MODE);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [storageHydrated, setStorageHydrated] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -552,7 +550,7 @@ export function ChatInterface() {
       const savedModeId = window.localStorage.getItem("beetlebot.chat.mode");
       const savedThreadId = window.localStorage.getItem("beetlebot.chat.threadId");
       if (savedModeId) {
-        const found = MODES.find((m) => m.id === savedModeId);
+        const found = CHAT_MODES.find((m) => m.id === savedModeId);
         if (found) setActiveMode(found);
       }
       if (savedThreadId && savedThreadId.length >= 8) {
@@ -720,10 +718,10 @@ export function ChatInterface() {
                   {message.role === "user" ? (
                     /* User bubble */
                     <div className="rounded-2xl rounded-br-sm bg-amber-400/20 px-4 py-3 text-sm leading-relaxed text-amber-50">
-                      {message.mode && message.mode !== "explore" && (
+                      {message.mode && message.mode !== "auto" && (
                         <p className="mb-1.5 text-xs text-amber-300/60">
-                          {MODES.find((m) => m.id === message.mode)?.icon}{" "}
-                          {MODES.find((m) => m.id === message.mode)?.label}
+                          {CHAT_MODES.find((m) => m.id === message.mode)?.icon}{" "}
+                          {CHAT_MODES.find((m) => m.id === message.mode)?.label}
                         </p>
                       )}
                       <p className="whitespace-pre-wrap break-words">{message.text}</p>

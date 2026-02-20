@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { MODES, STYLES } from "@/lib/constants";
+import { PLANNING_MODES, STYLES } from "@/lib/constants";
 import { NeedsPicker } from "@/components/packs/needs-picker";
 
 type DataSourceRow = { url: string; label: string; hint: string };
@@ -350,7 +350,7 @@ export default function EditPackPage() {
                 Which planning contexts does this pack apply to?
               </p>
               <div className="flex flex-wrap gap-2">
-                {MODES.map((mode) => {
+                {PLANNING_MODES.map((mode) => {
                   const selected = form.modes.includes(mode.id);
                   return (
                     <button

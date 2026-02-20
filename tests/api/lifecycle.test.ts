@@ -10,6 +10,7 @@ const createdAutopilotIds: string[] = [];
 
 beforeAll(async () => {
   await db.autopilotRun.deleteMany();
+  await db.softHold.deleteMany({ where: { title: "Soft hold: Test Autopilot" } });
   await db.autopilot.deleteMany({ where: { name: "Test Autopilot" } });
 });
 
@@ -18,6 +19,7 @@ afterEach(async () => {
   await db.autopilotRun.deleteMany({
     where: { autopilotId: { in: createdAutopilotIds } },
   });
+  await db.softHold.deleteMany({ where: { title: "Soft hold: Test Autopilot" } });
   await db.autopilot.deleteMany({
     where: { id: { in: createdAutopilotIds } },
   });

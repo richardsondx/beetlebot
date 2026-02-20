@@ -28,7 +28,7 @@ const CORE_CONCEPTS = [
   {
     title: "Modes",
     description:
-      "Use Explore, Date Night, Family, Social, Relax, Travel, or Focus to shape planning behavior and output style.",
+      "Use Auto, Explore, Date Night, Family, Social, Relax, Travel, or Focus to shape planning behavior and output style.",
   },
   {
     title: "Packs",

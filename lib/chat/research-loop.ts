@@ -21,6 +21,8 @@ export type ResearchRecommendation = {
   noveltyReason: string;
   score: number;
   domain: string;
+  imageUrl?: string;
+  imageCandidates?: string[];
 };
 
 export type ResearchLoopResult = {
@@ -211,6 +213,10 @@ export async function runResearchLoop(input: RunResearchLoopInput): Promise<Rese
       noveltyReason,
       score,
       domain,
+      imageUrl: typeof raw.imageUrl === "string" ? raw.imageUrl : undefined,
+      imageCandidates: Array.isArray(raw.imageCandidates)
+        ? raw.imageCandidates.filter((value): value is string => typeof value === "string").slice(0, 4)
+        : undefined,
     });
     seenDomains.add(domain);
   }

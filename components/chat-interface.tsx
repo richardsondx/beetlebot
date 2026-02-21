@@ -39,6 +39,16 @@ const quickActions = [
   },
 ];
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Convert pack slug (e.g. marie/paris-hidden-gems) to friendly name (Paris Hidden Gems) */
+function packSlugToFriendlyName(slug: string): string {
+  const part = slug.replace(/^@/, "").split("/").pop() ?? slug;
+  return part
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 // ── Message type ────────────────────────────────────────────────────────────
 
 type ChatMessage = {
@@ -46,6 +56,9 @@ type ChatMessage = {
   text: string;
   blocks?: RichBlock[];
   mode?: string;
+  packsUsed?: string[];
+  /** Raw API response payload stored for debug inspection */
+  _raw?: unknown;
 };
 
 // ── Sub-components ──────────────────────────────────────────────────────────
@@ -275,7 +288,7 @@ function ImageCardView({
             <button
               type="button"
               onClick={() => onSelect(card)}
-              className="flex-1 rounded-lg bg-amber-400/15 py-1.5 text-xs font-semibold text-amber-300 transition-colors hover:bg-amber-400/25 active:scale-95"
+              className="rounded-lg bg-amber-400/15 px-4 py-1.5 text-xs font-semibold text-amber-300 transition-all hover:bg-amber-400/25 active:scale-[0.97]"
             >
               Choose this
             </button>
@@ -293,12 +306,14 @@ function ImageCardView({
               </svg>
             </a>
           )}
-          {card.sourceName && (
-            <span className="ml-auto rounded-md bg-white/4 px-1.5 py-0.5 text-[10px] text-slate-600">
-              {card.sourceName}
-            </span>
-          )}
         </div>
+
+        {/* Source attribution */}
+        {card.sourceName && (
+          <p className="mt-2.5 truncate text-[10px] text-slate-600">
+            via {card.sourceName}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -492,6 +507,38 @@ function RichBlockRenderer({
   }
 }
 
+// ── JSON debug inspector ──────────────────────────────────────────────────────
+
+function JsonInspector({ message }: { message: ChatMessage }) {
+  const [open, setOpen] = useState(false);
+  const payload = {
+    text: message.text,
+    blocks: message.blocks,
+    _raw: message._raw,
+  };
+  const json = JSON.stringify(payload, null, 2);
+  return (
+    <div className="mt-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title="Inspect raw JSON"
+        className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-mono text-slate-600 opacity-0 transition-all hover:bg-white/5 hover:text-slate-400 group-hover/bubble:opacity-100"
+      >
+        <span>{open ? "▾" : "▸"}</span>
+        <span>{"{}"}</span>
+      </button>
+      {open && (
+        <div className="mt-1.5 overflow-x-auto rounded-xl border border-white/8 bg-[#070c14] p-3">
+          <pre className="whitespace-pre-wrap break-all font-mono text-[10px] leading-relaxed text-slate-400">
+            {json}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Assistant message body ────────────────────────────────────────────────────
 
 function AssistantMessageBody({
@@ -621,6 +668,7 @@ export function ChatInterface() {
           blocks?: RichBlock[];
           fallbackPlan?: string;
           threadId?: string;
+          packsUsed?: string[];
         };
         error?: string;
       };
@@ -641,6 +689,8 @@ export function ChatInterface() {
           role: "assistant",
           text: `${payload.data!.reply}${fallbackText}`,
           blocks: payload.data!.blocks,
+          packsUsed: payload.data!.packsUsed,
+          _raw: payload.data,
         },
       ]);
     } catch (submitError) {
@@ -728,11 +778,21 @@ export function ChatInterface() {
                     </div>
                   ) : (
                     /* Assistant bubble — may contain rich blocks or inline suggestions */
-                    <div className="overflow-hidden rounded-2xl rounded-bl-sm bg-[#131c2e] px-4 py-3 text-sm leading-relaxed">
+                    <div className="group/bubble overflow-hidden rounded-2xl rounded-bl-sm bg-[#131c2e] px-4 py-3 text-sm leading-relaxed">
+                      {message.packsUsed && message.packsUsed.length > 0 && (
+                        <p className="mb-2 text-[11px] font-medium text-slate-500">
+                          Using{" "}
+                          {message.packsUsed
+                            .map((s) => packSlugToFriendlyName(s))
+                            .join(", ")}{" "}
+                          {message.packsUsed.length === 1 ? "pack" : "packs"}
+                        </p>
+                      )}
                       <AssistantMessageBody
                         message={message}
                         onSelect={handleCardSelect}
                       />
+                      <JsonInspector message={message} />
                     </div>
                   )}
                 </div>

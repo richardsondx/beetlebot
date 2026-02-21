@@ -1,5 +1,6 @@
 import type { ChatToolDefinition } from "@/lib/tools/types";
 import { assertIntegrationScope } from "@/lib/integrations/scope-guard";
+import type { CalendarEventSummary } from "@/lib/calendar/google-calendar";
 import {
   createGoogleCalendarEvent,
   deleteGoogleCalendarEvent,
@@ -190,7 +191,7 @@ export const googleCalendarEventsTool: ChatToolDefinition = {
                 calendarName: string;
                 primary: boolean;
                 count: number;
-                events: Array<Record<string, unknown>>;
+                events: CalendarEventSummary[];
               }> => response.status === "fulfilled",
             )
             .map((response) => response.value);

@@ -26,6 +26,16 @@ export const installPackSchema = z.object({
   slug: z.string().min(2),
 });
 
+export const installFromForageSchema = z.object({
+  packRef: z
+    .string()
+    .min(3)
+    .regex(
+      /^@?[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+$/,
+      "Must be in format @author/slug or author/slug",
+    ),
+});
+
 export const createPackSchema = z.object({
   slug: z
     .string()

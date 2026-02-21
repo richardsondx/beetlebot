@@ -20,7 +20,10 @@ import {
 } from "@/lib/repositories/memory";
 import type { PreferenceProfile } from "@/lib/repositories/memory";
 import { createPack, getInstalledPackInstructions, getPackBySlug } from "@/lib/repositories/packs";
-import { enrichLlmReply } from "@/lib/chat/visual-enricher";
+import {
+  applyUpgradedCardsToBlocks,
+  enrichLlmReply,
+} from "@/lib/chat/visual-enricher";
 import type { RichBlock } from "@/lib/chat/rich-message";
 import { getChatToolByName, getScopedOpenRouterTools } from "@/lib/tools/registry";
 import type { ChatToolDefinition } from "@/lib/tools/types";
@@ -28,6 +31,7 @@ import { runResearchLoop } from "@/lib/chat/research-loop";
 import { buildSeasonContext } from "@/lib/season/context";
 import type { PackDataSource } from "@/lib/types";
 import { MODE_IDS } from "@/lib/constants";
+import { getBousierTelemetry } from "@/lib/media/bousier";
 
 const DEFAULT_MODEL = "openai/gpt-5-nano";
 let runtimeModelOverride: string | null = null;
@@ -1097,14 +1101,35 @@ function formatResearchReply(input: {
   if (!input.recommendations.length) {
     return "I dug for fresh sources but couldn't find strong matches yet. Share a city and budget and I will run a tighter discovery pass.";
   }
-  const lines = input.recommendations.map((item, index) => {
-    return `${index + 1}. ${item.title} — ${item.whyItFits} Source: ${item.sourceName} (${item.url})`;
+  const options = input.recommendations.slice(0, 4).map((item) => ({
+    title: item.title,
+    subtitle: item.whyItFits,
+    category: inferResearchCategory(item),
+    meta: {
+      source: item.sourceName,
+      domain: item.domain,
+    },
+    actionUrl: item.url,
+    sourceName: item.sourceName,
+  }));
+  return JSON.stringify({
+    text: `I ran a fresh-source pass and prioritized diversity across at least ${input.sourceDiversityTarget} source domains. Here are the strongest matches with direct links.`,
+    options,
   });
-  return [
-    `I ran a fresh-source research pass and prioritized diversity across at least ${input.sourceDiversityTarget} source domains.`,
-    ...lines,
-    "Tell me which one you prefer and I can go deeper on that lane.",
-  ].join("\n");
+}
+
+function inferResearchCategory(item: {
+  title: string;
+  url: string;
+  domain: string;
+}): "event" | "hotel" | "restaurant" | "activity" | "destination" | "experience" {
+  const text = `${item.title} ${item.url} ${item.domain}`.toLowerCase();
+  if (/(hotel|resort|inn|suite|lodging|booking\.com|expedia|airbnb)/.test(text)) return "hotel";
+  if (/(restaurant|cafe|bar|bistro|brunch|dining|food|opentable|yelp)/.test(text)) return "restaurant";
+  if (/(festival|concert|tickets|event|show|exhibition|calendar)/.test(text)) return "event";
+  if (/(park|museum|gallery|tour|activity|things to do|attraction)/.test(text)) return "activity";
+  if (/(travel|destination|visit|tourism)/.test(text)) return "destination";
+  return "experience";
 }
 
 async function createUniquePackSlug(base: string) {
@@ -1698,11 +1723,31 @@ export async function POST(request: Request) {
         "I couldn’t complete a live tool lookup right now, but I can still help with a best-effort suggestion.";
     }
 
-    // Enrich the raw LLM reply with visual blocks (images, option cards)
-    const enriched = await enrichLlmReply(replyText);
+    let resolveAssistantId: (id: string) => void = () => {};
+    const assistantMessageIdReady = new Promise<string>((resolve) => {
+      resolveAssistantId = resolve;
+    });
+    let currentBlocks: RichBlock[] | undefined;
+
+    // Enrich the raw LLM reply with visual blocks (images, option cards).
+    // Run an optional async upgrade pass to replace placeholders post-response.
+    const enriched = await enrichLlmReply(replyText, {
+      asyncUpgrade: true,
+      onAsyncUpgrade: async (upgradedCards) => {
+        const assistantId = await assistantMessageIdReady;
+        const mergedBlocks = applyUpgradedCardsToBlocks(currentBlocks, upgradedCards);
+        if (!mergedBlocks?.length) return;
+        currentBlocks = mergedBlocks;
+        await db.conversationMessage.update({
+          where: { id: assistantId },
+          data: { blocksJson: JSON.stringify(mergedBlocks) },
+        });
+      },
+    });
     const blocks: RichBlock[] | undefined = enriched.blocks?.length
       ? enriched.blocks
       : undefined;
+    currentBlocks = blocks;
 
     await addConversationMessage({
       threadId: thread.id,
@@ -1715,6 +1760,7 @@ export async function POST(request: Request) {
       content: enriched.text,
       blocksJson: blocks ? JSON.stringify(blocks) : undefined,
     });
+    resolveAssistantId(assistantMessage.id);
 
     const confidence = taste.count > 0 ? 0.86 : 0.78;
 
@@ -1741,6 +1787,13 @@ export async function POST(request: Request) {
         message: traceMessage,
       },
     });
+    const mediaTelemetry = getBousierTelemetry();
+    await db.debugTrace.create({
+      data: {
+        scope: "chat_media",
+        message: `bousier tier1=${mediaTelemetry.tiers.tier1_metadata.hits}/${mediaTelemetry.tiers.tier1_metadata.attempts} tier2=${mediaTelemetry.tiers.tier2_open_data.hits}/${mediaTelemetry.tiers.tier2_open_data.attempts} cache_hit_ratio=${mediaTelemetry.cache.hitRatio} fallback=${mediaTelemetry.fallbackCount}`,
+      },
+    });
     if (shouldResolveThreadSuggestions) {
       await db.debugTrace.create({
         data: {
@@ -1760,6 +1813,7 @@ export async function POST(request: Request) {
       responseId,
       messageId: assistantMessage.id,
       threadId: thread.id,
+      packsUsed: installedPacks.length > 0 ? installedPacks.map((p) => p.name) : undefined,
     });
   } catch (error) {
     return fromError(error);

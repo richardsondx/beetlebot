@@ -156,6 +156,50 @@ export async function deletePack(slug: string) {
   });
 }
 
+export async function upsertPackFromForage(data: {
+  slug: string;
+  name: string;
+  city: string;
+  modes: string[];
+  style: string;
+  budgetRange: string;
+  needs: string[];
+  description: string;
+  instructions?: string;
+  tags?: string[];
+  dataSources?: PackDataSource[];
+}) {
+  const shared = {
+    name: data.name,
+    city: data.city,
+    modes: JSON.stringify(data.modes),
+    style: data.style,
+    budgetRange: data.budgetRange,
+    needs: JSON.stringify(data.needs),
+    description: data.description,
+    instructions: data.instructions ?? "",
+    tags: JSON.stringify(data.tags ?? []),
+    dataSources: JSON.stringify(data.dataSources ?? []),
+    installed: true,
+  };
+
+  const pack = await db.pack.upsert({
+    where: { slug: data.slug },
+    create: { slug: data.slug, ...shared },
+    update: shared,
+  });
+
+  await db.auditEvent.create({
+    data: {
+      actor: "api:packs",
+      action: "pack_installed_from_forage",
+      details: data.slug,
+    },
+  });
+
+  return parsePack(pack);
+}
+
 export async function installPack(slug: string) {
   const pack = await db.pack.update({
     where: { slug },

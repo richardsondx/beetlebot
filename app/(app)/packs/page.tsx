@@ -9,29 +9,33 @@ export default async function PacksPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-5xl space-y-6 px-6 py-6">
-        <header className="flex items-start justify-between gap-4">
-          <div>
-            <div className="mb-1 flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-300/10 text-lg">
-                📦
-              </span>
-              <h1 className="text-2xl font-semibold">Packs</h1>
-              {installedCount > 0 && (
-                <span className="rounded-full border border-sky-300/25 bg-sky-300/10 px-2.5 py-0.5 text-xs text-sky-200">
-                  {installedCount} installed
+        <header className="space-y-3">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="mb-1 flex items-center gap-2.5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-300/10 text-lg">
+                  📦
                 </span>
-              )}
+                <h1 className="text-2xl font-semibold">Packs</h1>
+                {installedCount > 0 && (
+                  <span className="rounded-full border border-sky-300/25 bg-sky-300/10 px-2.5 py-0.5 text-xs text-sky-200">
+                    {installedCount} installed
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-slate-400">
+                Community capability packs for city and niche planning.
+              </p>
             </div>
-            <p className="text-sm text-slate-400">
-              Community capability packs for city and niche planning.
-            </p>
+            <div className="flex shrink-0 items-center gap-2">
+              <Link
+                href="/packs/new"
+                className="shrink-0 rounded-lg border border-amber-300/25 bg-amber-300/10 px-4 py-2 text-sm text-amber-100 transition-colors hover:bg-amber-300/20"
+              >
+                + Create pack
+              </Link>
+            </div>
           </div>
-          <Link
-            href="/packs/new"
-            className="shrink-0 rounded-lg border border-amber-300/25 bg-amber-300/10 px-4 py-2 text-sm text-amber-100 transition-colors hover:bg-amber-300/20"
-          >
-            + Create pack
-          </Link>
         </header>
 
         {packs.length === 0 ? (

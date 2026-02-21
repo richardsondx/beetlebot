@@ -4,6 +4,14 @@ import { fmtDateKey, fmtTime, fmtRelative } from "@/lib/format";
 
 const PAGE_SIZE = 50;
 
+type AuditEventRow = {
+  id: string;
+  at: Date;
+  action: string;
+  actor: string;
+  details: string | null;
+};
+
 function actionColor(action: string): string {
   const a = action.toLowerCase();
   if (a.includes("creat") || a.includes("add") || a.includes("connect")) {
@@ -34,7 +42,11 @@ export default async function AuditPage({
   const skip = (page - 1) * PAGE_SIZE;
 
   const [auditEvents, total] = await Promise.all([
-    db.auditEvent.findMany({ orderBy: { at: "desc" }, skip, take: PAGE_SIZE }),
+    db.auditEvent.findMany({
+      orderBy: { at: "desc" },
+      skip,
+      take: PAGE_SIZE,
+    }) as Promise<AuditEventRow[]>,
     db.auditEvent.count(),
   ]);
 
@@ -42,7 +54,7 @@ export default async function AuditPage({
   const safePage = Math.min(page, Math.max(1, totalPages));
 
   // Group by day
-  const groups = new Map<string, typeof auditEvents>();
+  const groups = new Map<string, AuditEventRow[]>();
   for (const event of auditEvents) {
     const key = fmtDateKey(event.at);
     if (!groups.has(key)) groups.set(key, []);

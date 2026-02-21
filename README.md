@@ -90,6 +90,178 @@ Open [http://localhost:3000](http://localhost:3000).
 
 That's it. The beetle is alive.
 
+## Self-hosting (DigitalOcean / any Linux server)
+
+The Quickstart works on a server, but it runs a **dev** server (`next dev`). For self-hosting you usually want:
+
+- **Production mode**: `npm run build` + `npm run start`
+- **Always-on process**: systemd (or similar) so it restarts on reboot
+- **Persistent storage**: SQLite DB file in a durable path + backups
+- **Correct base URL**: affects OAuth callbacks and webhook URLs
+
+### Choose your hosting style
+
+- **Private (recommended for security / no public domain)**:
+  - UI/admin panel is accessed via **SSH tunnel** or **VPN**
+  - No inbound public traffic required
+  - **Limitations**: integrations that require inbound webhooks or public OAuth callbacks (Google Calendar OAuth, Telegram/WhatsApp webhooks) won’t work unless the server is reachable over HTTPS
+- **Public (domain + HTTPS)**:
+  - Needed for OAuth callbacks and channel webhooks
+  - Put Beetlebot behind Nginx + Let’s Encrypt
+
+### Server requirements
+
+- **Node**: 18+ (Node 20 LTS recommended)
+- **Build tools** (needed for `better-sqlite3`): `build-essential`, `python3`, `make`, `g++`
+- **Ports**:
+  - Private: none (SSH only), or VPN-only
+  - Public: 80/443 to your reverse proxy
+
+### Firewall (recommended)
+
+If you’re doing **private self-hosting**, you can keep Beetlebot bound to `127.0.0.1` and only allow SSH:
+
+```bash
+sudo apt -y install ufw
+sudo ufw allow OpenSSH
+sudo ufw --force enable
+sudo ufw status
+```
+
+If you’re doing **public hosting**, you’ll also allow 80/443 for your reverse proxy:
+
+```bash
+sudo ufw allow "Nginx Full"
+```
+
+### Install dependencies (Ubuntu example)
+
+```bash
+sudo apt update && sudo apt -y upgrade
+sudo apt -y install git build-essential python3 make g++ curl
+```
+
+Install Node (example using NodeSource for Node 20):
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt -y install nodejs
+node -v
+npm -v
+```
+
+### Clone & install
+
+If you see `Permission denied (publickey)` when cloning, use HTTPS:
+
+```bash
+git clone https://github.com/richardsondx/beetlebot.git
+sudo mkdir -p /opt
+sudo mv beetlebot /opt/beetlebot
+sudo chown -R "$USER":"$USER" /opt/beetlebot
+cd /opt/beetlebot
+npm install
+```
+
+### Configure `.env` for self-hosting
+
+```bash
+cp .env.example .env
+openssl rand -base64 32
+```
+
+Then edit `.env`:
+
+- **DATABASE_URL**: point at a durable file path (don’t lose it)
+- **ENCRYPTION_KEY**: set once and **never change** (it encrypts stored credentials at rest)
+- **NEXT_PUBLIC_APP_URL / BEETLEBOT_BASE_URL**:
+  - Private: typically `http://localhost:<port>` (if using SSH tunnel)
+  - Public: `https://your-domain`
+- **AI provider keys**: at least one of `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`
+
+Example (private via SSH tunnel on a custom port):
+
+```bash
+DATABASE_URL="file:/opt/beetlebot/prod.db"
+ENCRYPTION_KEY="<paste the openssl output>"
+NEXT_PUBLIC_APP_URL="http://localhost:48653"
+BEETLEBOT_BASE_URL="http://localhost:48653"
+OPENAI_API_KEY="..."
+```
+
+### Initialize DB, build, and run (production)
+
+```bash
+npm run db:push
+npm run build
+NODE_ENV=production npm run start -- -H 127.0.0.1 -p 48653
+```
+
+Notes:
+
+- `-H 127.0.0.1` binds to localhost (best for private/self-host).
+- Choose any port you want (e.g. `48653`) — just keep `.env` base URLs consistent.
+
+### Access the admin panel privately (SSH tunnel)
+
+On your laptop:
+
+```bash
+ssh -L 48653:127.0.0.1:48653 <user>@<server-ip>
+```
+
+Then open `http://localhost:48653`.
+
+### Keep it running (systemd)
+
+Recommended: run Beetlebot as a dedicated user:
+
+```bash
+sudo useradd --system --home /opt/beetlebot --shell /usr/sbin/nologin beetlebot || true
+sudo chown -R beetlebot:beetlebot /opt/beetlebot
+```
+
+Create a systemd service (example):
+
+```ini
+[Unit]
+Description=Beetlebot
+After=network.target
+
+[Service]
+Type=simple
+User=beetlebot
+Group=beetlebot
+WorkingDirectory=/opt/beetlebot
+EnvironmentFile=/opt/beetlebot/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm run start -- -H 127.0.0.1 -p 48653
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable it:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now beetlebot
+sudo systemctl status beetlebot
+```
+
+### Public hosting (domain + HTTPS) overview
+
+If you need OAuth callbacks and inbound webhooks, put Beetlebot behind a reverse proxy:
+
+- Run Beetlebot on `127.0.0.1:<port>` as above
+- Configure Nginx to proxy `https://your-domain` → `http://127.0.0.1:<port>`
+- Use Let’s Encrypt (Certbot) for TLS
+- Set in `.env`:
+  - `NEXT_PUBLIC_APP_URL="https://your-domain"`
+  - `BEETLEBOT_BASE_URL="https://your-domain"`
+
 ### Environment variables
 
 Copy `.env.example` to `.env` and configure:

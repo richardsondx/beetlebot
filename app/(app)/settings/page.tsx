@@ -3,6 +3,7 @@ import { OauthResultBanner } from "@/components/integrations/oauth-result-banner
 import { SafetySettingsCard } from "@/components/safety-settings";
 import { listIntegrationConnections } from "@/lib/repositories/integrations";
 import { getSafetySettings } from "@/lib/repositories/settings";
+import { Suspense } from "react";
 
 const advancedItems = [
   { label: "Builder console", value: "Enabled" },
@@ -65,7 +66,9 @@ export default async function SettingsPage() {
             </p>
           </div>
 
-          <OauthResultBanner />
+          <Suspense fallback={null}>
+            <OauthResultBanner />
+          </Suspense>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {integrations.map((integration) => (

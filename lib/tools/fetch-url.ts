@@ -1,5 +1,10 @@
 import * as cheerio from "cheerio";
 import type { ChatToolDefinition } from "@/lib/tools/types";
+import {
+  extractImageCandidatesFromHtml,
+  extractPageMetadataFromHtml,
+  isSafeRemoteUrl,
+} from "@/lib/media/cache";
 
 const MAX_CONTENT_LENGTH = 4000;
 const FETCH_TIMEOUT_MS = 10_000;
@@ -166,12 +171,31 @@ export const fetchUrlTool: ChatToolDefinition = {
 
       const html = await response.text();
       const { title, text, links } = extractMainText(html, url, hint);
+      const metadata = extractPageMetadataFromHtml(html);
+      const imageCandidates = extractImageCandidatesFromHtml(html);
+      const rankedCandidates = [
+        ...imageCandidates.og,
+        ...imageCandidates.twitter,
+        ...imageCandidates.jsonLd,
+        ...imageCandidates.imgTags,
+      ]
+        .map((candidate) => {
+          try {
+            return new URL(candidate, url).toString();
+          } catch {
+            return null;
+          }
+        })
+        .filter((candidate): candidate is string => !!candidate && isSafeRemoteUrl(candidate, true));
 
       return {
         url,
         title,
         content: text,
         links,
+        metadata,
+        imageUrl: rankedCandidates[0] ?? null,
+        imageCandidates: rankedCandidates.slice(0, 8),
         truncated: text.length >= MAX_CONTENT_LENGTH,
       };
     } catch (err) {

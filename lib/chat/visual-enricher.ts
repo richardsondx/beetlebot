@@ -2,10 +2,9 @@
  * Visual enrichment pipeline.
  *
  * Takes structured LLM output (text + raw option list) and attaches real
- * image URLs.  Supports:
- *   1. Unsplash API  — set UNSPLASH_ACCESS_KEY in .env
- *   2. Pexels API    — set PEXELS_API_KEY in .env
- *   3. Placeholder   — automatic fallback, always works, no keys required
+ * image URLs.  Uses Bousier's tiered resolver first (metadata + open datasets),
+ * then falls back to placeholders when no trusted image is available within the
+ * latency budget.
  *
  * The module is intentionally tolerant: any fetch failure results in a
  * graceful fallback rather than a thrown error.
@@ -13,7 +12,10 @@
 
 import type { AssistantMessage, ImageCard, RichBlock } from "./rich-message";
 import { sanitiseBlocks } from "./safety";
-import { getBestEventImageUrl } from "@/lib/media/cache";
+import {
+  type BousierEntityInput,
+  resolveImageBatch,
+} from "@/lib/media/bousier";
 
 // ── Raw LLM option (before enrichment) ────────────────────────────────────
 
@@ -33,13 +35,23 @@ export type RawLlmPayload = {
   blocks?: unknown[];
 };
 
+type EnrichOptions = {
+  /** Run a non-blocking second pass for cards that had placeholders. */
+  asyncUpgrade?: boolean;
+  /** Optional callback when upgraded cards are found in background pass. */
+  onAsyncUpgrade?: (cards: ImageCard[]) => Promise<void> | void;
+};
+
 // ── Enrichment entry point ─────────────────────────────────────────────────
 
 /**
  * Parse an LLM reply string, extract structured options, enrich with images,
  * and return a canonical AssistantMessage.
  */
-export async function enrichLlmReply(raw: string): Promise<AssistantMessage> {
+export async function enrichLlmReply(
+  raw: string,
+  options: EnrichOptions = {},
+): Promise<AssistantMessage> {
   const payload = parseLlmPayload(raw);
 
   // If LLM supplied pre-built blocks, sanitise and use them directly
@@ -56,9 +68,7 @@ export async function enrichLlmReply(raw: string): Promise<AssistantMessage> {
   }
 
   // Enrich each option with an image URL
-  const cards = await Promise.all(
-    payload.options.map((opt) => enrichOption(opt)),
-  );
+  const cards = await enrichOptionsWithBousier(payload.options);
 
   const blocks: RichBlock[] =
     cards.length === 1
@@ -70,6 +80,10 @@ export async function enrichLlmReply(raw: string): Promise<AssistantMessage> {
             items: cards.map((card, i) => ({ index: i + 1, card })),
           },
         ];
+
+  if (options.asyncUpgrade && options.onAsyncUpgrade) {
+    void runAsyncCardUpgrade(cards, payload.options, options.onAsyncUpgrade);
+  }
 
   return { text: payload.text, blocks };
 }
@@ -154,106 +168,120 @@ export function parseLlmPayload(raw: string): RawLlmPayload {
 
 // ── Per-option image enrichment ────────────────────────────────────────────
 
-async function enrichOption(opt: RawOption): Promise<ImageCard> {
-  const query = `${opt.category ?? ""} ${opt.title}`.trim();
-  const imageUrl = await fetchBestImageUrl({
-    query,
+const FRIENDLY_SOURCE_NAMES: Record<string, string> = {
+  canonical_metadata: "Official site",
+  wikipedia_summary: "Wikipedia",
+};
+
+function friendlySourceName(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  return FRIENDLY_SOURCE_NAMES[raw] ?? raw;
+}
+
+async function enrichOptionsWithBousier(options: RawOption[]): Promise<ImageCard[]> {
+  const inputs: BousierEntityInput[] = options.map((opt) => ({
+    title: opt.title,
+    category: opt.category,
     actionUrl: opt.actionUrl,
+    query: `${opt.category ?? ""} ${opt.title}`.trim(),
+  }));
+  const resolved = await resolveImageBatch(inputs, {
+    mode: "balanced",
+    timeoutMs: Number(process.env.BOUSIER_TIMEOUT_MS ?? 1500),
   });
 
-  return {
-    type: "image_card",
-    title: opt.title,
-    subtitle: opt.subtitle,
-    imageUrl,
-    alt: opt.title,
-    meta: opt.meta,
-    actionUrl: opt.actionUrl,
-    sourceName: opt.sourceName,
-  };
+  return options.map((opt, idx) => {
+    const result = resolved[idx];
+    const query = `${opt.category ?? ""} ${opt.title}`.trim();
+    const imageUrl = result?.selectedImageUrl ?? makePlaceholder(query);
+    const friendly = friendlySourceName(result?.selectedSourceName);
+    const sourceName = friendly
+      ? opt.sourceName
+        ? `${opt.sourceName} · ${friendly}`
+        : friendly
+      : opt.sourceName;
+
+    const meta: Record<string, string> = { ...(opt.meta ?? {}) };
+
+    return {
+      type: "image_card" as const,
+      title: opt.title,
+      subtitle: opt.subtitle,
+      imageUrl,
+      alt: opt.title,
+      meta: Object.keys(meta).length > 0 ? meta : undefined,
+      actionUrl: opt.actionUrl,
+      sourceName,
+    };
+  });
+}
+
+async function runAsyncCardUpgrade(
+  cards: ImageCard[],
+  options: RawOption[],
+  onAsyncUpgrade: (cards: ImageCard[]) => Promise<void> | void,
+) {
+  const targets = options
+    .map((opt, idx) => ({ opt, idx }))
+    .filter(({ idx }) => cards[idx]?.imageUrl.includes("placehold.co"))
+    .filter(({ opt }) => !!opt.actionUrl);
+
+  if (targets.length === 0) return;
+
+  const upgraded = await resolveImageBatch(
+    targets.map(({ opt }) => ({
+      title: opt.title,
+      category: opt.category,
+      actionUrl: opt.actionUrl,
+      query: `${opt.category ?? ""} ${opt.title}`.trim(),
+    })),
+    { mode: "balanced", timeoutMs: Number(process.env.BOUSIER_ASYNC_TIMEOUT_MS ?? 3500) },
+  );
+
+  const nextCards = [...cards];
+  let changed = false;
+  targets.forEach(({ idx }, i) => {
+    const best = upgraded[i]?.selectedImageUrl;
+    if (!best) return;
+    if (best.includes("placehold.co")) return;
+    nextCards[idx] = { ...nextCards[idx], imageUrl: best };
+    changed = true;
+  });
+  if (!changed) return;
+  await onAsyncUpgrade(nextCards);
+}
+
+export function applyUpgradedCardsToBlocks(
+  blocks: RichBlock[] | undefined,
+  upgradedCards: ImageCard[],
+): RichBlock[] | undefined {
+  if (!blocks?.length || upgradedCards.length === 0) return blocks;
+  let cursor = 0;
+  const mapped: RichBlock[] = blocks.map((block) => {
+    if (block.type === "image_card") {
+      const next = upgradedCards[cursor++];
+      return next ? { ...block, imageUrl: next.imageUrl } : block;
+    }
+    if (block.type === "image_gallery") {
+      const items = block.items.map((item) => {
+        const next = upgradedCards[cursor++];
+        return next ? { ...item, imageUrl: next.imageUrl } : item;
+      });
+      return { ...block, items };
+    }
+    if (block.type === "option_set") {
+      const items = block.items.map((entry) => {
+        const next = upgradedCards[cursor++];
+        return next ? { ...entry, card: { ...entry.card, imageUrl: next.imageUrl } } : entry;
+      });
+      return { ...block, items };
+    }
+    return block;
+  });
+  return mapped;
 }
 
 // ── Image fetch helpers ────────────────────────────────────────────────────
-
-async function fetchBestImageUrl(input: {
-  query: string;
-  actionUrl?: string;
-}): Promise<string> {
-  if (input.actionUrl) {
-    const best = await getBestEventImageUrl({ actionUrl: input.actionUrl });
-    if (best?.imageUrl) return best.imageUrl;
-  }
-  return fetchImageUrl(input.query);
-}
-
-async function fetchImageUrl(query: string): Promise<string> {
-  const unsplashKey = process.env.UNSPLASH_ACCESS_KEY;
-  const pexelsKey = process.env.PEXELS_API_KEY;
-
-  if (unsplashKey) {
-    const url = await tryUnsplash(query, unsplashKey);
-    if (url) return url;
-  }
-
-  if (pexelsKey) {
-    const url = await tryPexels(query, pexelsKey);
-    if (url) return url;
-  }
-
-  return makePlaceholder(query);
-}
-
-async function tryUnsplash(
-  query: string,
-  accessKey: string,
-): Promise<string | null> {
-  try {
-    const params = new URLSearchParams({
-      query,
-      per_page: "1",
-      orientation: "landscape",
-    });
-    const res = await fetch(
-      `https://api.unsplash.com/search/photos?${params.toString()}`,
-      {
-        headers: { Authorization: `Client-ID ${accessKey}` },
-        signal: AbortSignal.timeout(4000),
-      },
-    );
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      results?: Array<{ urls?: { regular?: string } }>;
-    };
-    const url = data.results?.[0]?.urls?.regular;
-    return url ?? null;
-  } catch {
-    return null;
-  }
-}
-
-async function tryPexels(
-  query: string,
-  apiKey: string,
-): Promise<string | null> {
-  try {
-    const params = new URLSearchParams({ query, per_page: "1" });
-    const res = await fetch(
-      `https://api.pexels.com/v1/search?${params.toString()}`,
-      {
-        headers: { Authorization: apiKey },
-        signal: AbortSignal.timeout(4000),
-      },
-    );
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      photos?: Array<{ src?: { large?: string } }>;
-    };
-    const url = data.photos?.[0]?.src?.large;
-    return url ?? null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Generate a deterministic, nice-looking placeholder using placehold.co.

@@ -42,6 +42,12 @@ const CAPABILITIES: Record<string, ProviderCapabilities> = {
     mediaGroup: false,
     buttons: false,
   },
+  slack: {
+    photo: true,
+    captionMaxLen: 4000,
+    mediaGroup: false,
+    buttons: true,
+  },
 };
 
 // ── Public API ─────────────────────────────────────────────────────────────
@@ -67,36 +73,20 @@ export type ChannelSendResult =
 export async function sendToChannel(
   input: ChannelSendInput,
 ): Promise<ChannelSendResult> {
+  const normalized = normalizeForChannel(input.message, input.provider, input.assistantMessageId);
   switch (input.provider) {
     case "telegram":
-      return sendViaTelegram(input);
+      return sendViaTelegram(input, normalized);
     case "whatsapp":
-      return sendViaWhatsApp(input);
+      return sendViaWhatsApp(input, normalized);
+    case "slack":
+      return sendViaSlack(input, normalized);
     default:
       return sendTextFallback(input);
   }
 }
 
 // ── Helpers shared across providers ───────────────────────────────────────
-
-/** Extract the first usable image card from the blocks, if any. */
-function firstImageCard(msg: AssistantMessage): ImageCard | null {
-  if (!msg.blocks) return null;
-  for (const block of msg.blocks) {
-    if (block.type === "image_card" && isValidImageUrl(block.imageUrl)) {
-      return block;
-    }
-    if (block.type === "image_gallery" && block.items[0]) {
-      const item = block.items[0];
-      if (isValidImageUrl(item.imageUrl)) return item;
-    }
-    if (block.type === "option_set" && block.items[0]) {
-      const card = block.items[0].card;
-      if (isValidImageUrl(card.imageUrl)) return card;
-    }
-  }
-  return null;
-}
 
 /** Extract all image cards (for media group sends), max 10. */
 function allImageCards(msg: AssistantMessage): ImageCard[] {
@@ -206,29 +196,46 @@ function truncate(s: string, max: number): string {
   return s.slice(0, max - 1) + "…";
 }
 
+type NormalizedChannelPayload = {
+  cards: ImageCard[];
+  fullText: string;
+};
+
+export function normalizeForChannel(
+  message: AssistantMessage,
+  provider: string,
+  assistantMessageId?: string,
+): NormalizedChannelPayload {
+  const caps = CAPABILITIES[provider];
+  const captionBudget = caps?.captionMaxLen ?? 1000;
+  const cards = allImageCards(message).filter((card) => {
+    if (!isValidImageUrl(card.imageUrl)) return false;
+    if (card.imageUrl.includes("placehold.co")) return false;
+    return true;
+  });
+  const fullText = truncate(
+    assistantMessageId
+      ? toPlainTextWithShare(message, assistantMessageId)
+      : toPlainText(message),
+    captionBudget * 4,
+  );
+  return { cards, fullText };
+}
+
 // ── Telegram ───────────────────────────────────────────────────────────────
 
 const TELEGRAM_API = "https://api.telegram.org";
 
 async function sendViaTelegram(
   input: ChannelSendInput,
+  normalized: NormalizedChannelPayload,
 ): Promise<ChannelSendResult> {
-  const { accessToken, recipientId, message, assistantMessageId } = input;
+  const { accessToken, recipientId, message } = input;
   const caps = CAPABILITIES.telegram;
   const base = `${TELEGRAM_API}/bot${accessToken}`;
   const messageIds: string[] = [];
-
-  // Exclude placeholder images — Telegram's bot API cannot render them,
-  // causing silent media group failures that swallow the entire option list.
-  const cards = allImageCards(message).filter(
-    (c) => !c.imageUrl.includes("placehold.co"),
-  );
-
-  // The full plain-text representation always includes the option list.
-  const fullText = truncate(
-    assistantMessageId ? toPlainTextWithShare(message, assistantMessageId) : toPlainText(message),
-    caps.captionMaxLen * 4,
-  );
+  const cards = normalized.cards;
+  const fullText = normalized.fullText;
 
   try {
     if (cards.length > 1 && caps.mediaGroup) {
@@ -390,6 +397,7 @@ const WA_API = `https://graph.facebook.com/${WA_GRAPH_VERSION}`;
 
 async function sendViaWhatsApp(
   input: ChannelSendInput,
+  normalized: NormalizedChannelPayload,
 ): Promise<ChannelSendResult> {
   const { accessToken, recipientId, phoneNumberId, message, assistantMessageId } = input;
   const caps = CAPABILITIES.whatsapp;
@@ -399,9 +407,7 @@ async function sendViaWhatsApp(
   }
 
   const messageIds: string[] = [];
-  const realCards = allImageCards(message).filter(
-    (c) => !c.imageUrl.includes("placehold.co"),
-  );
+  const realCards = normalized.cards;
   const card = realCards.length > 0 ? realCards[0] : null;
 
   try {
@@ -426,7 +432,7 @@ async function sendViaWhatsApp(
         const lines = [
           "More options:",
           ...(extraItems.length > 0
-            ? extraItems.map((item, i) => {
+            ? extraItems.map((item) => {
                 const share = shareUrlForIndex({
                   assistantMessageId,
                   index: item.index,
@@ -449,15 +455,11 @@ async function sendViaWhatsApp(
         if (textId) messageIds.push(textId);
       }
     } else {
-      const plain = truncate(
-        assistantMessageId ? toPlainTextWithShare(message, assistantMessageId) : toPlainText(message),
-        caps.captionMaxLen * 4,
-      );
       const textId = await waSendText(
         accessToken,
         phoneNumberId,
         recipientId,
-        plain,
+        normalized.fullText,
       );
       if (textId) messageIds.push(textId);
     }
@@ -469,6 +471,18 @@ async function sendViaWhatsApp(
       error: err instanceof Error ? err.message : "WhatsApp send failed",
     };
   }
+}
+
+async function sendViaSlack(
+  _input: ChannelSendInput,
+  normalized: NormalizedChannelPayload,
+): Promise<ChannelSendResult> {
+  // Slack adapter contract (future): this function intentionally provides
+  // a graceful fallback so provider plumbing can be added without breaking sends.
+  console.warn(
+    `[channel-sender] Slack adapter not implemented yet. Fallback text length=${normalized.fullText.length}.`,
+  );
+  return { ok: true, messageIds: [] };
 }
 
 async function waSendText(

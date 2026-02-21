@@ -103,53 +103,74 @@ function normalizeJsonLd(input: unknown): unknown[] {
   return [input];
 }
 
-function collectJsonLdEventImages(node: unknown, out: string[]) {
+function collectJsonLdImages(node: unknown, out: string[]) {
   if (!node || typeof node !== "object") return;
   const obj = node as Record<string, unknown>;
-
-  const typeValue = obj["@type"];
-  const types = Array.isArray(typeValue)
-    ? typeValue.filter((t) => typeof t === "string")
-    : typeof typeValue === "string"
-      ? [typeValue]
-      : [];
-  const isEvent = types.some((t) => t.toLowerCase() === "event");
-
-  if (isEvent && obj.image) {
+  if (obj.image) {
     const images = Array.isArray(obj.image) ? obj.image : [obj.image];
-    for (const img of images) {
-      if (typeof img === "string") out.push(img);
-      else if (img && typeof img === "object") {
-        const url = (img as Record<string, unknown>).url;
-        if (typeof url === "string") out.push(url);
-      }
-    }
+    for (const img of images) pushJsonLdImageCandidate(img, out);
   }
 
-  // Traverse common graph shapes
+  // Common JSON-LD image aliases.
+  if (obj.thumbnailUrl) {
+    const values = Array.isArray(obj.thumbnailUrl)
+      ? obj.thumbnailUrl
+      : [obj.thumbnailUrl];
+    for (const value of values) pushJsonLdImageCandidate(value, out);
+  }
+
+  if (obj.logo) {
+    pushJsonLdImageCandidate(obj.logo, out);
+  }
+
+  if (obj.primaryImageOfPage) {
+    pushJsonLdImageCandidate(obj.primaryImageOfPage, out);
+  }
+
   const graph = obj["@graph"];
   if (graph) {
     for (const item of normalizeJsonLd(graph)) {
-      collectJsonLdEventImages(item, out);
+      collectJsonLdImages(item, out);
     }
   }
 
-  // Traverse nested objects/arrays (bounded)
+  // Traverse nested objects/arrays (bounded) for atypical schemas.
   for (const value of Object.values(obj)) {
     if (Array.isArray(value)) {
-      for (const item of value.slice(0, 30)) collectJsonLdEventImages(item, out);
+      for (const item of value.slice(0, 30)) collectJsonLdImages(item, out);
     } else if (value && typeof value === "object") {
-      collectJsonLdEventImages(value, out);
+      collectJsonLdImages(value, out);
     }
   }
 }
 
-export function extractEventImageCandidatesFromHtml(html: string): {
+function pushJsonLdImageCandidate(value: unknown, out: string[]) {
+  if (typeof value === "string") {
+    out.push(value);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  const obj = value as Record<string, unknown>;
+  const urlFields = ["url", "contentUrl", "thumbnailUrl"];
+  for (const field of urlFields) {
+    const url = obj[field];
+    if (typeof url === "string") out.push(url);
+    if (Array.isArray(url)) {
+      for (const item of url) {
+        if (typeof item === "string") out.push(item);
+      }
+    }
+  }
+}
+
+export type ImageCandidatesFromHtml = {
   og: string[];
   twitter: string[];
   jsonLd: string[];
   imgTags: string[];
-} {
+};
+
+export function extractImageCandidatesFromHtml(html: string): ImageCandidatesFromHtml {
   const $ = cheerio.load(html);
 
   const ogCandidates: string[] = [];
@@ -167,14 +188,14 @@ export function extractEventImageCandidatesFromHtml(html: string): {
     if (content) twitterCandidates.push(content);
   });
 
-  // JSON-LD (Event.image)
+  // JSON-LD (Event / Place / LocalBusiness / Article image references)
   $("script[type='application/ld+json']").each((_, el) => {
     const raw = $(el).text();
     if (!raw?.trim()) return;
     try {
       const parsed = JSON.parse(raw) as unknown;
       const items = normalizeJsonLd(parsed);
-      for (const item of items) collectJsonLdEventImages(item, jsonLdCandidates);
+      for (const item of items) collectJsonLdImages(item, jsonLdCandidates);
     } catch {
       // ignore
     }
@@ -191,6 +212,41 @@ export function extractEventImageCandidatesFromHtml(html: string): {
   }
 
   return { og: ogCandidates, twitter: twitterCandidates, jsonLd: jsonLdCandidates, imgTags: imgTagCandidates };
+}
+
+export function extractEventImageCandidatesFromHtml(html: string): ImageCandidatesFromHtml {
+  return extractImageCandidatesFromHtml(html);
+}
+
+export type PageMetadataFromHtml = {
+  title: string | null;
+  description: string | null;
+  siteName: string | null;
+  canonicalUrl: string | null;
+  ogImage: string | null;
+  twitterImage: string | null;
+};
+
+export function extractPageMetadataFromHtml(html: string): PageMetadataFromHtml {
+  const $ = cheerio.load(html);
+  const title = $("title").first().text().trim() || null;
+  const description = firstMetaContent($, [
+    "meta[name='description']",
+    "meta[property='og:description']",
+    "meta[name='twitter:description']",
+  ]);
+  const siteName = firstMetaContent($, ["meta[property='og:site_name']"]);
+  const canonicalHref = $("link[rel='canonical']").first().attr("href")?.trim() ?? null;
+  const ogImage = firstMetaContent($, ["meta[property='og:image']", "meta[property='og:image:url']"]);
+  const twitterImage = firstMetaContent($, ["meta[name='twitter:image']", "meta[name='twitter:image:src']"]);
+  return {
+    title,
+    description,
+    siteName,
+    canonicalUrl: canonicalHref,
+    ogImage,
+    twitterImage,
+  };
 }
 
 async function fetchHtml(url: string): Promise<string | null> {
@@ -215,11 +271,11 @@ async function fetchHtml(url: string): Promise<string | null> {
   }
 }
 
-export async function discoverEventImageUrlFromPage(pageUrl: string): Promise<string | null> {
+export async function discoverImageCandidatesFromPage(pageUrl: string): Promise<string[]> {
   const html = await fetchHtml(pageUrl);
-  if (!html) return null;
+  if (!html) return [];
 
-  const candidates = extractEventImageCandidatesFromHtml(html);
+  const candidates = extractImageCandidatesFromHtml(html);
   const ranked = [
     ...candidates.og,
     ...candidates.twitter,
@@ -227,16 +283,27 @@ export async function discoverEventImageUrlFromPage(pageUrl: string): Promise<st
     ...candidates.imgTags,
   ];
 
+  const out: string[] = [];
+  const seen = new Set<string>();
   for (const candidate of ranked) {
     const resolved = resolveUrl(candidate, pageUrl);
     if (!resolved) continue;
     if (!isSafeRemoteUrl(resolved, true)) continue;
-    // For downstream channel sends, image URLs must be https; but allow http here
-    // because we may cache/proxy it to our own https domain.
-    return resolved;
+    if (seen.has(resolved)) continue;
+    seen.add(resolved);
+    out.push(resolved);
+    if (out.length >= 20) break;
   }
+  return out;
+}
 
-  return null;
+export async function discoverImageUrlFromPage(pageUrl: string): Promise<string | null> {
+  const candidates = await discoverImageCandidatesFromPage(pageUrl);
+  return candidates[0] ?? null;
+}
+
+export async function discoverEventImageUrlFromPage(pageUrl: string): Promise<string | null> {
+  return discoverImageUrlFromPage(pageUrl);
 }
 
 async function readBytesWithLimit(
@@ -347,7 +414,13 @@ export function publicMediaUrlForId(id: string): string | null {
 export async function getBestEventImageUrl(input: {
   actionUrl: string;
 }): Promise<{ imageUrl: string; cached: boolean } | null> {
-  const discovered = await discoverEventImageUrlFromPage(input.actionUrl);
+  return getBestImageUrl({ actionUrl: input.actionUrl });
+}
+
+export async function getBestImageUrl(input: {
+  actionUrl: string;
+}): Promise<{ imageUrl: string; cached: boolean } | null> {
+  const discovered = await discoverImageUrlFromPage(input.actionUrl);
   if (!discovered) return null;
 
   const publicBase = getPublicBaseUrl();

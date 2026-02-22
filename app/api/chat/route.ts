@@ -10,16 +10,33 @@ import {
   getRecentConversationThreads,
   parseMessageBlocks,
 } from "@/lib/repositories/conversations";
-import { getIntegrationConnection } from "@/lib/repositories/integrations";
+import {
+  getIntegrationConnection,
+  listIntegrationConnections,
+} from "@/lib/repositories/integrations";
 import {
   deriveRecommendationSignals,
   extractRecommendationConstraints,
+  getHomeAreaFromMemory,
   getPreferenceProfile,
+  getPreferredCityFromMemory,
   tasteProfile,
   upsertMemory,
 } from "@/lib/repositories/memory";
 import type { PreferenceProfile } from "@/lib/repositories/memory";
-import { createPack, getInstalledPackInstructions, getPackBySlug } from "@/lib/repositories/packs";
+import {
+  createPack,
+  getInstalledPackInstructions,
+  getPackBySlug,
+  listPacks,
+} from "@/lib/repositories/packs";
+import {
+  createAutopilot,
+  deleteAutopilot,
+  listAutopilots,
+  updateAutopilot,
+} from "@/lib/repositories/autopilots";
+import { getSafetySettings } from "@/lib/repositories/settings";
 import {
   applyUpgradedCardsToBlocks,
   enrichLlmReply,
@@ -183,17 +200,39 @@ If your reply does NOT include concrete suggestions (e.g. it's a clarifying ques
 CRITICAL URL RULES:
 - For category "event", you MUST include actionUrl and it MUST be an event detail page that contains the organizer's hero/share image (often OG image metadata). Do NOT use a generic search results page.
 - If you only have a listing/search page or you're unsure of the canonical event URL, use the fetch_url tool on a reputable source page to locate a specific event detail URL first, then return the JSON.
+- Do NOT use JSON/options format for capability/config/help questions or factual place-info questions.
 `.trim();
 
-function buildCompanionPrompt(mode?: string, isAction = false) {
+function buildCompanionPrompt(input: {
+  mode?: string;
+  isAction?: boolean;
+  isCapabilityQuery?: boolean;
+  isLocationInfoQuery?: boolean;
+  preferredName?: string | null;
+  preferredCity?: string | null;
+  homeArea?: string | null;
+  isNewThread?: boolean;
+}) {
+  const preferredNameHint = input.preferredName
+    ? `Known preferred name: ${input.preferredName}. Use it naturally and sparingly.`
+    : "Preferred name unknown. Ask once, casually, after some rapport or when it helps personalize a concrete request.";
   const base = [
     "You are beetlebot 🪲, a brilliant life companion with the instincts of a world-class travel agent, event specialist, and local insider.",
     "You think like an expert concierge who builds a mental model of each client over time — every conversation makes you sharper and more attuned to what they'll love.",
     "",
     "CONVERSATIONAL STYLE:",
     "- Talk like a smart, well-connected friend — warm, concise, natural. Not a brochure.",
+    "- Reply in the same language as the user's latest message unless they explicitly ask to switch languages.",
     "- Use short paragraphs. Only provide structured plans when explicitly asked.",
     "- When someone says hi or starts casual, match their energy. Be warm and meet them where they are — don't jump straight into planning mode.",
+    "- In a new thread, prioritize rapport first: one short natural opener before suggestions.",
+    "- If the user asks who you are, introduce yourself as beetlebot in one short sentence.",
+    `- ${preferredNameHint}`,
+    input.homeArea
+      ? `Known home area: ${input.homeArea}. Use this for proximity-sensitive recommendations.`
+      : input.preferredCity
+        ? `Known city: ${input.preferredCity}. Ask for a finer home area only when the user asks for nearby/close-to-home ideas.`
+        : "Home location granularity is unknown. If proximity matters, ask one concise location clarifier (city first, then finer area later).",
     "- NEVER repeat, echo, or reuse exact phrasing from your previous messages. Each reply must be fresh and forward-moving.",
     "",
     "PREFERENCE DISCOVERY:",
@@ -206,8 +245,10 @@ function buildCompanionPrompt(mode?: string, isAction = false) {
     "  Instead of 'What area do you prefer?' → 'Do you want to stay close to home or up for a bit of a trek?'",
     "  Instead of 'What are your interests?' → 'What kind of stuff gets you excited — active, cultural, food-driven, chill vibes?'",
     "- Never ask more than ONE preference question per response unless the user is specifically setting up preferences.",
+    "- If the user just shared profile info (name/city/home area), acknowledge briefly and do not jump into scouting suggestions in that same turn unless explicitly asked.",
     "- If the user gives you a clear request with enough context, just answer. Don't interrogate.",
     "- Lead with value (a suggestion, an idea, a reaction) THEN ask — never lead with the question.",
+    "- Post-event learning questions (e.g., 'how was it?') are allowed only inside active conversations and should feel occasional, not scripted.",
     "",
     "PRECISION:",
     "- Follow the user's instructions EXACTLY. When they name a specific event, activity, restaurant, or place, use THAT EXACT thing — never substitute.",
@@ -223,6 +264,7 @@ function buildCompanionPrompt(mode?: string, isAction = false) {
     "",
     "CALENDAR:",
     "- When the user asks about schedule, meetings, free time, or calendar conflicts, call the google_calendar_events tool before answering.",
+    "- When user asks to plan around a named event/time anchor (e.g. 'before the fair tomorrow', 'before my event'), and calendar read access exists, proactively check calendar first to resolve the anchor instead of asking the user for the event time again.",
     "- When you need to move, update, or delete a calendar event, ALWAYS use the google_calendar_events tool with operation 'find' first to resolve the event by name. It handles emoji prefixes, partial names, and fuzzy matching. Use the returned eventId and calendarId for the subsequent update/delete call.",
     "- NEVER give up after a single failed list query. The 'find' operation searches ALL calendars and uses fuzzy matching — use it.",
     "- If a calendar tool response includes { requiresUserConfirmation: true }, ask the user the provided prompt and wait for confirmation before doing additional calendar actions.",
@@ -240,12 +282,198 @@ function buildCompanionPrompt(mode?: string, isAction = false) {
     "- 🔗 Website or ticket link",
     "- 👨‍👩‍👦 Who it's good for",
     "Think: 'What would make the user's life easier glancing at this event 5 minutes before leaving the house?'",
+    "",
+    "CAPABILITY TRANSPARENCY:",
+    "- If the user asks what integrations are enabled, answer directly using INTEGRATION STATUS in system context.",
+    "- Never guess integration status. If uncertain, say that clearly and ask to verify in settings.",
+    "- For capability/help/config questions, answer directly and concretely. Do not switch into recommendations.",
+    "- For factual place/location questions, answer the question first; don't pivot into suggestion lists unless asked.",
   ].join("\n");
-  const modeHint = mode && MODE_HINTS[mode] ? `\n${MODE_HINTS[mode]}` : "";
-  // Suppress the visual option-card format when the user is giving a direct action command.
-  const visualHint =
-    mode && VISUAL_MODES.has(mode) && !isAction ? `\n${VISUAL_SYSTEM_INSTRUCTION}` : "";
-  return base + modeHint + visualHint;
+  const modeHint = input.mode && MODE_HINTS[input.mode] ? `\n${MODE_HINTS[input.mode]}` : "";
+  const newThreadHint = input.isNewThread
+    ? "\nThis is the beginning of a new thread; avoid jumping straight into optimization."
+    : "";
+  return base + modeHint + newThreadHint;
+}
+
+export type PromptPolicyContext = {
+  effectiveMode: string;
+  isActionCmd: boolean;
+  isCapabilityQuery: boolean;
+  isCapabilityHelpTurn: boolean;
+  isLocationInfoQuery: boolean;
+  allowBestEffortSuggestions: boolean;
+  preferredName?: string | null;
+  preferredCity?: string | null;
+  homeArea?: string | null;
+  isNewThread?: boolean;
+  isLightConversationTurn: boolean;
+  isMetaConversationQuery: boolean;
+  isLateNight: boolean;
+  explicitSuggestionRequest: boolean;
+  shouldUseSafeNoIntentMode: boolean;
+  wantsBestEffortNow: boolean;
+  calendarIntent: boolean;
+  calendarWriteIntent: boolean;
+  shouldProactiveCalendarCheck: boolean;
+  integrationStatus: string;
+  packStatus: string;
+  autopilotStatus: string;
+  approvalGateStatus: string;
+  shouldInjectPackContext: boolean;
+  packContext?: string | null;
+  hasRecentClarifier: boolean;
+};
+
+function buildCoreIdentityPrompt(input: PromptPolicyContext): string {
+  return buildCompanionPrompt({
+    mode: input.effectiveMode,
+    isAction: input.isActionCmd,
+    isCapabilityQuery: input.isCapabilityQuery,
+    isLocationInfoQuery: input.isLocationInfoQuery,
+    preferredName: input.preferredName,
+    preferredCity: input.preferredCity,
+    homeArea: input.homeArea,
+    isNewThread: input.isNewThread,
+  });
+}
+
+function buildToolCapabilityPrompt(input: PromptPolicyContext): string {
+  const lines = [
+    "TOOL CAPABILITY POLICY:",
+    "- For capability/help/config questions, answer directly from the status snapshots below.",
+    "- Do not pivot capability/help/config turns into recommendation lists unless user explicitly asks for ideas.",
+    `INTEGRATION STATUS: ${input.integrationStatus}`,
+  ];
+  if (input.isCapabilityQuery || input.isCapabilityHelpTurn) {
+    lines.push(`PACK STATUS: ${input.packStatus}`);
+    lines.push(`AUTOPILOT STATUS: ${input.autopilotStatus}`);
+    lines.push(`APPROVAL GATE: ${input.approvalGateStatus}`);
+  }
+  return lines.join("\n");
+}
+
+function buildMemoryPolicyPrompt(input: PromptPolicyContext): string {
+  const lines = ["MEMORY POLICY:"];
+  if (input.preferredName) {
+    lines.push(`- Known preferred name: ${input.preferredName}. Use naturally and do not re-ask unless user asks to change it.`);
+  } else {
+    lines.push("- Preferred name is unknown. Ask once only when helpful.");
+  }
+  if (input.preferredCity) {
+    lines.push(`- Known city: ${input.preferredCity}. Do not ask city again unless user indicates uncertainty or moved.`);
+  } else {
+    lines.push("- City is unknown. Ask only when location context is needed.");
+  }
+  if (input.homeArea) {
+    lines.push(`- Known home area: ${input.homeArea}. Use this for nearby recommendations.`);
+  } else {
+    lines.push("- Home area is unknown. Ask only for nearby/proximity-sensitive requests.");
+  }
+  return lines.join("\n");
+}
+
+function buildConversationPolicyPrompt(input: PromptPolicyContext): string {
+  const lines = [
+    "CONVERSATION POLICY:",
+    "- Ask at most one concise clarification question tied to the active request.",
+    "- If a similar clarification was already asked recently, stop clarifying and provide best-effort assumptions.",
+  ];
+  if (input.hasRecentClarifier) {
+    lines.push("- A clarification was recently asked in this thread; avoid repeating another clarifier now.");
+  }
+  if (input.isLightConversationTurn) {
+    lines.push(
+      "- This is a lightweight conversational turn. Keep reply brief and warm. Do NOT provide recommendations, option cards, or planning questions unless explicitly asked.",
+    );
+  }
+  if (input.isLateNight && input.isLightConversationTurn && !input.explicitSuggestionRequest) {
+    lines.push(
+      "- Late-night norm: avoid 'tonight plans/vibes' follow-ups after midnight unless user explicitly asks for planning.",
+    );
+  }
+  if (input.isMetaConversationQuery) {
+    lines.push(
+      "- This is a meta conversation turn. Acknowledge briefly, correct course, and end with a neutral help offer. No timeframe assumptions.",
+    );
+  }
+  if (input.shouldUseSafeNoIntentMode) {
+    lines.push(
+      "- Intent extraction is unavailable. Use a safe conversational fallback: brief reply in user's language, no assumptions, no recommendations, one concise clarification.",
+    );
+  }
+  if (!input.allowBestEffortSuggestions && !input.isActionCmd && !input.calendarIntent && !input.isCapabilityQuery) {
+    lines.push(
+      "- Do not provide concrete recommendation lists/options unless user explicitly asks for suggestions or asks you to proceed now.",
+    );
+  }
+  if (input.wantsBestEffortNow || input.hasRecentClarifier) {
+    lines.push("- User signaled to proceed now; stop clarifying and provide best-effort suggestions with brief assumptions.");
+  }
+  return lines.join("\n");
+}
+
+function buildCalendarAnchorPolicyPrompt(input: PromptPolicyContext): string | null {
+  if (!input.calendarIntent) return null;
+  if (input.calendarWriteIntent) {
+    return [
+      "CALENDAR ANCHOR POLICY:",
+      "- User is asking to modify calendar data.",
+      "- For update/delete, always call google_calendar_events with operation 'find' first, then write using resolved eventId/calendarId.",
+      "- If required fields are missing, ask one concise clarification and do not switch to unrelated calendar listings.",
+      "- If tool result includes { requiresUserConfirmation: true }, ask that prompt and wait.",
+    ].join("\n");
+  }
+  return [
+    "CALENDAR ANCHOR POLICY:",
+    input.shouldProactiveCalendarCheck
+      ? "- User implied/granted calendar-check permission. Proactively retrieve relevant calendar data before asking follow-up permission."
+      : "- For explicit calendar schedule questions, retrieve relevant calendar data before final answer.",
+    "- Answer from tool results directly; do not ask the user to repeat already implied anchor times.",
+  ].join("\n");
+}
+
+function buildOutputFormatPolicyPrompt(input: PromptPolicyContext): string {
+  const lines = [
+    "OUTPUT FORMAT POLICY:",
+    "- For capability/location/meta/smalltalk/informational turns, default to direct text answers.",
+  ];
+  if (input.isCapabilityQuery || input.isLocationInfoQuery) {
+    lines.push("- This is informational: answer directly and concisely. Do not generate option cards or unrelated suggestions.");
+  }
+  if (input.isActionCmd) {
+    lines.push(
+      "- CRITICAL action command: execute with tools and confirm in 1-2 sentences. Do NOT produce option cards or new suggestions.",
+    );
+  }
+  const shouldUseVisualCards =
+    Boolean(input.effectiveMode) &&
+    VISUAL_MODES.has(input.effectiveMode) &&
+    !input.isActionCmd &&
+    !input.isCapabilityQuery &&
+    !input.isLocationInfoQuery &&
+    input.allowBestEffortSuggestions;
+  if (shouldUseVisualCards) {
+    lines.push(VISUAL_SYSTEM_INSTRUCTION);
+  } else {
+    lines.push("- Keep response in concise text format for this turn.");
+  }
+  return lines.join("\n");
+}
+
+export function composePolicySections(input: PromptPolicyContext): string[] {
+  const sections: Array<string | null> = [
+    buildCoreIdentityPrompt(input),
+    buildToolCapabilityPrompt(input),
+    buildMemoryPolicyPrompt(input),
+    buildConversationPolicyPrompt(input),
+    buildCalendarAnchorPolicyPrompt(input),
+    buildOutputFormatPolicyPrompt(input),
+  ];
+  if (input.shouldInjectPackContext && input.packContext) {
+    sections.push(input.packContext);
+  }
+  return sections.filter((section): section is string => Boolean(section && section.trim()));
 }
 
 function buildTemporalContext(timezone?: string): string {
@@ -287,14 +515,130 @@ function buildTemporalContext(timezone?: string): string {
   return `Current date and time: ${formatted}. Today is ${dayOfWeek}. ${weekendNote}`;
 }
 
-function buildRuntimeContext(input: { tasteHints: string[]; recentRuns: string[] }) {
+function getLocalHour(timezone?: string) {
+  const tz = timezone || "America/Toronto";
+  const hour = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "2-digit",
+    hour12: false,
+  }).format(new Date());
+  const parsed = Number.parseInt(hour, 10);
+  return Number.isFinite(parsed) ? parsed : 12;
+}
+
+function buildRuntimeContext(input: {
+  tasteHints: string[];
+  recentRuns: string[];
+  integrationStatus: string;
+  preferredCity?: string | null;
+  homeArea?: string | null;
+  packStatus?: string;
+  autopilotStatus?: string;
+  approvalGateStatus?: string;
+}) {
   const memoryContext = input.tasteHints.length
     ? `User taste hints: ${input.tasteHints.join(", ")}.`
     : "No explicit taste hints yet.";
   const runContext = input.recentRuns.length
     ? `Recent run states: ${input.recentRuns.join(" | ")}.`
     : "No recent run history.";
-  return `${memoryContext}\n${runContext}`;
+  const locationContext = input.homeArea
+    ? `Known home area: ${input.homeArea}.`
+    : input.preferredCity
+      ? `Known city: ${input.preferredCity}.`
+      : "No known home location yet.";
+  const lines = [`${memoryContext}`, `${runContext}`, `${locationContext}`, `INTEGRATION STATUS: ${input.integrationStatus}`];
+  if (input.packStatus) lines.push(`PACK STATUS: ${input.packStatus}`);
+  if (input.autopilotStatus) lines.push(`AUTOPILOT STATUS: ${input.autopilotStatus}`);
+  if (input.approvalGateStatus) lines.push(`APPROVAL GATE: ${input.approvalGateStatus}`);
+  return lines.join("\n");
+}
+
+function sanitizePreferredName(raw: string): string | null {
+  const cleaned = raw.replace(/[^a-zA-Z0-9' -]/g, "").trim();
+  if (cleaned.length < 2 || cleaned.length > 32) return null;
+  return cleaned;
+}
+
+async function getPreferredNameFromMemory(): Promise<string | null> {
+  const hit = await db.memoryEntry.findFirst({
+    where: {
+      bucket: "profile_memory",
+      key: { in: ["preferred_name", "name"] },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!hit?.value) return null;
+  return sanitizePreferredName(hit.value);
+}
+
+function formatIntegrationStatusSnapshot(
+  connections: Awaited<ReturnType<typeof listIntegrationConnections>>,
+) {
+  if (!connections.length) return "No integrations configured.";
+  return connections
+    .map((connection) => {
+      const scopes = connection.grantedScopes.length
+        ? ` [${connection.grantedScopes.join(", ")}]`
+        : "";
+      const account = connection.externalAccountLabel ? ` (${connection.externalAccountLabel})` : "";
+      return `${connection.displayName}: ${connection.status}${scopes}${account}`;
+    })
+    .join(" | ");
+}
+
+function formatPackStatusSnapshot(packs: Awaited<ReturnType<typeof listPacks>>) {
+  const installed = packs.filter((pack) => Boolean((pack as { installed?: boolean }).installed));
+  if (!installed.length) return "No packs enabled.";
+  return installed
+    .slice(0, 8)
+    .map(
+      (pack) =>
+        `${pack.name} (${pack.slug}) city=${pack.city} modes=${pack.modes.join("/") || "n/a"} budget=${pack.budgetRange}`,
+    )
+    .join(" | ");
+}
+
+function formatAutopilotSnapshot(autopilots: Awaited<ReturnType<typeof listAutopilots>>) {
+  if (!autopilots.length) return "No autopilots configured.";
+  return autopilots
+    .slice(0, 8)
+    .map(
+      (autopilot) =>
+        `${autopilot.name} [status=${autopilot.status}] Goal=${autopilot.goal}; Trigger=${autopilot.triggerType}:${autopilot.trigger}; Action=${autopilot.action}; Approval=${autopilot.approvalRule}`,
+    )
+    .join(" | ");
+}
+
+function formatApprovalGateSnapshot(settings: Awaited<ReturnType<typeof getSafetySettings>>) {
+  return `defaultApproval=${settings.defaultApproval}; spendCap=${settings.spendCap}; quietHours=${settings.quietStart}-${settings.quietEnd}`;
+}
+
+function buildCapabilityReply(input: {
+  topic: CapabilityTopic;
+  integrations: Awaited<ReturnType<typeof listIntegrationConnections>>;
+  packs: Awaited<ReturnType<typeof listPacks>>;
+  autopilots: Awaited<ReturnType<typeof listAutopilots>>;
+  safetySettings: Awaited<ReturnType<typeof getSafetySettings>>;
+}) {
+  if (input.topic === "integrations") {
+    return `Here are the enabled integrations right now: ${formatIntegrationStatusSnapshot(input.integrations)}.`;
+  }
+  if (input.topic === "packs") {
+    return `Enabled packs right now: ${formatPackStatusSnapshot(input.packs)}.`;
+  }
+  if (input.topic === "autopilots") {
+    return `Here are your autopilots (Goal / Trigger / Action / Approval): ${formatAutopilotSnapshot(input.autopilots)}. You can ask me to create, pause/resume, or delete an autopilot.`;
+  }
+  if (input.topic === "approval_gate") {
+    return `Your approval gate settings are: ${formatApprovalGateSnapshot(input.safetySettings)}.`;
+  }
+  return [
+    `Integrations: ${formatIntegrationStatusSnapshot(input.integrations)}.`,
+    `Packs: ${formatPackStatusSnapshot(input.packs)}.`,
+    `Autopilots: ${formatAutopilotSnapshot(input.autopilots)}.`,
+    `Approval gate: ${formatApprovalGateSnapshot(input.safetySettings)}.`,
+  ].join("\n");
 }
 
 async function buildPackContext(
@@ -323,7 +667,11 @@ type OrchestrationState =
   | "research_mode"
   | "recommendation_mode"
   | "pack_creation_mode"
-  | "calendar_intent_mode";
+  | "calendar_intent_mode"
+  | "smalltalk_mode"
+  | "capability_mode"
+  | "autopilot_ops_mode"
+  | "info_mode";
 
 const PACK_CREATION_COMMANDS = [
   "create a pack from this",
@@ -386,6 +734,7 @@ function buildPreferenceAwarenessPrompt(profile: PreferenceProfile): string {
       "- Only ask about gaps RELEVANT to the current conversation. Don't ask about transportation when they want restaurant tips.",
       "- Lead with value first (a suggestion, idea, or reaction), then fold in the question.",
       "- If the user's request is clear enough to act on, just act. Not every message needs a question.",
+      "- On greeting or small-talk turns, don't ask preference questions. Keep it warm and simple.",
       "- Never present a checklist or questionnaire. This should feel like a friend getting to know another friend.",
       "- When the user casually reveals info (mentions kids, a partner, a neighborhood), acknowledge it naturally and use it.",
     );
@@ -394,59 +743,40 @@ function buildPreferenceAwarenessPrompt(profile: PreferenceProfile): string {
   return lines.join("\n");
 }
 
-async function extractImplicitPreferences(message: string) {
+async function extractImplicitPreferencesFromModel(intent: MessageIntent) {
   const extractions: Array<{ bucket: string; key: string; value: string }> = [];
 
-  // Explicit preference statements: "I like/love/enjoy/prefer X"
-  const prefMatches = message.matchAll(
-    /\bi\s+(?:like|love|enjoy|prefer|adore)\s+(.{3,60}?)(?:\.|,|!|\band\b|$)/gi,
-  );
-  for (const match of prefMatches) {
-    const value = match[1]?.trim();
-    if (value && value.length > 2) {
-      extractions.push({ bucket: "taste_memory", key: "explicit_preference", value });
+  const preferredName = intent.extractedPreferredName
+    ? sanitizePreferredName(intent.extractedPreferredName)
+    : null;
+  if (preferredName && preferredName.length >= 2) {
+    extractions.push({
+      bucket: "profile_memory",
+      key: "preferred_name",
+      value: preferredName,
+    });
+  }
+  const city = intent.extractedCity?.trim();
+  if (city && city.length >= 2) {
+    extractions.push({ bucket: "profile_memory", key: "city", value: city });
+  }
+  const homeArea = intent.extractedHomeArea?.trim();
+  if (homeArea && homeArea.length >= 2) {
+    extractions.push({ bucket: "profile_memory", key: "home_area", value: homeArea });
+  }
+  if (intent.preferenceFeedback?.subject) {
+    extractions.push({
+      bucket: "taste_memory",
+      key: intent.preferenceFeedback.sentiment === "liked" ? "liked_activity" : "disliked_activity",
+      value: intent.preferenceFeedback.subject,
+    });
+    if (intent.preferenceFeedback.reason) {
+      extractions.push({
+        bucket: "logistics_memory",
+        key: intent.preferenceFeedback.sentiment === "liked" ? "like_reason" : "dislike_reason",
+        value: intent.preferenceFeedback.reason,
+      });
     }
-  }
-
-  // Partner preference statements: "my wife/husband likes X"
-  const partnerPrefMatches = message.matchAll(
-    /\bmy\s+(?:wife|husband|partner|spouse|girlfriend|boyfriend)\s+(?:likes?|loves?|enjoys?|prefers?)\s+(.{3,60}?)(?:\.|,|!|$)/gi,
-  );
-  for (const match of partnerPrefMatches) {
-    const value = match[1]?.trim();
-    if (value && value.length > 2) {
-      extractions.push({ bucket: "taste_memory", key: "partner_preference", value });
-    }
-  }
-
-  // Household signal: partner
-  if (/\bmy\s+(?:wife|husband|partner|spouse|girlfriend|boyfriend|fiancée?)\b/i.test(message)) {
-    extractions.push({ bucket: "profile_memory", key: "household", value: "has partner" });
-  }
-
-  // Household signal: children
-  if (/\bmy\s+(?:kids?|children|son|daughter|baby|toddler|little\s+ones?)\b/i.test(message)) {
-    extractions.push({ bucket: "profile_memory", key: "household", value: "has children" });
-  }
-
-  // Location signals: "I'm in X", "I live in X", "we're in X"
-  const locationMatch = message.match(
-    /\b(?:i'?m\s+in|i\s+live\s+in|we'?re\s+in|based\s+in)\s+([A-Z][a-zA-Z\s]{2,30}?)(?:\.|,|!|$)/i,
-  );
-  if (locationMatch?.[1]) {
-    extractions.push({ bucket: "profile_memory", key: "city", value: locationMatch[1].trim() });
-  }
-
-  // Budget signals
-  const budgetMatch =
-    message.match(/budget\s*(?:is|of|around)?\s*\$?\s*(\d+)/i) ??
-    message.match(/under\s+\$?\s*(\d+)/i) ??
-    message.match(/\$(\d+)\s*[-–]\s*\$?(\d+)/i);
-  if (budgetMatch) {
-    const value = budgetMatch[2]
-      ? `$${budgetMatch[1]}-$${budgetMatch[2]}`
-      : `under $${budgetMatch[1]}`;
-    extractions.push({ bucket: "logistics_memory", key: "budget_range", value });
   }
 
   const seen = new Set<string>();
@@ -483,6 +813,8 @@ type MessageIntent = {
   isCalendarWrite: boolean;
   /** Message asks to read/query calendar details (next event, schedule, availability). */
   isCalendarQuery: boolean;
+  /** User asks to proactively verify/check calendar access or schedule now. */
+  shouldProactiveCalendarCheck: boolean;
   /** Message references prior suggestions ("these", "this one", "that option", etc.). */
   referencesPriorSuggestions: boolean;
   /** Message is specifically about travel plans/trips. */
@@ -493,7 +825,69 @@ type MessageIntent = {
   isResearchRequest: boolean;
   /** Message asks about things to do / events / what's happening in a city or area — exploration, NOT personal calendar. */
   isDiscoveryQuery: boolean;
+  /** User sent a pure greeting turn. */
+  isGreeting: boolean;
+  /** User is doing small-talk/rapport rather than planning. */
+  isSmallTalk: boolean;
+  /** User asks about bot capabilities/config (integrations, packs, autopilots, settings). */
+  isCapabilityQuery: boolean;
+  /** User asks factual info about a place/location/venue rather than recommendations. */
+  isLocationInfoQuery: boolean;
+  /** User explicitly asks for concrete suggestions/options/recommendations. */
+  isExplicitSuggestionRequest: boolean;
+  /** User asks the assistant to proceed now with best-effort suggestions (no more clarifications). */
+  wantsBestEffortNow: boolean;
+  /** True when model-based intent extraction succeeded. */
+  intentExtractionOk: boolean;
+  /** User is commenting on assistant behavior/memory/style (meta conversation). */
+  isMetaConversationQuery: boolean;
+  /** User is replying with profile data asked in prior assistant turn. */
+  isProfileCaptureTurn: boolean;
+  /** Best capability topic to answer, if applicable. */
+  capabilityTopic: CapabilityTopic;
+  /** Mode hint from classifier when request is planning-related. */
+  suggestedMode: "explore" | "dating" | "family" | "social" | "relax" | "travel" | "focus";
+  /** Optional extracted name to persist. */
+  extractedPreferredName: string | null;
+  /** Optional extracted city to persist. */
+  extractedCity: string | null;
+  /** Optional extracted home area (neighborhood/intersection/postal prefix). */
+  extractedHomeArea: string | null;
+  /** Whether the user is asking for nearby/close-to-home style constraints. */
+  isProximityPreferenceQuery: boolean;
+  /** Optional sentiment feedback about a recent activity. */
+  preferenceFeedback:
+    | {
+        subject: string;
+        sentiment: "liked" | "disliked";
+        reason: string | null;
+      }
+    | null;
+  /** Autopilot operation intent from model extraction. */
+  autopilotOperation: "none" | "create" | "delete" | "pause" | "resume";
+  /** Extracted autopilot target for delete/pause/resume operations. */
+  autopilotTargetName: string | null;
+  /** Extracted autopilot payload for create operation. */
+  autopilotCreateFields: {
+    name: string;
+    goal: string;
+    triggerType: "time" | "context" | "event";
+    trigger: string;
+    action: string;
+    approvalRule: "ask_first" | "auto_hold" | "auto_execute";
+    mode: string;
+    budgetCap: number;
+  } | null;
+  /** Confidence (0..1) for autopilot operation extraction. */
+  autopilotOperationConfidence: number;
 };
+
+type CapabilityTopic =
+  | "integrations"
+  | "packs"
+  | "autopilots"
+  | "approval_gate"
+  | "general";
 
 function normalizeRequestedMode(raw?: string): string {
   if (!raw) return "auto";
@@ -502,34 +896,53 @@ function normalizeRequestedMode(raw?: string): string {
   return normalized;
 }
 
-function inferPlanningModeFromMessage(message: string, intent: MessageIntent): string {
-  if (intent.isTravelQuery) return "travel";
+function stripSimpleCodeFence(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("```")) return trimmed;
+  const firstNewline = trimmed.indexOf("\n");
+  if (firstNewline < 0) return trimmed;
+  const body = trimmed.slice(firstNewline + 1);
+  const fenceIndex = body.lastIndexOf("```");
+  if (fenceIndex < 0) return body.trim();
+  return body.slice(0, fenceIndex).trim();
+}
 
-  const lower = message.toLowerCase();
-  if (/\b(date|romantic|anniversary|wife|husband|partner|boyfriend|girlfriend|couple)\b/.test(lower)) {
-    return "dating";
-  }
-  if (/\b(kid|kids|family|children|toddler|baby|son|daughter)\b/.test(lower)) {
-    return "family";
-  }
-  if (/\b(friends|group|party|hangout|team|everyone)\b/.test(lower)) {
-    return "social";
-  }
-  if (/\b(relax|chill|rest|recharge|self[-\s]?care|wellness|spa|slow)\b/.test(lower)) {
-    return "relax";
-  }
-  if (/\b(focus|deep work|work block|pomodoro|study|productive)\b/.test(lower)) {
-    return "focus";
-  }
-  if (/\b(explore|discover|adventure|events?|things to do|new)\b/.test(lower)) {
-    return "explore";
-  }
-  return "explore";
+function buildDefaultIntent(intentExtractionOk: boolean): MessageIntent {
+  return {
+    isActionCommand: false,
+    isCalendarWrite: false,
+    isCalendarQuery: false,
+    shouldProactiveCalendarCheck: false,
+    referencesPriorSuggestions: false,
+    isTravelQuery: false,
+    isUpcomingQuery: false,
+    isResearchRequest: false,
+    isDiscoveryQuery: false,
+    isGreeting: false,
+    isSmallTalk: false,
+    isCapabilityQuery: false,
+    isLocationInfoQuery: false,
+    isExplicitSuggestionRequest: false,
+    wantsBestEffortNow: false,
+    intentExtractionOk,
+    isMetaConversationQuery: false,
+    isProfileCaptureTurn: false,
+    capabilityTopic: "general",
+    suggestedMode: "explore",
+    extractedPreferredName: null,
+    extractedCity: null,
+    extractedHomeArea: null,
+    isProximityPreferenceQuery: false,
+    preferenceFeedback: null,
+    autopilotOperation: "none",
+    autopilotTargetName: null,
+    autopilotCreateFields: null,
+    autopilotOperationConfidence: 0,
+  };
 }
 
 function resolveEffectiveMode(input: {
   requestedMode?: string;
-  message: string;
   intent: MessageIntent;
 }) {
   const requestedMode = normalizeRequestedMode(input.requestedMode);
@@ -538,7 +951,7 @@ function resolveEffectiveMode(input: {
   }
   return {
     requestedMode,
-    effectiveMode: inferPlanningModeFromMessage(input.message, input.intent),
+    effectiveMode: input.intent.suggestedMode ?? "explore",
   };
 }
 
@@ -551,16 +964,7 @@ async function classifyMessageIntent(
   message: string,
   lastAssistantMessage?: string,
 ): Promise<MessageIntent> {
-  const fallback: MessageIntent = {
-    isActionCommand: false,
-    isCalendarWrite: false,
-    isCalendarQuery: false,
-    referencesPriorSuggestions: false,
-    isTravelQuery: false,
-    isUpcomingQuery: false,
-    isResearchRequest: false,
-    isDiscoveryQuery: false,
-  };
+  const fallback = buildDefaultIntent(false);
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return fallback;
 
@@ -569,23 +973,45 @@ async function classifyMessageIntent(
     : "";
 
   const prompt = [
-    "Classify the user message below. Reply with valid JSON only — no prose, no markdown.",
+    "Classify and extract signals from the user message. Reply with valid JSON only.",
     "",
     contextLine,
     `User message: """${message}"""`,
     "",
     "Return exactly:",
-    '{ "isActionCommand": boolean, "isCalendarWrite": boolean, "isCalendarQuery": boolean, "referencesPriorSuggestions": boolean, "isTravelQuery": boolean, "isUpcomingQuery": boolean, "isResearchRequest": boolean, "isDiscoveryQuery": boolean }',
+    '{ "isActionCommand": boolean, "isCalendarWrite": boolean, "isCalendarQuery": boolean, "shouldProactiveCalendarCheck": boolean, "referencesPriorSuggestions": boolean, "isTravelQuery": boolean, "isUpcomingQuery": boolean, "isResearchRequest": boolean, "isDiscoveryQuery": boolean, "isGreeting": boolean, "isSmallTalk": boolean, "isCapabilityQuery": boolean, "isLocationInfoQuery": boolean, "isExplicitSuggestionRequest": boolean, "wantsBestEffortNow": boolean, "isMetaConversationQuery": boolean, "isProfileCaptureTurn": boolean, "isProximityPreferenceQuery": boolean, "capabilityTopic": "integrations|packs|autopilots|approval_gate|general", "suggestedMode": "explore|dating|family|social|relax|travel|focus", "extractedPreferredName": string|null, "extractedCity": string|null, "extractedHomeArea": string|null, "preferenceFeedback": { "subject": string, "sentiment": "liked|disliked", "reason": string|null } | null, "autopilotOperation": "none|create|delete|pause|resume", "autopilotTargetName": string|null, "autopilotCreateFields": { "name": string, "goal": string, "triggerType": "time|context|event", "trigger": string, "action": string, "approvalRule": "ask_first|auto_hold|auto_execute", "mode": string, "budgetCap": number } | null, "autopilotOperationConfidence": number }',
     "",
     "Definitions:",
     "isActionCommand  — true when the user wants to EXECUTE something (add to calendar, move/reschedule an event, book, confirm a choice, keep a suggestion, cancel something) rather than explore or get new ideas.",
     "isCalendarWrite  — true when the intent involves creating, editing, moving, fixing duplicates, merging, or removing a calendar event.",
     "isCalendarQuery — true ONLY when the user asks about THEIR OWN personal schedule (e.g. 'what's on my calendar', 'do I have anything tomorrow', 'when is my next meeting', 'am I free Saturday'). Must be about the user's own calendar/schedule. FALSE for discovery questions like 'what's happening in the city', 'what's going on tonight', 'things to do this weekend' — those are discovery, not calendar.",
+    "shouldProactiveCalendarCheck — true when user indicates permission or intent to check calendar right now (e.g. asks if you have access and expects a check, says 'yes check my calendar', asks for availability around an event, or asks to do something before a specific event tomorrow).",
     "referencesPriorSuggestions — true when the user refers to options already shown (e.g. 'these', 'this one', 'that option', 'option 2', 'the first one').",
     "isTravelQuery — true when the user asks about travel/trips/vacation plans.",
-    "isUpcomingQuery — true when the user asks for what is next/upcoming/coming soon on their personal calendar.",
+    "isUpcomingQuery — true when the user asks for what is next/upcoming/coming soon on their personal calendar, OR asks to plan around something happening soon (e.g. before an event tomorrow).",
+    "If user asks for suggestions 'before my/the event tomorrow' (or similar event-anchored timing), set isUpcomingQuery=true and shouldProactiveCalendarCheck=true even if the user is also asking for fun ideas.",
     "isResearchRequest — true when user asks for fresh/new/deep research or discovery from new sources.",
     "isDiscoveryQuery — true when the user asks about things to do, events happening, what's going on, nightlife, activities, or attractions in a city or area. This is about exploring the world, NOT checking their personal calendar. Examples: 'what's happening tonight', 'things to do in Toronto', 'any events this weekend', 'what's going on in the city'.",
+    "isGreeting — true for greeting-only messages (e.g. 'hi', 'hello', 'hey there').",
+    "isSmallTalk — true for rapport chatter (e.g. 'how are you?', 'what's up?', 'thanks'). Should be false for planning requests.",
+    "isMetaConversationQuery — true when user comments on assistant behavior/style/memory (e.g. 'didn't I tell you my name?', 'this feels awkward', 'why are you suggesting this right away?').",
+    "isCapabilityQuery — true when the user asks what beetlebot has enabled/can do (integrations, packs, autopilots, approval settings, features, setup help).",
+    "isLocationInfoQuery — true for factual questions about a location/restaurant/place (hours, address, details, info), without asking for recommendation lists.",
+    "isExplicitSuggestionRequest — true only when the user directly asks for suggestions/options/ideas/recommendations.",
+    "wantsBestEffortNow — true when user says to proceed without more questions (e.g. 'either', 'figure it out', 'propose something already', 'just pick').",
+    "If user says 'either', 'show me either', 'surprise me', 'i don't know figure it out', or 'propose something already', set wantsBestEffortNow=true and isExplicitSuggestionRequest=true.",
+    "If prior assistant asked a binary choice and user answered one option (or said either), do not ask the same binary question again.",
+    "isProfileCaptureTurn — true if this looks like a short profile-answer (like name/city) to a prior assistant question.",
+    "If previous assistant asked for name and user replies with a short token like 'Richardson' or 'Jimmy', set isProfileCaptureTurn=true and extractedPreferredName.",
+    "If previous assistant asked for city/home area and user replies with short place text, set isProfileCaptureTurn=true and extract location fields.",
+    "isProximityPreferenceQuery — true when user asks for nearby/close-to-home options.",
+    "capabilityTopic — choose the most relevant capability topic, else general.",
+    "suggestedMode — pick best planning mode for request context when relevant, else explore.",
+    "extractedPreferredName — extract preferred name if user provides one, else null.",
+    "extractedCity — extract city if user provides one, else null. If message contains city plus another question (e.g., 'Toronto. Do you have access to my calendar?'), still set extractedCity='Toronto'.",
+    "extractedHomeArea — extract neighborhood/intersection/postal-prefix style home area when provided, else null.",
+    "preferenceFeedback — extract positive/negative feedback about an activity if present, else null.",
+    "autopilotOperation/autopilotTargetName/autopilotCreateFields/autopilotOperationConfidence — extract autopilot command intent and fields.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -602,7 +1028,7 @@ async function classifyMessageIntent(
       body: JSON.stringify({
         model: "openai/gpt-4o-mini",
         temperature: 0,
-        max_tokens: 80,
+        max_tokens: 260,
         messages: [{ role: "user", content: prompt }],
       }),
       signal: AbortSignal.timeout(5000),
@@ -614,21 +1040,400 @@ async function classifyMessageIntent(
     const text = payload.choices?.[0]?.message?.content?.trim() ?? "";
 
     // Strip optional markdown fences before parsing
-    const clean = text.replace(/^```[a-z]*\n?/, "").replace(/\n?```$/, "").trim();
+    const clean = stripSimpleCodeFence(text);
     const parsed = JSON.parse(clean) as Partial<MessageIntent>;
+    const suggestedModeRaw = typeof parsed.suggestedMode === "string" ? parsed.suggestedMode : "explore";
+    const suggestedMode =
+      suggestedModeRaw === "dating" ||
+      suggestedModeRaw === "family" ||
+      suggestedModeRaw === "social" ||
+      suggestedModeRaw === "relax" ||
+      suggestedModeRaw === "travel" ||
+      suggestedModeRaw === "focus"
+        ? suggestedModeRaw
+        : "explore";
+    const topicRaw = typeof parsed.capabilityTopic === "string" ? parsed.capabilityTopic : "general";
+    const capabilityTopic: CapabilityTopic =
+      topicRaw === "integrations" ||
+      topicRaw === "packs" ||
+      topicRaw === "autopilots" ||
+      topicRaw === "approval_gate"
+        ? topicRaw
+        : "general";
+    const opRaw = typeof parsed.autopilotOperation === "string" ? parsed.autopilotOperation : "none";
+    const autopilotOperation =
+      opRaw === "create" || opRaw === "delete" || opRaw === "pause" || opRaw === "resume" ? opRaw : "none";
+    const autopilotCreateFields =
+      parsed.autopilotCreateFields &&
+      typeof parsed.autopilotCreateFields === "object" &&
+      !Array.isArray(parsed.autopilotCreateFields)
+        ? (parsed.autopilotCreateFields as MessageIntent["autopilotCreateFields"])
+        : null;
+    const autopilotOperationConfidence =
+      typeof parsed.autopilotOperationConfidence === "number"
+        ? Math.max(0, Math.min(parsed.autopilotOperationConfidence, 1))
+        : 0;
+    const feedback =
+      parsed.preferenceFeedback &&
+      typeof parsed.preferenceFeedback === "object" &&
+      !Array.isArray(parsed.preferenceFeedback)
+        ? parsed.preferenceFeedback
+        : null;
+    const preferenceFeedback =
+      feedback &&
+      typeof feedback.subject === "string" &&
+      (feedback.sentiment === "liked" || feedback.sentiment === "disliked")
+        ? {
+            subject: feedback.subject.trim(),
+            sentiment: feedback.sentiment,
+            reason: typeof feedback.reason === "string" && feedback.reason.trim() ? feedback.reason.trim() : null,
+          }
+        : null;
     return {
+      intentExtractionOk: true,
       isActionCommand: Boolean(parsed.isActionCommand),
       isCalendarWrite: Boolean(parsed.isCalendarWrite),
       isCalendarQuery: Boolean(parsed.isCalendarQuery),
+      shouldProactiveCalendarCheck: Boolean(parsed.shouldProactiveCalendarCheck),
       referencesPriorSuggestions: Boolean(parsed.referencesPriorSuggestions),
       isTravelQuery: Boolean(parsed.isTravelQuery),
       isUpcomingQuery: Boolean(parsed.isUpcomingQuery),
       isResearchRequest: Boolean(parsed.isResearchRequest),
       isDiscoveryQuery: Boolean(parsed.isDiscoveryQuery),
+      isGreeting: Boolean(parsed.isGreeting),
+      isSmallTalk: Boolean(parsed.isSmallTalk),
+      isCapabilityQuery: Boolean(parsed.isCapabilityQuery),
+      isLocationInfoQuery: Boolean(parsed.isLocationInfoQuery),
+      isExplicitSuggestionRequest: Boolean(parsed.isExplicitSuggestionRequest),
+      wantsBestEffortNow: Boolean(parsed.wantsBestEffortNow),
+      isMetaConversationQuery: Boolean(parsed.isMetaConversationQuery),
+      isProfileCaptureTurn: Boolean(parsed.isProfileCaptureTurn),
+      capabilityTopic,
+      suggestedMode,
+      extractedPreferredName:
+        typeof parsed.extractedPreferredName === "string" && parsed.extractedPreferredName.trim()
+          ? parsed.extractedPreferredName.trim()
+          : null,
+      extractedCity:
+        typeof parsed.extractedCity === "string" && parsed.extractedCity.trim()
+          ? parsed.extractedCity.trim()
+          : null,
+      extractedHomeArea:
+        typeof parsed.extractedHomeArea === "string" && parsed.extractedHomeArea.trim()
+          ? parsed.extractedHomeArea.trim()
+          : null,
+      isProximityPreferenceQuery: Boolean(parsed.isProximityPreferenceQuery),
+      preferenceFeedback,
+      autopilotOperation,
+      autopilotTargetName:
+        typeof parsed.autopilotTargetName === "string" && parsed.autopilotTargetName.trim()
+          ? parsed.autopilotTargetName.trim()
+          : null,
+      autopilotCreateFields,
+      autopilotOperationConfidence,
     };
   } catch {
     return fallback;
   }
+}
+
+async function extractProfileFactsFromMessage(input: {
+  message: string;
+  lastAssistantMessage?: string;
+}): Promise<{ preferredName: string | null; city: string | null; homeArea: string | null }> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return { preferredName: null, city: null, homeArea: null };
+  const contextLine = input.lastAssistantMessage
+    ? `Previous assistant message: """${input.lastAssistantMessage.slice(0, 240)}"""`
+    : "";
+  const prompt = [
+    "Extract profile facts from the user message. Reply with strict JSON only.",
+    contextLine,
+    `User message: """${input.message}"""`,
+    'Return exactly: { "preferredName": string|null, "city": string|null, "homeArea": string|null }',
+    "Rules:",
+    "- Extract city even if mixed with other intents (calendar access, capability, planning).",
+    "- homeArea is neighborhood/intersection/postal-prefix level only.",
+    "- If uncertain, return null.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:3001",
+        "X-Title": "beetlebot",
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini",
+        temperature: 0,
+        max_tokens: 90,
+        messages: [{ role: "user", content: prompt }],
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return { preferredName: null, city: null, homeArea: null };
+    const payload = (await response.json()) as OpenRouterResponse;
+    const text = payload.choices?.[0]?.message?.content?.trim() ?? "";
+    const parsed = JSON.parse(stripSimpleCodeFence(text)) as {
+      preferredName?: string | null;
+      city?: string | null;
+      homeArea?: string | null;
+    };
+    return {
+      preferredName: typeof parsed.preferredName === "string" && parsed.preferredName.trim() ? parsed.preferredName.trim() : null,
+      city: typeof parsed.city === "string" && parsed.city.trim() ? parsed.city.trim() : null,
+      homeArea: typeof parsed.homeArea === "string" && parsed.homeArea.trim() ? parsed.homeArea.trim() : null,
+    };
+  } catch {
+    return { preferredName: null, city: null, homeArea: null };
+  }
+}
+
+async function extractCalendarAnchorIntentFromMessage(input: {
+  message: string;
+  lastAssistantMessage?: string;
+}): Promise<{ shouldProactiveCalendarCheck: boolean; isUpcomingQuery: boolean }> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return { shouldProactiveCalendarCheck: false, isUpcomingQuery: false };
+  const contextLine = input.lastAssistantMessage
+    ? `Previous assistant message: """${input.lastAssistantMessage.slice(0, 240)}"""`
+    : "";
+  const prompt = [
+    "Extract event-anchor calendar intent from the user message. Reply with strict JSON only.",
+    contextLine,
+    `User message: """${input.message}"""`,
+    'Return exactly: { "shouldProactiveCalendarCheck": boolean, "isUpcomingQuery": boolean }',
+    "Rules:",
+    "- Set shouldProactiveCalendarCheck=true if user asks for plans relative to a personal event/time anchor soon and expects the assistant to figure timing from calendar.",
+    "- Set isUpcomingQuery=true if user is asking about upcoming/next timing around an event (e.g., before a named event tomorrow).",
+    "- If uncertain, return false for both.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:3001",
+        "X-Title": "beetlebot",
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini",
+        temperature: 0,
+        max_tokens: 60,
+        messages: [{ role: "user", content: prompt }],
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return { shouldProactiveCalendarCheck: false, isUpcomingQuery: false };
+    const payload = (await response.json()) as OpenRouterResponse;
+    const text = payload.choices?.[0]?.message?.content?.trim() ?? "";
+    const parsed = JSON.parse(stripSimpleCodeFence(text)) as {
+      shouldProactiveCalendarCheck?: boolean;
+      isUpcomingQuery?: boolean;
+    };
+    return {
+      shouldProactiveCalendarCheck: Boolean(parsed.shouldProactiveCalendarCheck),
+      isUpcomingQuery: Boolean(parsed.isUpcomingQuery),
+    };
+  } catch {
+    return { shouldProactiveCalendarCheck: false, isUpcomingQuery: false };
+  }
+}
+
+async function confirmCalendarReadIntentFromMessage(input: {
+  message: string;
+  lastAssistantMessage?: string;
+}): Promise<boolean> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return false;
+  const contextLine = input.lastAssistantMessage
+    ? `Previous assistant message: """${input.lastAssistantMessage.slice(0, 240)}"""`
+    : "";
+  const prompt = [
+    "Determine whether the user is explicitly asking to read their personal calendar/schedule. Reply with strict JSON only.",
+    contextLine,
+    `User message: """${input.message}"""`,
+    'Return exactly: { "isPersonalCalendarRead": boolean }',
+    "Rules:",
+    "- True ONLY when user is asking to read/check their own calendar, schedule, meetings, availability, or next event.",
+    "- False for greetings, small-talk, general planning requests, recommendation/discovery asks, location info asks, and capability/help questions.",
+    "- False for calendar write/modify commands (add/create/schedule/update/move/reschedule/delete/remove).",
+    "- If message asks for ideas/plans/activities (even with 'tomorrow'), return false unless user explicitly asks to read their calendar.",
+    "- If message includes both calendar mention and an action command, action wins: return false.",
+    "Examples:",
+    '- "what is next on my calendar?" => true',
+    '- "am I free tomorrow at 2?" => true',
+    '- "add a focus block tomorrow at 2pm to my calendar" => false',
+    '- "I\'m in Vancouver, find me a fun indoor plan for tomorrow" => false',
+    '- "date night ideas this Saturday under $120" => false',
+    "- If uncertain, return false.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:3001",
+        "X-Title": "beetlebot",
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini",
+        temperature: 0,
+        max_tokens: 40,
+        messages: [{ role: "user", content: prompt }],
+      }),
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!response.ok) return false;
+    const payload = (await response.json()) as OpenRouterResponse;
+    const text = payload.choices?.[0]?.message?.content?.trim() ?? "";
+    const parsed = JSON.parse(stripSimpleCodeFence(text)) as {
+      isPersonalCalendarRead?: boolean;
+    };
+    return Boolean(parsed.isPersonalCalendarRead);
+  } catch {
+    return false;
+  }
+}
+
+async function confirmCalendarWriteIntentFromMessage(input: {
+  message: string;
+  lastAssistantMessage?: string;
+}): Promise<boolean> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return false;
+  const contextLine = input.lastAssistantMessage
+    ? `Previous assistant message: """${input.lastAssistantMessage.slice(0, 240)}"""`
+    : "";
+  const prompt = [
+    "Determine whether the user is asking to WRITE/CHANGE their calendar. Reply with strict JSON only.",
+    contextLine,
+    `User message: """${input.message}"""`,
+    'Return exactly: { "isCalendarWriteIntent": boolean }',
+    "Rules:",
+    "- True for add/create/schedule/block/move/reschedule/update/delete/remove calendar-event requests.",
+    "- True when user asks to place a suggestion/option onto calendar.",
+    "- True when the message specifies a date/time and asks to put that item on calendar.",
+    "- False for read-only schedule questions (next event, am I free, what's on my calendar).",
+    "- False for general planning/discovery requests that do not ask to modify calendar.",
+    "Examples:",
+    '- "add a focus block tomorrow at 2pm to my calendar" => true',
+    '- "move my dentist appointment to 3pm tomorrow" => true',
+    '- "add option 2 to my calendar" => true',
+    '- "schedule deep work tomorrow 9am-11am on my calendar" => true',
+    '- "what is next on my calendar?" => false',
+    '- "I\'m in Vancouver, find me a fun indoor plan for tomorrow" => false',
+    "- If uncertain, return false.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:3001",
+        "X-Title": "beetlebot",
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini",
+        temperature: 0,
+        max_tokens: 40,
+        messages: [{ role: "user", content: prompt }],
+      }),
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!response.ok) return false;
+    const payload = (await response.json()) as OpenRouterResponse;
+    const text = payload.choices?.[0]?.message?.content?.trim() ?? "";
+    const parsed = JSON.parse(stripSimpleCodeFence(text)) as {
+      isCalendarWriteIntent?: boolean;
+    };
+    return Boolean(parsed.isCalendarWriteIntent);
+  } catch {
+    return false;
+  }
+}
+
+function parseApprovalRuleValue(input: string): "ask_first" | "auto_hold" | "auto_execute" | null {
+  const value = input.toLowerCase().trim();
+  if (value.includes("ask")) return "ask_first";
+  if (value.includes("hold")) return "auto_hold";
+  if (value.includes("execute") || value.includes("auto")) return "auto_execute";
+  return null;
+}
+
+function normalizeAutopilotCreateFields(fields: MessageIntent["autopilotCreateFields"]) {
+  if (!fields) return null;
+  const triggerType =
+    fields.triggerType === "context" || fields.triggerType === "event" ? fields.triggerType : "time";
+  const approvalRule = parseApprovalRuleValue(fields.approvalRule) ?? "ask_first";
+  const budgetCap = Number.isFinite(fields.budgetCap) ? Math.max(1, Math.round(fields.budgetCap)) : 120;
+  return {
+    name: fields.name?.trim() ?? "",
+    goal: fields.goal?.trim() ?? "",
+    trigger: fields.trigger?.trim() ?? "",
+    triggerType,
+    action: fields.action?.trim() ?? "",
+    approvalRule,
+    mode: fields.mode?.trim() || "explore",
+    budgetCap,
+  };
+}
+
+function shouldAskInSessionFeedbackFollowup(input: {
+  threadId: string;
+  recentConversation: Array<{ role: string; content: string; blocksJson?: string | null }>;
+  isLightConversationTurn: boolean;
+  explicitSuggestionRequest: boolean;
+}) {
+  if (!input.isLightConversationTurn || input.explicitSuggestionRequest) return false;
+  const hasRecentRecommendation = input.recentConversation
+    .filter((item) => item.role === "assistant")
+    .some((item) => Boolean(item.blocksJson));
+  if (!hasRecentRecommendation) return false;
+  const alreadyAsked = input.recentConversation
+    .slice(-8)
+    .some(
+      (item) =>
+        item.role === "assistant" &&
+        item.content.toLowerCase().includes("how did") &&
+        item.content.toLowerCase().includes("go"),
+    );
+  if (alreadyAsked) return false;
+  const daySeed = new Date().toISOString().slice(0, 10);
+  const seed = `${input.threadId}:${daySeed}:feedback`;
+  let hash = 0;
+  for (const ch of seed) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return hash % 5 === 0;
+}
+
+function hasRecentClarifierQuestion(
+  recentConversation: Array<{ role: string; content: string; blocksJson?: string | null }>,
+) {
+  return recentConversation
+    .slice(-6)
+    .some((item) => {
+      if (item.role !== "assistant") return false;
+      const content = item.content.toLowerCase();
+      return (
+        content.includes("quick check") ||
+        content.includes("which area should i center around") ||
+        content.includes("what city are you in") ||
+        content.includes("which option should i add")
+      );
+    });
 }
 
 export function extractThreadSuggestionsForIntent(
@@ -742,7 +1547,7 @@ async function resolveSuggestionIntentFromThread(input: {
 
     const payload = (await response.json()) as OpenRouterResponse;
     const text = payload.choices?.[0]?.message?.content?.trim() ?? "";
-    const clean = text.replace(/^```[a-z]*\n?/, "").replace(/\n?```$/, "").trim();
+    const clean = stripSimpleCodeFence(text);
     const parsed = JSON.parse(clean) as Partial<SuggestionIntentResolution>;
     const selectedIndices = Array.isArray(parsed.selectedIndices)
       ? parsed.selectedIndices
@@ -1079,6 +1884,12 @@ async function tryAnswerCalendarIntent(input: {
       handled: true as const,
       replyText: `Your next plan is ${top.summary}${source} on ${when}${location}.`,
       trace: `calendar_intent_detected scope=all window_days=${windowUsed} matches=${ranked.length} match_source_calendar=${top.calendarName ?? "unknown"}`,
+      anchorEvent: {
+        summary: top.summary,
+        start: top.start,
+        calendarName: top.calendarName ?? null,
+        location: top.location ?? null,
+      },
     };
   }
 
@@ -1095,6 +1906,7 @@ async function tryAnswerCalendarIntent(input: {
 }
 
 function formatResearchReply(input: {
+  userMessage: string;
   recommendations: Awaited<ReturnType<typeof runResearchLoop>>["recommendations"];
   sourceDiversityTarget: number;
 }) {
@@ -1112,8 +1924,12 @@ function formatResearchReply(input: {
     actionUrl: item.url,
     sourceName: item.sourceName,
   }));
+  const isQuestion = /\?\s*$/.test(input.userMessage.trim());
+  const leadIn = isQuestion
+    ? "I checked fresh sources and pulled the strongest options with direct links."
+    : `I pulled fresh options and kept diversity across roughly ${input.sourceDiversityTarget} source domains.`;
   return JSON.stringify({
-    text: `I ran a fresh-source pass and prioritized diversity across at least ${input.sourceDiversityTarget} source domains. Here are the strongest matches with direct links.`,
+    text: leadIn,
     options,
   });
 }
@@ -1145,16 +1961,10 @@ async function createUniquePackSlug(base: string) {
 export async function POST(request: Request) {
   try {
     const body = chatSchema.parse(await request.json());
-    await extractImplicitPreferences(body.message);
-    const preferenceProfile = await getPreferenceProfile();
-    const taste = await tasteProfile();
-    const recentRuns = await db.autopilotRun.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 3,
-    });
 
     const existingThread = body.threadId ? await getConversationThread(body.threadId) : null;
     const thread = existingThread ?? (await createConversationThread(body.message.slice(0, 100)));
+    const isNewThread = !existingThread;
     const recentConversation = await getConversationMessages(thread.id, CONVERSATION_HISTORY_LIMIT);
     const conversationHistory: OpenRouterMessage[] = recentConversation
       .filter((item) => item.role === "user" || item.role === "assistant" || item.role === "system")
@@ -1162,6 +1972,114 @@ export async function POST(request: Request) {
         role: item.role as "user" | "assistant" | "system",
         content: item.content,
       }));
+
+    const lastAssistantMessage = recentConversation
+      .filter((m) => m.role === "assistant")
+      .at(-1)?.content;
+    let intent = await classifyMessageIntent(body.message, lastAssistantMessage);
+    const shouldRunProfileFactsPass =
+      intent.intentExtractionOk &&
+      !intent.extractedPreferredName &&
+      !intent.extractedCity &&
+      !intent.extractedHomeArea &&
+      (intent.isProfileCaptureTurn || intent.isProximityPreferenceQuery || intent.shouldProactiveCalendarCheck);
+    if (shouldRunProfileFactsPass) {
+      const profileFacts = await extractProfileFactsFromMessage({
+        message: body.message,
+        lastAssistantMessage,
+      });
+      intent = {
+        ...intent,
+        extractedPreferredName: intent.extractedPreferredName ?? profileFacts.preferredName,
+        extractedCity: intent.extractedCity ?? profileFacts.city,
+        extractedHomeArea: intent.extractedHomeArea ?? profileFacts.homeArea,
+      };
+    }
+    const shouldRunCalendarAnchorRescuePass =
+      !intent.isProximityPreferenceQuery &&
+      !intent.isTravelQuery &&
+      !intent.isActionCommand &&
+      !intent.isCalendarWrite &&
+      !intent.isCalendarQuery &&
+      !intent.shouldProactiveCalendarCheck &&
+      !intent.isUpcomingQuery &&
+      ((intent.intentExtractionOk && intent.isDiscoveryQuery && intent.isExplicitSuggestionRequest) ||
+        !intent.intentExtractionOk);
+    if (shouldRunCalendarAnchorRescuePass) {
+      const calendarAnchorIntent = await extractCalendarAnchorIntentFromMessage({
+        message: body.message,
+        lastAssistantMessage,
+      });
+      if (calendarAnchorIntent.shouldProactiveCalendarCheck || calendarAnchorIntent.isUpcomingQuery) {
+        intent = {
+          ...intent,
+          intentExtractionOk: true,
+          shouldProactiveCalendarCheck:
+            intent.shouldProactiveCalendarCheck || calendarAnchorIntent.shouldProactiveCalendarCheck,
+          isUpcomingQuery: intent.isUpcomingQuery || calendarAnchorIntent.isUpcomingQuery,
+        };
+      }
+    }
+    const shouldRunCalendarWriteRescue =
+      (intent.isCalendarQuery || intent.shouldProactiveCalendarCheck || intent.isUpcomingQuery) &&
+      !intent.isCalendarWrite &&
+      !intent.isActionCommand &&
+      !intent.isCapabilityQuery &&
+      !intent.isDiscoveryQuery;
+    if (shouldRunCalendarWriteRescue) {
+      const confirmedCalendarWrite = await confirmCalendarWriteIntentFromMessage({
+        message: body.message,
+        lastAssistantMessage,
+      });
+      if (confirmedCalendarWrite) {
+        intent = {
+          ...intent,
+          isActionCommand: true,
+          isCalendarWrite: true,
+          isCalendarQuery: false,
+          shouldProactiveCalendarCheck: false,
+          isUpcomingQuery: false,
+        };
+      }
+    }
+
+    const shouldRunCalendarReadGuard =
+      intent.isCalendarQuery &&
+      !intent.isCalendarWrite &&
+      !intent.isActionCommand &&
+      !intent.isCapabilityQuery;
+    if (shouldRunCalendarReadGuard) {
+      const confirmedCalendarRead = await confirmCalendarReadIntentFromMessage({
+        message: body.message,
+        lastAssistantMessage,
+      });
+      if (!confirmedCalendarRead) {
+        intent = {
+          ...intent,
+          isCalendarQuery: false,
+          isUpcomingQuery: false,
+        };
+      }
+    }
+    await extractImplicitPreferencesFromModel(intent);
+
+    const preferenceProfile = await getPreferenceProfile();
+    const preferredName = await getPreferredNameFromMemory();
+    const preferredCity = await getPreferredCityFromMemory();
+    const homeArea = await getHomeAreaFromMemory();
+    const taste = await tasteProfile();
+    const integrationConnections = await listIntegrationConnections();
+    const integrationStatus = formatIntegrationStatusSnapshot(integrationConnections);
+    const allPacks = await listPacks();
+    const packStatus = formatPackStatusSnapshot(allPacks);
+    const autopilots = await listAutopilots();
+    const autopilotStatus = formatAutopilotSnapshot(autopilots);
+    const safetySettings = await getSafetySettings();
+    const approvalGateStatus = formatApprovalGateSnapshot(safetySettings);
+    const recentRuns = await db.autopilotRun.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 3,
+    });
 
     const installedPacks = await getInstalledPackInstructions();
     const packContext = await buildPackContext(installedPacks);
@@ -1175,24 +2093,86 @@ export async function POST(request: Request) {
     });
     const shouldCreatePack = isPackCreationCommand(body.message);
 
-    // Classify intent via LLM — run in parallel with the narrow regex checks.
-    const lastAssistantMessage = recentConversation
-      .filter((m) => m.role === "assistant")
-      .at(-1)?.content;
-    const [intent] = await Promise.all([
-      classifyMessageIntent(body.message, lastAssistantMessage),
-    ]);
     const { requestedMode, effectiveMode } = resolveEffectiveMode({
       requestedMode: body.mode,
-      message: body.message,
       intent,
     });
+    const isGreetingTurn = intent.isGreeting;
+    const isSmallTalkTurn = intent.isSmallTalk;
+    const isMetaConversationQuery = intent.isMetaConversationQuery;
+    const isCapabilityQuery = intent.isCapabilityQuery;
+    const isLocationInfoQuery = intent.isLocationInfoQuery;
+    const explicitSuggestionRequest = intent.isExplicitSuggestionRequest;
+    const allowBestEffortSuggestions = explicitSuggestionRequest || intent.wantsBestEffortNow;
+    const shouldUseSafeNoIntentMode = !intent.intentExtractionOk;
+    const recentClarifierAsked = hasRecentClarifierQuestion(recentConversation);
+    const isProfileCaptureTurn =
+      intent.isProfileCaptureTurn ||
+      Boolean(intent.extractedPreferredName) ||
+      Boolean(intent.extractedCity) ||
+      Boolean(intent.extractedHomeArea);
+    const shouldAskHomeAreaClarifier =
+      intent.isProximityPreferenceQuery &&
+      allowBestEffortSuggestions &&
+      !intent.wantsBestEffortNow &&
+      !recentClarifierAsked &&
+      !homeArea &&
+      !isCapabilityQuery &&
+      !isLocationInfoQuery;
+    const capabilityTopic = intent.capabilityTopic;
+    const createAutopilotFields =
+      intent.autopilotOperation === "create"
+        ? normalizeAutopilotCreateFields(intent.autopilotCreateFields)
+        : null;
+    const deleteAutopilotTarget =
+      intent.autopilotOperation === "delete" ? intent.autopilotTargetName : null;
+    const toggleAutopilotTarget =
+      (intent.autopilotOperation === "pause" || intent.autopilotOperation === "resume") &&
+      Boolean(intent.autopilotTargetName)
+        ? {
+            targetName: intent.autopilotTargetName ?? "",
+            status: intent.autopilotOperation === "pause" ? "paused" : "on",
+          }
+        : null;
+    const lowConfidenceAutopilotOp =
+      intent.autopilotOperation !== "none" && intent.autopilotOperationConfidence < 0.65;
 
     const isActionCmd = intent.isActionCommand;
-    const calendarIntent = (intent.isCalendarQuery || intent.isCalendarWrite) && !intent.isDiscoveryQuery;
+    const localHour = getLocalHour(body.timezone);
+    const isLateNight = localHour >= 0 && localHour < 5;
+    // Event-anchored planning should still check calendar proactively even if
+    // classifier also flags discovery intent ("find fun things before my event tomorrow").
+    const shouldProactiveCalendarCheck =
+      intent.shouldProactiveCalendarCheck ||
+      (intent.isUpcomingQuery && !intent.isCalendarWrite && !intent.isActionCommand);
+    const calendarIntent =
+      intent.isCalendarQuery ||
+      intent.isCalendarWrite ||
+      shouldProactiveCalendarCheck;
     const calendarWriteIntent = intent.isCalendarWrite;
+    const isCapabilityHelpTurn =
+      isCapabilityQuery &&
+      !shouldCreatePack &&
+      !createAutopilotFields &&
+      !deleteAutopilotTarget &&
+      !toggleAutopilotTarget &&
+      !lowConfidenceAutopilotOp;
+    const isLightConversationTurn =
+      !intent.isActionCommand &&
+      !calendarIntent &&
+      !intent.isDiscoveryQuery &&
+      !intent.isResearchRequest &&
+      !shouldCreatePack &&
+      !isCapabilityHelpTurn &&
+      !isLocationInfoQuery &&
+      !allowBestEffortSuggestions &&
+      (isGreetingTurn || isSmallTalkTurn || isProfileCaptureTurn || isMetaConversationQuery);
     const shouldRunResearch =
       !isActionCmd &&
+      !isLightConversationTurn &&
+      !isCapabilityHelpTurn &&
+      !isLocationInfoQuery &&
+      allowBestEffortSuggestions &&
       (signals.boredomSignal || intent.isResearchRequest);
     const threadSuggestions = extractThreadSuggestionsForIntent(recentConversation);
     const shouldResolveThreadSuggestions =
@@ -1215,29 +2195,62 @@ export async function POST(request: Request) {
 
     let orchestrationState: OrchestrationState = "recommendation_mode";
 
+    const shouldInjectPackContext =
+      Boolean(packContext) &&
+      !isLightConversationTurn &&
+      !isCapabilityQuery &&
+      !isLocationInfoQuery &&
+      allowBestEffortSuggestions &&
+      (intent.isDiscoveryQuery ||
+        intent.isResearchRequest ||
+        intent.isTravelQuery);
+    const policySections = composePolicySections({
+      effectiveMode,
+      isActionCmd,
+      isCapabilityQuery,
+      isCapabilityHelpTurn,
+      isLocationInfoQuery,
+      allowBestEffortSuggestions,
+      preferredName,
+      preferredCity,
+      homeArea,
+      isNewThread,
+      isLightConversationTurn,
+      isMetaConversationQuery,
+      isLateNight,
+      explicitSuggestionRequest,
+      shouldUseSafeNoIntentMode,
+      wantsBestEffortNow: intent.wantsBestEffortNow,
+      calendarIntent,
+      calendarWriteIntent,
+      shouldProactiveCalendarCheck,
+      integrationStatus,
+      packStatus,
+      autopilotStatus,
+      approvalGateStatus,
+      shouldInjectPackContext,
+      packContext,
+      hasRecentClarifier: recentClarifierAsked,
+    });
     const systemMessages: OpenRouterMessage[] = [
       { role: "system", content: buildTemporalContext(body.timezone) },
       { role: "system", content: buildSeasonContext(body.timezone) },
-      { role: "system", content: buildCompanionPrompt(effectiveMode, isActionCmd) },
+      ...policySections.map((content) => ({ role: "system" as const, content })),
       { role: "system", content: buildPreferenceAwarenessPrompt(preferenceProfile) },
       {
         role: "system",
         content: buildRuntimeContext({
           tasteHints: taste.topPreferences,
           recentRuns: recentRuns.map((run) => `${run.autopilotId}:${run.status}/${run.approvalState}`),
+          integrationStatus,
+          preferredCity,
+          homeArea,
+          packStatus: isCapabilityQuery ? packStatus : undefined,
+          autopilotStatus: isCapabilityQuery ? autopilotStatus : undefined,
+          approvalGateStatus: isCapabilityQuery ? approvalGateStatus : undefined,
         }),
       },
     ];
-    if (packContext) {
-      systemMessages.push({ role: "system", content: packContext });
-    }
-    if (isActionCmd) {
-      systemMessages.push({
-        role: "system",
-        content:
-          "CRITICAL: The user is issuing a direct action command. Execute it immediately using the appropriate tool. Do NOT generate new suggestions or option cards. Do NOT ask for time preferences if a time was given. Respond with 1–2 sentences confirming what was done.",
-      });
-    }
     if (threadSuggestions.length > 0 && shouldResolveThreadSuggestions) {
       const selectedSummary =
         resolvedSuggestions.length > 0
@@ -1261,20 +2274,12 @@ export async function POST(request: Request) {
         ].join("\n"),
       });
     }
-    if (calendarIntent) {
-      if (calendarWriteIntent) {
-        systemMessages.push({
-          role: "system",
-          content:
-            "The user is asking to modify their calendar. To update or delete an existing event, FIRST call google_calendar_events with operation 'find' and the event name as query — this resolves emoji-prefixed titles and partial names. Then use the returned eventId and calendarId for the update/delete call. For new events use 'create'. If required fields are missing, ask one concise clarification question and do not switch to listing unrelated events. If this action references prior suggestions in thread context, carry those exact venues into description (names + practical details) instead of broad summaries. If a tool result returns { requiresUserConfirmation: true }, ask the user the provided prompt and do not perform additional calendar writes until they answer.",
-        });
-      } else {
-        systemMessages.push({
-          role: "system",
-          content:
-            "If the user explicitly asks for calendar data, retrieve it first with tools and answer directly. Do not ask for permission to check the calendar when they already asked you to check it.",
-        });
-      }
+    if (calendarIntent && calendarWriteIntent) {
+      systemMessages.push({
+        role: "system",
+        content:
+          "If this calendar action references prior suggestions in thread context, carry those exact venues into event description (names + practical details) instead of broad summaries.",
+      });
     }
 
     let replyText = "";
@@ -1315,12 +2320,14 @@ export async function POST(request: Request) {
         ...conversationHistory,
         { role: "user", content: body.message },
       ];
-      const openRouterTools = await getScopedOpenRouterTools();
+      const openRouterTools = (await getScopedOpenRouterTools()).filter((tool) => {
+        if (tool.function.name !== "google_calendar_events") return true;
+        return calendarIntent || calendarWriteIntent || isActionCmd || shouldProactiveCalendarCheck;
+      });
       let calendarWriteExecuted = false;
       let calendarFindSucceeded = false;
       let calendarWriteVerificationFailed = false;
       let toolCallsExecuted = 0;
-      let toolCallErrors = 0;
       let lastToolErrorMessage: string | null = null;
 
       for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
@@ -1370,7 +2377,6 @@ export async function POST(request: Request) {
           });
 
           if (!tool) {
-            toolCallErrors += 1;
             lastToolErrorMessage = `Tool '${toolName}' is not available.`;
             modelMessages.push({
               role: "tool",
@@ -1573,7 +2579,6 @@ export async function POST(request: Request) {
               },
             });
           } catch (toolError) {
-            toolCallErrors += 1;
             lastToolErrorMessage =
               toolError instanceof Error ? toolError.message : "Tool execution failed";
             modelMessages.push({
@@ -1624,8 +2629,178 @@ export async function POST(request: Request) {
           : "I couldn't complete the live tool lookup because no final tool-backed status was produced. Please retry once.";
       }
     };
+    const runInfoMode = async () => {
+      orchestrationState = "info_mode";
+      const infoReply = await generateModelReply({
+        messages: [
+          ...systemMessages,
+          ...conversationHistory,
+          {
+            role: "system",
+            content:
+              "Answer the user directly and factually. Do not propose unrelated options or recommendation lists unless the user explicitly asks for suggestions.",
+          },
+          { role: "user", content: body.message },
+        ],
+        tools: [],
+      });
+      responseModel = infoReply.responseModel;
+      requestedModel = infoReply.requestedModel;
+      responseId = infoReply.responseId;
+      replyText = infoReply.text;
+    };
+    const runSmallTalkMode = async (kind: "meta" | "light") => {
+      orchestrationState = "smalltalk_mode";
+      if (!process.env.OPENROUTER_API_KEY) {
+        replyText = "I’m here to help. Tell me what you want, and I’ll keep it simple.";
+        responseModel = "policy/smalltalk_fallback";
+        requestedModel = "policy/smalltalk_fallback";
+        responseId = null;
+        return;
+      }
+      const shouldAskFeedback = shouldAskInSessionFeedbackFollowup({
+        threadId: thread.id,
+        recentConversation,
+        isLightConversationTurn,
+        explicitSuggestionRequest: allowBestEffortSuggestions,
+      });
+      const smallTalkReply = await generateModelReply({
+        messages: [
+          ...systemMessages,
+          ...conversationHistory,
+          {
+            role: "system",
+            content:
+              kind === "meta"
+                ? "Respond naturally to the user's feedback about your behavior. Acknowledge briefly, correct course, and ask a neutral 'How can I help now?' follow-up. Do NOT offer suggestions, plans, vibes, or time assumptions."
+                : shouldAskFeedback
+                  ? "This is a casual conversation turn. Keep it warm, concise, and non-assumptive. Optionally include one brief in-session follow-up like 'how did your last plan go?' to improve future recommendations. Do NOT suggest plans unless explicitly asked. Never ask vibe/timeframe planning questions on casual turns."
+                  : "This is a casual conversation turn. Keep it warm, concise, and non-assumptive. Do NOT suggest plans unless explicitly asked. Never ask vibe/timeframe planning questions on casual turns.",
+          },
+          { role: "user", content: body.message },
+        ],
+        tools: [],
+      });
+      responseModel = smallTalkReply.responseModel;
+      requestedModel = smallTalkReply.requestedModel;
+      responseId = smallTalkReply.responseId;
+      replyText = smallTalkReply.text;
+    };
+    const runSafeNoIntentMode = async () => {
+      orchestrationState = "smalltalk_mode";
+      if (!process.env.OPENROUTER_API_KEY) {
+        replyText = "I didn’t fully catch that yet. Tell me what you need, and I’ll help.";
+        responseModel = "policy/intent_fallback";
+        requestedModel = "policy/intent_fallback";
+        responseId = null;
+        return;
+      }
+      const guardedReply = await generateModelReply({
+        messages: [
+          ...systemMessages,
+          ...conversationHistory,
+          {
+            role: "system",
+            content:
+              "Intent extraction was unavailable. Reply in the user's language with one short, natural clarification and no recommendations/cards. Do not assume timeframe, location, or preferences.",
+          },
+          { role: "user", content: body.message },
+        ],
+        tools: [],
+      });
+      responseModel = guardedReply.responseModel;
+      requestedModel = guardedReply.requestedModel;
+      responseId = guardedReply.responseId;
+      replyText = guardedReply.text;
+    };
     if (replyText) {
       // Pre-resolved clarification response from intent-linking stage.
+    } else if (shouldUseSafeNoIntentMode) {
+      await runSafeNoIntentMode();
+    } else if (isMetaConversationQuery) {
+      await runSmallTalkMode("meta");
+    } else if (shouldAskHomeAreaClarifier) {
+      orchestrationState = "smalltalk_mode";
+      replyText = preferredCity
+        ? `I can keep it close to home. Which area should I center around in ${preferredCity} (neighborhood or nearest major intersection)?`
+        : "I can keep it close to home. What city are you in, and what area should I center around (neighborhood or nearest major intersection)?";
+      responseModel = "policy/profile_clarifier";
+      requestedModel = "policy/profile_clarifier";
+      responseId = null;
+    } else if (lowConfidenceAutopilotOp) {
+      orchestrationState = "autopilot_ops_mode";
+      replyText =
+        "I think you want an autopilot change, but I’m not fully confident. Please confirm the action (create, delete, pause, or resume) and the autopilot name.";
+      responseModel = "policy/autopilot_ops";
+      requestedModel = "policy/autopilot_ops";
+      responseId = null;
+    } else if (createAutopilotFields) {
+      orchestrationState = "autopilot_ops_mode";
+      if (
+        !createAutopilotFields.name ||
+        !createAutopilotFields.goal ||
+        !createAutopilotFields.trigger ||
+        !createAutopilotFields.action ||
+        !Number.isFinite(createAutopilotFields.budgetCap)
+      ) {
+        replyText =
+          "I can create that autopilot. Please provide: name, goal, trigger, action, approval, mode, and budget in this format: name: ...; goal: ...; triggerType: time|context|event; trigger: ...; action: ...; approval: ask_first|auto_hold|auto_execute; mode: ...; budget: ...";
+      } else {
+        const created = await createAutopilot({
+          name: createAutopilotFields.name,
+          goal: createAutopilotFields.goal,
+          triggerType: createAutopilotFields.triggerType,
+          trigger: createAutopilotFields.trigger,
+          action: createAutopilotFields.action,
+          approvalRule: createAutopilotFields.approvalRule,
+          mode: createAutopilotFields.mode,
+          budgetCap: Math.max(1, createAutopilotFields.budgetCap),
+        });
+        replyText = `Created autopilot "${created.name}". Goal: ${created.goal}. Trigger: ${created.triggerType}:${created.trigger}. Action: ${created.action}. Approval: ${created.approvalRule}.`;
+      }
+      responseModel = "policy/autopilot_ops";
+      requestedModel = "policy/autopilot_ops";
+      responseId = null;
+    } else if (deleteAutopilotTarget) {
+      orchestrationState = "autopilot_ops_mode";
+      const match = autopilots.find((item) =>
+        item.name.toLowerCase().includes(deleteAutopilotTarget.toLowerCase()),
+      );
+      if (!match) {
+        replyText = `I couldn't find an autopilot named "${deleteAutopilotTarget}". Ask me "what autopilots are enabled?" and I'll list them.`;
+      } else {
+        await deleteAutopilot(match.id);
+        replyText = `Deleted autopilot "${match.name}".`;
+      }
+      responseModel = "policy/autopilot_ops";
+      requestedModel = "policy/autopilot_ops";
+      responseId = null;
+    } else if (toggleAutopilotTarget) {
+      orchestrationState = "autopilot_ops_mode";
+      const match = autopilots.find((item) =>
+        item.name.toLowerCase().includes(toggleAutopilotTarget.targetName.toLowerCase()),
+      );
+      if (!match) {
+        replyText = `I couldn't find an autopilot named "${toggleAutopilotTarget.targetName}". Ask me "what autopilots are enabled?" and I'll list them.`;
+      } else {
+        await updateAutopilot(match.id, { status: toggleAutopilotTarget.status });
+        replyText = `${toggleAutopilotTarget.status === "paused" ? "Paused" : "Resumed"} autopilot "${match.name}".`;
+      }
+      responseModel = "policy/autopilot_ops";
+      requestedModel = "policy/autopilot_ops";
+      responseId = null;
+    } else if (isCapabilityQuery && !shouldCreatePack && !shouldProactiveCalendarCheck) {
+      orchestrationState = "capability_mode";
+      replyText = buildCapabilityReply({
+        topic: capabilityTopic,
+        integrations: integrationConnections,
+        packs: allPacks,
+        autopilots,
+        safetySettings,
+      });
+      responseModel = "policy/capability";
+      requestedModel = "policy/capability";
+      responseId = null;
     } else if (shouldCreatePack) {
       orchestrationState = "pack_creation_mode";
       const recentAssistantText =
@@ -1665,23 +2840,55 @@ export async function POST(request: Request) {
         dataSources,
       });
       replyText = `Done — I created a new pack: "${createdPack.name}" (${createdPack.slug}). Open /packs/${createdPack.slug} to review or edit it.`;
-    } else if (calendarIntent && !calendarWriteIntent) {
+    } else if (isLightConversationTurn) {
+      await runSmallTalkMode("light");
+    } else if (calendarIntent && !calendarWriteIntent && !isActionCmd) {
       orchestrationState = "calendar_intent_mode";
       const calendarReply = await tryAnswerCalendarIntent({
         intent,
         timezone: body.timezone,
       });
       if (calendarReply.handled) {
-        replyText = calendarReply.replyText;
-        responseModel = "tool/google_calendar_events";
-        requestedModel = "tool/google_calendar_events";
-        responseId = null;
-        await db.debugTrace.create({
-          data: {
-            scope: "chat",
-            message: calendarReply.trace,
-          },
-        });
+        const shouldContinueWithSuggestions =
+          shouldProactiveCalendarCheck &&
+          allowBestEffortSuggestions &&
+          Boolean(calendarReply.anchorEvent);
+        if (shouldContinueWithSuggestions && calendarReply.anchorEvent) {
+          const anchorStart = formatEventDate(calendarReply.anchorEvent.start, body.timezone);
+          const anchorLocation = calendarReply.anchorEvent.location
+            ? ` at ${calendarReply.anchorEvent.location}`
+            : "";
+          const anchorCalendar = calendarReply.anchorEvent.calendarName
+            ? ` from ${calendarReply.anchorEvent.calendarName}`
+            : "";
+          systemMessages.push({
+            role: "system",
+            content: [
+              "CALENDAR ANCHOR RESOLVED:",
+              `Upcoming anchor event: ${calendarReply.anchorEvent.summary}${anchorCalendar} on ${anchorStart}${anchorLocation}.`,
+              "User asked for ideas before this event.",
+              "Do not ask for the event time again. Use this anchor and provide concrete pre-event suggestions that fit beforehand.",
+            ].join("\n"),
+          });
+          await db.debugTrace.create({
+            data: {
+              scope: "chat",
+              message: `${calendarReply.trace} anchor_resolved_then_recommendations=true`,
+            },
+          });
+          await runRecommendationMode();
+        } else {
+          replyText = calendarReply.replyText;
+          responseModel = "tool/google_calendar_events";
+          requestedModel = "tool/google_calendar_events";
+          responseId = null;
+          await db.debugTrace.create({
+            data: {
+              scope: "chat",
+              message: calendarReply.trace,
+            },
+          });
+        }
       } else {
         await runRecommendationMode();
       }
@@ -1696,6 +2903,7 @@ export async function POST(request: Request) {
         maxFetches: 7,
       });
       replyText = formatResearchReply({
+        userMessage: body.message,
         recommendations: research.recommendations,
         sourceDiversityTarget: signals.sourceDiversityTarget,
       });
@@ -1714,6 +2922,8 @@ export async function POST(request: Request) {
           message: `research_mode fetched=${research.sourcesFetched} picked=${research.recommendations.length}`,
         },
       });
+    } else if (isLocationInfoQuery) {
+      await runInfoMode();
     } else {
       await runRecommendationMode();
     }
@@ -1728,22 +2938,29 @@ export async function POST(request: Request) {
       resolveAssistantId = resolve;
     });
     let currentBlocks: RichBlock[] | undefined;
+    const suppressVisualEnrichment =
+      !allowBestEffortSuggestions ||
+      isCapabilityQuery ||
+      isLocationInfoQuery ||
+      orchestrationState === "autopilot_ops_mode";
 
     // Enrich the raw LLM reply with visual blocks (images, option cards).
     // Run an optional async upgrade pass to replace placeholders post-response.
-    const enriched = await enrichLlmReply(replyText, {
-      asyncUpgrade: true,
-      onAsyncUpgrade: async (upgradedCards) => {
-        const assistantId = await assistantMessageIdReady;
-        const mergedBlocks = applyUpgradedCardsToBlocks(currentBlocks, upgradedCards);
-        if (!mergedBlocks?.length) return;
-        currentBlocks = mergedBlocks;
-        await db.conversationMessage.update({
-          where: { id: assistantId },
-          data: { blocksJson: JSON.stringify(mergedBlocks) },
+    const enriched = suppressVisualEnrichment
+      ? { text: replyText, blocks: undefined as RichBlock[] | undefined }
+      : await enrichLlmReply(replyText, {
+          asyncUpgrade: true,
+          onAsyncUpgrade: async (upgradedCards) => {
+            const assistantId = await assistantMessageIdReady;
+            const mergedBlocks = applyUpgradedCardsToBlocks(currentBlocks, upgradedCards);
+            if (!mergedBlocks?.length) return;
+            currentBlocks = mergedBlocks;
+            await db.conversationMessage.update({
+              where: { id: assistantId },
+              data: { blocksJson: JSON.stringify(mergedBlocks) },
+            });
+          },
         });
-      },
-    });
     const blocks: RichBlock[] | undefined = enriched.blocks?.length
       ? enriched.blocks
       : undefined;
@@ -1813,7 +3030,7 @@ export async function POST(request: Request) {
       responseId,
       messageId: assistantMessage.id,
       threadId: thread.id,
-      packsUsed: installedPacks.length > 0 ? installedPacks.map((p) => p.name) : undefined,
+      packsUsed: shouldInjectPackContext ? installedPacks.map((p) => p.name) : undefined,
     });
   } catch (error) {
     return fromError(error);

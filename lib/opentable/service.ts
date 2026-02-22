@@ -1,4 +1,5 @@
 import { getIntegrationConnection } from "@/lib/repositories/integrations";
+import { getPreferredCityFromMemory } from "@/lib/repositories/memory";
 
 function parseConfig(configJson?: string | null): Record<string, string> {
   if (!configJson) return {};
@@ -25,7 +26,8 @@ export async function searchRestaurants(input: {
   time?: string;
 }) {
   const config = await getOpenTableConfig();
-  const city = input.city || config.defaultCity || "Toronto";
+  const cityFromMemory = await getPreferredCityFromMemory();
+  const city = input.city || config.defaultCity || cityFromMemory || "Toronto";
   const partySize = input.partySize || Number(config.defaultPartySize) || 2;
   const date = input.date || new Date().toISOString().split("T")[0];
   const time = input.time || "19:00";
@@ -55,7 +57,8 @@ export async function checkAvailability(input: {
   time?: string;
 }) {
   const config = await getOpenTableConfig();
-  const city = input.city || config.defaultCity || "Toronto";
+  const cityFromMemory = await getPreferredCityFromMemory();
+  const city = input.city || config.defaultCity || cityFromMemory || "Toronto";
   const partySize = input.partySize || Number(config.defaultPartySize) || 2;
   const date = input.date || new Date().toISOString().split("T")[0];
   const time = input.time || "19:00";
@@ -85,7 +88,8 @@ export async function generateBookingLink(input: {
   time?: string;
 }) {
   const config = await getOpenTableConfig();
-  const city = input.city || config.defaultCity || "Toronto";
+  const cityFromMemory = await getPreferredCityFromMemory();
+  const city = input.city || config.defaultCity || cityFromMemory || "Toronto";
   const partySize = input.partySize || Number(config.defaultPartySize) || 2;
   const date = input.date || new Date().toISOString().split("T")[0];
   const time = input.time || "19:00";

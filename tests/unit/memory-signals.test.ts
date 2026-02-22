@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   deriveRecommendationSignals,
   extractRecommendationConstraints,
+  getPreferenceProfile,
+  upsertMemory,
 } from "../../lib/repositories/memory";
+import { db } from "../../lib/db";
 
 describe("recommendation memory selectors", () => {
   it("extracts constraints from user request", () => {
@@ -27,5 +30,18 @@ describe("recommendation memory selectors", () => {
     expect(signals.boredomSignal).toBe(true);
     expect(signals.noveltyPreference).toBe("fresh");
     expect(signals.sourceDiversityTarget).toBeGreaterThanOrEqual(4);
+  });
+
+  it("exposes home-area preference in known profile dimensions", async () => {
+    await db.memoryEntry.deleteMany({ where: { key: "home_area" } });
+    await upsertMemory({
+      bucket: "profile_memory",
+      key: "home_area",
+      value: "Queen West",
+      source: "inferred",
+      confidence: 0.9,
+    });
+    const profile = await getPreferenceProfile();
+    expect(profile.known["home area for nearby recommendations"]).toBe("Queen West");
   });
 });

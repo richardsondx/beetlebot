@@ -208,6 +208,7 @@ const PREFERENCE_DIMENSIONS: Array<{
   aliases: string[];
 }> = [
   { key: "city", label: "home city or area", aliases: ["city", "location", "neighborhood", "home_city"] },
+  { key: "home_area", label: "home area for nearby recommendations", aliases: ["home_area", "home", "near_home", "intersection", "postal_prefix"] },
   { key: "household", label: "who they usually plan with (partner, kids, friends, solo)", aliases: ["household", "family", "partner", "kids", "children"] },
   { key: "budget_range", label: "typical budget comfort zone", aliases: ["budget_range", "budget", "spending", "price_range"] },
   { key: "max_travel_minutes", label: "how far they're willing to travel", aliases: ["max_travel_minutes", "travel_time", "commute"] },
@@ -277,5 +278,31 @@ export async function tasteProfile() {
     topPreferences: entries.slice(0, 5).map((entry) => entry.value),
     count: entries.length,
   };
+}
+
+export async function getPreferredCityFromMemory(): Promise<string | null> {
+  const hit = await db.memoryEntry.findFirst({
+    where: {
+      bucket: "profile_memory",
+      key: { in: ["city", "location", "home_city"] },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  const value = hit?.value?.trim();
+  if (!value) return null;
+  return value;
+}
+
+export async function getHomeAreaFromMemory(): Promise<string | null> {
+  const hit = await db.memoryEntry.findFirst({
+    where: {
+      bucket: "profile_memory",
+      key: { in: ["home_area", "near_home", "neighborhood", "postal_prefix"] },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  const value = hit?.value?.trim();
+  if (!value) return null;
+  return value;
 }
 

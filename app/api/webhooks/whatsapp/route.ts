@@ -211,7 +211,7 @@ export async function POST(request: Request) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       message: firstText,
-      mode: "explore",
+      mode: "auto",
       threadId: priorThreadId,
     }),
   });

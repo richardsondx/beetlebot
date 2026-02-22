@@ -1,0 +1,178 @@
+description: Beetlebot conversational + autonomy eval (live API)
+
+prompts:
+  - "{{input}}"
+
+providers:
+  - id: http
+    label: local-chat-api
+    config:
+      url: http://localhost:3000/api/chat
+      method: POST
+      headers:
+        Content-Type: application/json
+      body:
+        message: "{{input}}"
+        mode: auto
+        timezone: "{{timezone}}"
+      transformResponse: "json.data.reply"
+
+tests:
+  - description: Integration awareness answers directly
+    vars:
+      input: "what integrations do you have enabled right now?"
+      timezone: "America/Toronto"
+    assert:
+      - type: contains
+        value: "integrations"
+      - type: contains
+        value: "Google Calendar"
+      - type: not-contains
+        value: "fresh sources"
+
+  - description: Calendar access question answered directly
+    vars:
+      input: "do you have access to my calendar?"
+      timezone: "America/Toronto"
+    assert:
+      - type: contains
+        value: "Calendar"
+      - type: not-contains
+        value: "here are some ideas"
+      - type: not-contains
+        value: "I can suggest"
+
+  - description: Smalltalk should not jump to deterministic planning
+    vars:
+      input: "how are you?"
+      timezone: "America/Toronto"
+    assert:
+      - type: not-contains
+        value: "cozy and low-key"
+      - type: not-contains
+        value: "what kind of vibes"
+      - type: not-contains
+        value: "tonight"
+      - type: not-contains
+        value: "I can surface"
+
+  - description: Greeting should stay conversational first
+    vars:
+      input: "hey"
+      timezone: "America/Toronto"
+    assert:
+      - type: not-contains
+        value: "Toronto has"
+      - type: not-contains
+        value: "Here are 3 options"
+      - type: not-contains
+        value: "I can surface"
+
+  - description: Event-anchored planning should avoid redundant time ask
+    vars:
+      input: "hey can you find me something to do before the Ontario science fair event i have tomorrow?"
+      timezone: "America/Toronto"
+    assert:
+      - type: not-contains
+        value: "what time does the"
+      - type: not-contains
+        value: "what time does"
+      - type: not-contains
+        value: "when is the Ontario science fair"
+
+  - description: Best-effort signal should break clarification loop
+    vars:
+      input: "either, just propose already"
+      timezone: "America/Toronto"
+    assert:
+      - type: not-contains
+        value: "which area should I center around"
+      - type: not-contains
+        value: "what city are you in"
+      - type: not-contains
+        value: "quick check"
+
+  - description: Respect explicit location, avoid Toronto defaulting
+    vars:
+      input: "I'm in Vancouver, find me a fun indoor plan for tomorrow"
+      timezone: "America/Vancouver"
+    assert:
+      - type: contains
+        value: "Vancouver"
+      - type: not-contains
+        value: "Toronto"
+      - type: not-contains
+        value: "what city are you in"
+
+  - description: Budget inference should avoid re-asking budget
+    vars:
+      input: "Date night ideas in Toronto this Saturday under $120 for two"
+      timezone: "America/Toronto"
+    assert:
+      - type: not-contains
+        value: "what's your budget"
+      - type: not-contains
+        value: "budget range"
+      - type: contains
+        value: "$"
+
+  - description: Late-night conversational awareness
+    vars:
+      input: "hey"
+      timezone: "Asia/Tokyo"
+    assert:
+      - type: not-contains
+        value: "plans tonight"
+      - type: not-contains
+        value: "vibes tonight"
+      - type: not-contains
+        value: "pull up a few local winter options"
+
+  - description: French input should get French answer
+    vars:
+      input: "Bonjour, est-ce que tu peux m'aider a organiser ma journee ?"
+      timezone: "America/Toronto"
+    assert:
+      - type: contains
+        value: "peux"
+      - type: not-contains
+        value: "I can help"
+
+  - description: Spanish input should get Spanish answer
+    vars:
+      input: "Hola, puedes planearme algo simple para manana?"
+      timezone: "America/Toronto"
+    assert:
+      - type: contains
+        value: "mañana"
+      - type: not-contains
+        value: "I can help"
+
+  - description: Calendar write intent should confirm an action path
+    vars:
+      input: "add a focus block tomorrow at 2pm to my calendar"
+      timezone: "America/Toronto"
+    assert:
+      - type: contains
+        value: "added"
+      - type: not-contains
+        value: "your next plan is"
+      - type: not-contains
+        value: "here are your upcoming events"
+      - type: not-contains
+        value: "Here are your next events"
+
+  - description: Autonomous planning request should return actionable guidance
+    vars:
+      input: "Plan my Friday night for me under $80 near North York and include a backup option."
+      timezone: "America/Toronto"
+    assert:
+      - type: contains
+        value: "North York"
+      - type: contains
+        value: "$"
+      - type: contains
+        value: "backup"
+      - type: not-contains
+        value: "I can't"
+

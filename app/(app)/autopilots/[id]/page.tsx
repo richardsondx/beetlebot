@@ -74,11 +74,11 @@ export default async function AutopilotDetailPage({ params }: PageProps) {
 
           <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg border border-white/8 bg-white/3 p-3">
-              <p className="mb-1 text-xs text-slate-500">Trigger</p>
+              <p className="mb-1 text-xs text-slate-500">When</p>
               <p className="text-sm text-slate-200">{autopilot.trigger}</p>
             </div>
             <div className="rounded-lg border border-white/8 bg-white/3 p-3">
-              <p className="mb-1 text-xs text-slate-500">Action</p>
+              <p className="mb-1 text-xs text-slate-500">Then</p>
               <p className="text-sm text-slate-200">{autopilot.action}</p>
             </div>
             <div className="rounded-lg border border-white/8 bg-white/3 p-3">

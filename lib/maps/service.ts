@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { decryptConnection } from "@/lib/repositories/integration-crypto";
+import { getPreferredCityFromMemory } from "@/lib/repositories/memory";
 
 export type MapsTravelMode = "driving" | "walking" | "cycling" | "transit";
 
@@ -99,9 +100,10 @@ export async function geocodeMapsLocation(input: { location?: string }) {
   const connection = rawConnection ? decryptConnection(rawConnection) : null;
   const config = parseConfig(connection?.configJson);
   const connected = connection?.status === "connected";
+  const cityFromMemory = await getPreferredCityFromMemory();
 
   const locationInput =
-    input.location?.trim() || config.defaultLocation || config.locationLabel || "Toronto";
+    input.location?.trim() || config.defaultLocation || config.locationLabel || cityFromMemory || "Toronto";
 
   const result = await openMeteoGeocode(locationInput);
   return { ...result, connected };
@@ -213,11 +215,12 @@ export async function getMapsRoute(input: {
   const connection = rawConnection ? decryptConnection(rawConnection) : null;
   const config = parseConfig(connection?.configJson);
   const connected = connection?.status === "connected";
+  const cityFromMemory = await getPreferredCityFromMemory();
 
   const mode: MapsTravelMode = input.mode ?? "driving";
 
   const originInput =
-    input.origin?.trim() || config.defaultLocation || config.locationLabel || "Toronto";
+    input.origin?.trim() || config.defaultLocation || config.locationLabel || cityFromMemory || "Toronto";
   const destinationInput = input.destination.trim();
 
   const origin = await openMeteoGeocode(originInput);

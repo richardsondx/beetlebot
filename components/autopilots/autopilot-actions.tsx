@@ -193,7 +193,8 @@ export function AutopilotActions({ autopilot }: Props) {
           <input required value={form.name} onChange={(e) => set("name", e.target.value)} className={inputCls} />
         </label>
         <label className={`${labelCls} mt-4`}>
-          Goal
+          Objective
+          <span className="text-xs text-slate-600">The big picture — what is this autopilot working toward?</span>
           <textarea
             required
             value={form.goal}
@@ -242,32 +243,71 @@ export function AutopilotActions({ autopilot }: Props) {
         </div>
       </section>
 
-      {/* Trigger */}
+      {/* Trigger: When → Then */}
       <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-        <h4 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <h4 className="mb-5 text-xs font-semibold uppercase tracking-wider text-slate-500">
           Trigger
         </h4>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className={labelCls}>
-            Type
-            <select
-              value={form.triggerType}
-              onChange={(e) => set("triggerType", e.target.value as typeof form.triggerType)}
-              className={inputCls}
-            >
-              <option value="time">Time</option>
-              <option value="context">Context</option>
-              <option value="event">Event</option>
-            </select>
-          </label>
-          <label className={labelCls}>
-            Expression
-            <input required value={form.trigger} onChange={(e) => set("trigger", e.target.value)} className={inputCls} />
-          </label>
+
+        {/* ── WHEN ── */}
+        <div className="mb-2 flex items-center gap-2">
+          <span className="rounded bg-slate-700/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">When</span>
+          <span className="text-xs text-slate-600">What causes this autopilot to run?</span>
         </div>
-        <label className={`${labelCls} mt-4`}>
-          Action
-          <input required value={form.action} onChange={(e) => set("action", e.target.value)} className={inputCls} />
+        <div className="grid gap-3 sm:grid-cols-3">
+          {([
+            { value: "time", label: "Time", icon: "🕐", description: "On a schedule or at a specific time." },
+            { value: "context", label: "Context", icon: "📍", description: "When conditions change — weather, location, etc." },
+            { value: "event", label: "Event", icon: "⚡", description: "In response to an external event or notification." },
+          ] as const).map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => set("triggerType", opt.value)}
+              className={`rounded-xl border p-3 text-left transition-all ${
+                form.triggerType === opt.value
+                  ? "border-amber-300/50 bg-amber-300/10 ring-1 ring-amber-300/25"
+                  : "border-white/10 bg-white/3 hover:border-white/20"
+              }`}
+            >
+              <p className={`text-sm font-medium ${form.triggerType === opt.value ? "text-amber-200" : "text-slate-300"}`}>
+                <span className="mr-1.5">{opt.icon}</span>{opt.label}
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500">{opt.description}</p>
+            </button>
+          ))}
+        </div>
+        <label className={`${labelCls} mt-3`}>
+          <input
+            required
+            value={form.trigger}
+            onChange={(e) => set("trigger", e.target.value)}
+            placeholder={
+              form.triggerType === "time" ? "e.g. Every Tuesday at 15:00"
+                : form.triggerType === "context" ? "e.g. When it's raining in the evening"
+                : "e.g. When a new calendar invite arrives"
+            }
+            className={inputCls}
+          />
+        </label>
+
+        {/* ── divider ── */}
+        <div className="my-5 border-t border-white/5" />
+
+        {/* ── THEN ── */}
+        <div className="mb-2 flex items-center gap-2">
+          <span className="rounded bg-slate-700/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">Then</span>
+          <span className="text-xs text-slate-600">Tell Beetlebot what to do — like giving instructions to a smart assistant.</span>
+        </div>
+        <label className={labelCls}>
+          <textarea
+            required
+            value={form.action}
+            onChange={(e) => set("action", e.target.value)}
+            placeholder={"e.g. Block 18:00\u201321:00 on my calendar and suggest 2 restaurant options under $80.\nIf it\u2019s raining, suggest indoor plans instead."}
+            rows={4}
+            className={`${inputCls} resize-none`}
+          />
         </label>
       </section>
 

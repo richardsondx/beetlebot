@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+/data/media/
 
 # debug
 npm-debug.log*

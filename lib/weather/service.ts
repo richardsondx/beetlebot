@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { decryptConnection } from "@/lib/repositories/integration-crypto";
+import { getPreferredCityFromMemory } from "@/lib/repositories/memory";
 
 export type WeatherContextInput = {
   location?: string;
@@ -118,8 +119,9 @@ export async function getWeatherContext(input: WeatherContextInput = {}): Promis
   const connection = rawConnection ? decryptConnection(rawConnection) : null;
   const config = parseConfig(connection?.configJson);
   const connected = connection?.status === "connected";
+  const cityFromMemory = await getPreferredCityFromMemory();
 
-  const defaultLocation = config.defaultLocation || "Toronto";
+  const defaultLocation = config.defaultLocation || cityFromMemory || "Toronto";
   const locationInput = input.location?.trim() || defaultLocation;
 
   try {

@@ -38,17 +38,26 @@ const holdStatusConfig: Record<string, { badge: string; label: string }> = {
   },
 };
 
+type SoftHoldRow = {
+  id: string;
+  title: string;
+  startAt: Date;
+  endAt: Date;
+  status: string;
+};
+
 export default async function CalendarPage() {
   const [softHolds, googleCalendar] = await Promise.all([
-    db.softHold.findMany({ orderBy: { startAt: "asc" } }),
+    db.softHold.findMany({ orderBy: { startAt: "asc" } }) as Promise<SoftHoldRow[]>,
     getIntegrationConnection("google_calendar"),
   ]);
 
   const calStatus = statusConfig[googleCalendar.status] ?? statusConfig.disconnected;
   const isConnected = googleCalendar.status === "connected";
 
-  const upcoming = softHolds.filter((h) => h.endAt > new Date());
-  const past = softHolds.filter((h) => h.endAt <= new Date());
+  const now = new Date();
+  const upcoming = softHolds.filter((h: SoftHoldRow) => h.endAt > now);
+  const past = softHolds.filter((h: SoftHoldRow) => h.endAt <= now);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -118,7 +127,7 @@ export default async function CalendarPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {upcoming.map((hold) => {
+              {upcoming.map((hold: SoftHoldRow) => {
                 const hs = holdStatusConfig[hold.status] ?? holdStatusConfig.held;
                 const sameDay =
                   fmtDateShort(hold.startAt) === fmtDateShort(hold.endAt);
@@ -161,7 +170,7 @@ export default async function CalendarPage() {
           <section className="space-y-3">
             <h2 className="text-sm font-semibold text-slate-500">Past holds</h2>
             <div className="space-y-2">
-              {past.map((hold) => {
+              {past.map((hold: SoftHoldRow) => {
                 const hs = holdStatusConfig[hold.status] ?? holdStatusConfig.released;
                 return (
                   <div

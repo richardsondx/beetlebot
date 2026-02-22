@@ -74,12 +74,12 @@ export default async function SettingsPage() {
           </Suspense>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {integrations.map((integration) => (
+            {integrations.map((integration: Parameters<typeof IntegrationCard>[0]["integration"]) => (
               <IntegrationCard
                 key={integration.provider}
                 publicBaseUrl={publicBaseUrl}
                 whatsAppVerifyToken={whatsAppVerifyToken}
-                integration={integration as Parameters<typeof IntegrationCard>[0]["integration"]}
+                integration={integration}
               />
             ))}
           </div>

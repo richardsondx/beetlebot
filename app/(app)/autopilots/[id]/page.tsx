@@ -10,6 +10,14 @@ type PageProps = {
   params: Promise<{ id: string }>;
 };
 
+type SoftHoldRow = {
+  id: string;
+  title: string;
+  startAt: Date;
+  endAt: Date;
+  status: string;
+};
+
 const holdStatusConfig: Record<string, { badge: string }> = {
   held: { badge: "border-emerald-300/25 bg-emerald-300/10 text-emerald-200" },
   released: { badge: "border-white/15 bg-white/5 text-slate-400" },
@@ -20,7 +28,7 @@ export default async function AutopilotDetailPage({ params }: PageProps) {
   const { id } = await params;
   const [autopilot, softHolds] = await Promise.all([
     db.autopilot.findUnique({ where: { id } }),
-    db.softHold.findMany({ orderBy: { startAt: "asc" } }),
+    db.softHold.findMany({ orderBy: { startAt: "asc" } }) as Promise<SoftHoldRow[]>,
   ]);
 
   if (!autopilot) notFound();
@@ -30,8 +38,9 @@ export default async function AutopilotDetailPage({ params }: PageProps) {
       ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-200"
       : "border-white/15 bg-white/5 text-slate-400";
 
-  const upcoming = softHolds.filter((h) => h.endAt > new Date());
-  const past = softHolds.filter((h) => h.endAt <= new Date());
+  const now = new Date();
+  const upcoming = softHolds.filter((h: SoftHoldRow) => h.endAt > now);
+  const past = softHolds.filter((h: SoftHoldRow) => h.endAt <= now);
 
   return (
     <div className="h-full overflow-y-auto">

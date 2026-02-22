@@ -25,9 +25,20 @@ const approvalConfig: Record<string, { label: string; cls: string }> = {
   auto_execute: { label: "Auto execute", cls: "border-violet-300/25 bg-violet-300/10 text-violet-200" },
 };
 
+type AutopilotRow = {
+  id: string;
+  name: string;
+  goal: string;
+  trigger: string;
+  approvalRule: string;
+  mode: string;
+  status: string;
+  budgetCap?: number | null;
+};
+
 export default async function AutopilotsPage() {
-  const autopilots = await listAutopilots();
-  const activeCount = autopilots.filter((a) => a.status === "on").length;
+  const autopilots = await (listAutopilots() as Promise<AutopilotRow[]>);
+  const activeCount = autopilots.filter((a: AutopilotRow) => a.status === "on").length;
 
   return (
     <div className="h-full overflow-y-auto">
@@ -73,7 +84,7 @@ export default async function AutopilotsPage() {
           </div>
         ) : (
           <div className="grid gap-3">
-            {autopilots.map((item) => {
+            {autopilots.map((item: AutopilotRow) => {
               const s = statusConfig[item.status] ?? statusConfig.off;
               const a = approvalConfig[item.approvalRule] ?? approvalConfig.ask_first;
               return (

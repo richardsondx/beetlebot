@@ -2,9 +2,22 @@ import Link from "next/link";
 import { InstallPackButton } from "@/components/packs/install-pack-button";
 import { listPacks } from "@/lib/repositories/packs";
 
+type PackRow = {
+  slug: string;
+  name: string;
+  city: string;
+  style: string;
+  budgetRange: string;
+  description: string;
+  installed: boolean;
+  modes: string[];
+  tags: string[];
+  needs: string[];
+};
+
 export default async function PacksPage() {
-  const packs = await listPacks();
-  const installedCount = packs.filter((p) => p.installed).length;
+  const packs = await (listPacks() as Promise<PackRow[]>);
+  const installedCount = packs.filter((p: PackRow) => p.installed).length;
 
   return (
     <div className="h-full overflow-y-auto">
@@ -56,7 +69,7 @@ export default async function PacksPage() {
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {packs.map((pack) => (
+            {packs.map((pack: PackRow) => (
               <article
                 key={pack.slug}
                 className="group flex flex-col rounded-2xl border border-white/10 bg-[#0d1422] transition-all hover:border-white/20"

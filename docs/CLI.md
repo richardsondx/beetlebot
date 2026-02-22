@@ -23,8 +23,22 @@ CLI entrypoint: `beetlebot`
 - `beetlebot integrations connect <provider> [provider flags]`
 - `beetlebot integrations disconnect <provider>`
 - `beetlebot integrations test <provider>`
+- `beetlebot svc status [beetlebot|ngrok]`
+- `beetlebot svc restart [beetlebot|ngrok]`
+- `beetlebot svc logs [beetlebot|ngrok] [-n <lines>]`
+- `beetlebot svc endpoint`
 
 The current implementation is API-coupled and designed for local-first operations.
+
+## Self-host service helpers
+
+For Linux self-host setups, `beetlebot svc` gives memorable shortcuts:
+
+- `beetlebot svc status` -> `systemctl status beetlebot --no-pager`
+- `beetlebot svc restart` -> restart Beetlebot service + show status
+- `beetlebot svc status ngrok` -> status for `ngrok-beetlebot`
+- `beetlebot svc logs ngrok -n 200` -> recent ngrok journal logs
+- `beetlebot svc endpoint` -> reads ngrok inspector and prints active public URL(s)
 
 ## TUI
 

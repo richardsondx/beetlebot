@@ -1,5 +1,6 @@
 import { IntegrationCard } from "@/components/integrations/integration-card";
 import { OauthResultBanner } from "@/components/integrations/oauth-result-banner";
+import { PublicCallbackUrlsCard } from "@/components/integrations/public-callback-urls-card";
 import { SafetySettingsCard } from "@/components/safety-settings";
 import { listIntegrationConnections } from "@/lib/repositories/integrations";
 import { getSafetySettings } from "@/lib/repositories/settings";
@@ -16,6 +17,8 @@ export default async function SettingsPage() {
     listIntegrationConnections(),
     getSafetySettings(),
   ]);
+  const publicBaseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim()
+    || process.env.BEETLEBOT_BASE_URL?.trim();
 
   return (
     <div className="h-full overflow-y-auto">
@@ -69,6 +72,8 @@ export default async function SettingsPage() {
           <Suspense fallback={null}>
             <OauthResultBanner />
           </Suspense>
+
+          <PublicCallbackUrlsCard baseUrl={publicBaseUrl} />
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {integrations.map((integration) => (

@@ -1,11 +1,32 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { spawnSync } from "node:child_process";
 import { api, printJson } from "./client";
 import { runTui } from "./tui";
 
 const program = new Command();
 
 program.name("beetlebot").description("beetlebot CLI").version("0.1.0");
+
+type ManagedService = "beetlebot" | "ngrok";
+
+const SYSTEMD_SERVICES: Record<ManagedService, string> = {
+  beetlebot: "beetlebot",
+  ngrok: "ngrok-beetlebot",
+};
+
+function runSystemCommand(command: string, args: string[]) {
+  const result = spawnSync(command, args, {
+    stdio: "inherit",
+    env: process.env,
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  if ((result.status ?? 0) !== 0) {
+    process.exit(result.status ?? 1);
+  }
+}
 
 program
   .command("tui")
@@ -151,6 +172,66 @@ integrations
   .action(async (provider: string) =>
     printJson(await api(`/api/integrations/${provider}/test`, { method: "POST" })),
   );
+
+const svc = program
+  .command("svc")
+  .alias("service")
+  .description("Systemd + ngrok helper commands (self-host)");
+
+svc
+  .command("status")
+  .argument("[service]", "beetlebot | ngrok", "beetlebot")
+  .action((service: ManagedService) => {
+    const unit = SYSTEMD_SERVICES[service];
+    if (!unit) throw new Error(`Unknown service: ${service}`);
+    runSystemCommand("systemctl", ["status", unit, "--no-pager"]);
+  });
+
+svc
+  .command("restart")
+  .argument("[service]", "beetlebot | ngrok", "beetlebot")
+  .action((service: ManagedService) => {
+    const unit = SYSTEMD_SERVICES[service];
+    if (!unit) throw new Error(`Unknown service: ${service}`);
+    runSystemCommand("systemctl", ["restart", unit]);
+    runSystemCommand("systemctl", ["status", unit, "--no-pager"]);
+  });
+
+svc
+  .command("logs")
+  .argument("[service]", "beetlebot | ngrok", "beetlebot")
+  .option("-n, --lines <count>", "Number of log lines", "100")
+  .action((service: ManagedService, opts: { lines: string }) => {
+    const unit = SYSTEMD_SERVICES[service];
+    if (!unit) throw new Error(`Unknown service: ${service}`);
+    const lines = String(Math.max(1, parseInt(opts.lines, 10) || 100));
+    runSystemCommand("journalctl", ["-u", unit, "-n", lines, "--no-pager"]);
+  });
+
+svc
+  .command("endpoint")
+  .description("Show active ngrok public URL(s)")
+  .action(() => {
+    const result = spawnSync("curl", ["-s", "http://127.0.0.1:4040/api/tunnels"], {
+      encoding: "utf8",
+      env: process.env,
+    });
+    if (result.error) throw result.error;
+    if ((result.status ?? 0) !== 0) {
+      process.exit(result.status ?? 1);
+    }
+    const payload = JSON.parse(result.stdout || "{}") as {
+      tunnels?: Array<{ name?: string; public_url?: string }>;
+    };
+    const urls =
+      payload.tunnels
+        ?.filter((tunnel) => typeof tunnel.public_url === "string")
+        .map((tunnel) => ({ name: tunnel.name ?? "tunnel", publicUrl: tunnel.public_url })) ?? [];
+    if (!urls.length) {
+      throw new Error("No ngrok tunnels found at http://127.0.0.1:4040/api/tunnels");
+    }
+    printJson({ tunnels: urls });
+  });
 
 void program.parseAsync(process.argv).catch((error) => {
   console.error(error instanceof Error ? error.message : String(error));

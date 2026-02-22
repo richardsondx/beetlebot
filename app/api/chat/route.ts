@@ -46,6 +46,8 @@ import { getChatToolByName, getScopedOpenRouterTools } from "@/lib/tools/registr
 import type { ChatToolDefinition } from "@/lib/tools/types";
 import { runResearchLoop } from "@/lib/chat/research-loop";
 import { buildSeasonContext } from "@/lib/season/context";
+import type { WeatherContext } from "@/lib/weather/service";
+import { getWeatherContext } from "@/lib/weather/service";
 import type { PackDataSource } from "@/lib/types";
 import { MODE_IDS } from "@/lib/constants";
 import { getBousierTelemetry } from "@/lib/media/bousier";
@@ -355,6 +357,8 @@ function buildToolCapabilityPrompt(input: PromptPolicyContext): string {
 
 function buildMemoryPolicyPrompt(input: PromptPolicyContext): string {
   const lines = ["MEMORY POLICY:"];
+  lines.push("- Never invent personal facts. Only state details that are explicitly present in memory/tool results/thread history.");
+  lines.push("- If a requested personal detail is unknown, say it is unknown and ask a focused follow-up.");
   if (input.preferredName) {
     lines.push(`- Known preferred name: ${input.preferredName}. Use naturally and do not re-ask unless user asks to change it.`);
   } else {
@@ -453,6 +457,9 @@ function buildOutputFormatPolicyPrompt(input: PromptPolicyContext): string {
     !input.isCapabilityQuery &&
     !input.isLocationInfoQuery &&
     input.allowBestEffortSuggestions;
+  if (input.allowBestEffortSuggestions && !input.isActionCmd && !input.isCapabilityQuery && !input.isLocationInfoQuery) {
+    lines.push("- For plan-style answers, include one clearly labeled backup/fallback option.");
+  }
   if (shouldUseVisualCards) {
     lines.push(VISUAL_SYSTEM_INSTRUCTION);
   } else {
@@ -513,6 +520,50 @@ function buildTemporalContext(timezone?: string): string {
         : `This coming weekend is Saturday ${dateFmt(sat)} – Sunday ${dateFmt(sun)}.`;
 
   return `Current date and time: ${formatted}. Today is ${dayOfWeek}. ${weekendNote}`;
+}
+
+function formatWeatherWindowTime(iso: string, timezone?: string) {
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return iso;
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone || "America/Toronto",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function buildWeatherBriefContext(input: {
+  weather: WeatherContext;
+  timezone?: string;
+}) {
+  if (input.weather.isFallback) {
+    return [
+      `WEATHER BRIEF: ${input.weather.location}: live weather data unavailable right now.`,
+      "Do not assume specific temperature or rain probability. Use weather-safe planning and retry weather lookup before finalizing outdoor commitments.",
+    ].join("\n");
+  }
+  const tempText =
+    typeof input.weather.tempC === "number" ? `${input.weather.tempC}C now` : "temperature unavailable";
+  const rainText =
+    typeof input.weather.rainProbability === "number"
+      ? `rain chance ${Math.round(input.weather.rainProbability * 100)}%`
+      : "rain probability unavailable";
+  const lines = [`WEATHER BRIEF: ${input.weather.location}: ${input.weather.summary}, ${tempText}, ${rainText}.`];
+
+  const topRiskWindow = input.weather.highRiskWindows[0];
+  if (topRiskWindow) {
+    lines.push(
+      `Highest rain-risk window today/next hours: ${formatWeatherWindowTime(topRiskWindow.start, input.timezone)}-${formatWeatherWindowTime(topRiskWindow.end, input.timezone)} (up to ${Math.round(topRiskWindow.peakRainProbability * 100)}%).`,
+    );
+  }
+
+  const weekAhead = input.weather.daily[6];
+  if (weekAhead) {
+    lines.push(
+      `Week-ahead signal (${weekAhead.date}): ${weekAhead.summary}, rain risk up to ${Math.round(weekAhead.rainProbabilityMax * 100)}%.`,
+    );
+  }
+  return lines.join("\n");
 }
 
 function getLocalHour(timezone?: string) {
@@ -706,6 +757,7 @@ function inferPackStyle(preference: "fresh" | "balanced" | "familiar") {
 
 function buildPreferenceAwarenessPrompt(profile: PreferenceProfile): string {
   const lines: string[] = ["PREFERENCE AWARENESS:"];
+  lines.push("Use only explicit stored facts from this section; do not extrapolate additional preferences.");
 
   if (profile.isNewUser) {
     lines.push(
@@ -837,6 +889,8 @@ type MessageIntent = {
   isExplicitSuggestionRequest: boolean;
   /** User asks the assistant to proceed now with best-effort suggestions (no more clarifications). */
   wantsBestEffortNow: boolean;
+  /** User explicitly requests a backup/fallback/plan B option. */
+  requiresBackupOption: boolean;
   /** True when model-based intent extraction succeeded. */
   intentExtractionOk: boolean;
   /** User is commenting on assistant behavior/memory/style (meta conversation). */
@@ -907,6 +961,18 @@ function stripSimpleCodeFence(text: string) {
   return body.slice(0, fenceIndex).trim();
 }
 
+function normalizeMessageForIntentRules(message: string) {
+  return message.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function isLikelyHistoricalRecallQuestion(message: string) {
+  const normalized = normalizeMessageForIntentRules(message);
+  const hasQuestionShape = normalized.includes("?") || /^(what|who|when|which|do you|did i|did you)\b/.test(normalized);
+  const hasPastAnchor = /\b(yesterday|last night|last week|two days ago|earlier|before|so far)\b/.test(normalized);
+  const hasRecallVerb = /\b(remember|recall|learned|know|recommended|asked you to book|told you)\b/.test(normalized);
+  return hasQuestionShape && (hasPastAnchor || hasRecallVerb);
+}
+
 function buildDefaultIntent(intentExtractionOk: boolean): MessageIntent {
   return {
     isActionCommand: false,
@@ -924,6 +990,7 @@ function buildDefaultIntent(intentExtractionOk: boolean): MessageIntent {
     isLocationInfoQuery: false,
     isExplicitSuggestionRequest: false,
     wantsBestEffortNow: false,
+    requiresBackupOption: false,
     intentExtractionOk,
     isMetaConversationQuery: false,
     isProfileCaptureTurn: false,
@@ -979,27 +1046,35 @@ async function classifyMessageIntent(
     `User message: """${message}"""`,
     "",
     "Return exactly:",
-    '{ "isActionCommand": boolean, "isCalendarWrite": boolean, "isCalendarQuery": boolean, "shouldProactiveCalendarCheck": boolean, "referencesPriorSuggestions": boolean, "isTravelQuery": boolean, "isUpcomingQuery": boolean, "isResearchRequest": boolean, "isDiscoveryQuery": boolean, "isGreeting": boolean, "isSmallTalk": boolean, "isCapabilityQuery": boolean, "isLocationInfoQuery": boolean, "isExplicitSuggestionRequest": boolean, "wantsBestEffortNow": boolean, "isMetaConversationQuery": boolean, "isProfileCaptureTurn": boolean, "isProximityPreferenceQuery": boolean, "capabilityTopic": "integrations|packs|autopilots|approval_gate|general", "suggestedMode": "explore|dating|family|social|relax|travel|focus", "extractedPreferredName": string|null, "extractedCity": string|null, "extractedHomeArea": string|null, "preferenceFeedback": { "subject": string, "sentiment": "liked|disliked", "reason": string|null } | null, "autopilotOperation": "none|create|delete|pause|resume", "autopilotTargetName": string|null, "autopilotCreateFields": { "name": string, "goal": string, "triggerType": "time|context|event", "trigger": string, "action": string, "approvalRule": "ask_first|auto_hold|auto_execute", "mode": string, "budgetCap": number } | null, "autopilotOperationConfidence": number }',
+    '{ "isActionCommand": boolean, "isCalendarWrite": boolean, "isCalendarQuery": boolean, "shouldProactiveCalendarCheck": boolean, "referencesPriorSuggestions": boolean, "isTravelQuery": boolean, "isUpcomingQuery": boolean, "isResearchRequest": boolean, "isDiscoveryQuery": boolean, "isGreeting": boolean, "isSmallTalk": boolean, "isCapabilityQuery": boolean, "isLocationInfoQuery": boolean, "isExplicitSuggestionRequest": boolean, "wantsBestEffortNow": boolean, "requiresBackupOption": boolean, "isMetaConversationQuery": boolean, "isProfileCaptureTurn": boolean, "isProximityPreferenceQuery": boolean, "capabilityTopic": "integrations|packs|autopilots|approval_gate|general", "suggestedMode": "explore|dating|family|social|relax|travel|focus", "extractedPreferredName": string|null, "extractedCity": string|null, "extractedHomeArea": string|null, "preferenceFeedback": { "subject": string, "sentiment": "liked|disliked", "reason": string|null } | null, "autopilotOperation": "none|create|delete|pause|resume", "autopilotTargetName": string|null, "autopilotCreateFields": { "name": string, "goal": string, "triggerType": "time|context|event", "trigger": string, "action": string, "approvalRule": "ask_first|auto_hold|auto_execute", "mode": string, "budgetCap": number } | null, "autopilotOperationConfidence": number }',
     "",
     "Definitions:",
     "isActionCommand  — true when the user wants to EXECUTE something (add to calendar, move/reschedule an event, book, confirm a choice, keep a suggestion, cancel something) rather than explore or get new ideas.",
     "isCalendarWrite  — true when the intent involves creating, editing, moving, fixing duplicates, merging, or removing a calendar event.",
-    "isCalendarQuery — true ONLY when the user asks about THEIR OWN personal schedule (e.g. 'what's on my calendar', 'do I have anything tomorrow', 'when is my next meeting', 'am I free Saturday'). Must be about the user's own calendar/schedule. FALSE for discovery questions like 'what's happening in the city', 'what's going on tonight', 'things to do this weekend' — those are discovery, not calendar.",
+    "isCalendarQuery — true ONLY when the user asks about THEIR OWN personal schedule (e.g. 'what's on my calendar', 'do I have anything tomorrow', 'when is my next meeting', 'am I free Saturday', 'who am I meeting today'). Must be about the user's own calendar/schedule. FALSE for discovery questions like 'what's happening in the city', 'what's going on tonight', 'things to do this weekend' — those are discovery, not calendar.",
     "shouldProactiveCalendarCheck — true when user indicates permission or intent to check calendar right now (e.g. asks if you have access and expects a check, says 'yes check my calendar', asks for availability around an event, or asks to do something before a specific event tomorrow).",
+    "For general planning requests with time/budget constraints (e.g., 'plan me something at 5pm today', 'date night under $120'), do NOT set shouldProactiveCalendarCheck unless user explicitly asks to use their personal calendar.",
     "referencesPriorSuggestions — true when the user refers to options already shown (e.g. 'these', 'this one', 'that option', 'option 2', 'the first one').",
     "isTravelQuery — true when the user asks about travel/trips/vacation plans.",
     "isUpcomingQuery — true when the user asks for what is next/upcoming/coming soon on their personal calendar, OR asks to plan around something happening soon (e.g. before an event tomorrow).",
     "If user asks for suggestions 'before my/the event tomorrow' (or similar event-anchored timing), set isUpcomingQuery=true and shouldProactiveCalendarCheck=true even if the user is also asking for fun ideas.",
+    "If the user asks a memory/recall question about past conversation history (e.g., 'what was the restaurant you recommended two days ago?', 'what event did I ask you to book yesterday?'), set isActionCommand=false and isCalendarWrite=false.",
+    "If user asks 'Plan me something at 5pm today in Toronto with a backup option' (or equivalent planning-only phrasing), set isActionCommand=false and isCalendarWrite=false.",
+    "If user asks for general planning in another language (e.g., 'Hola, puedes planearme algo simple para manana?'), treat it as planning/suggestions (not calendar write) unless they explicitly ask to add/edit calendar data.",
     "isResearchRequest — true when user asks for fresh/new/deep research or discovery from new sources.",
     "isDiscoveryQuery — true when the user asks about things to do, events happening, what's going on, nightlife, activities, or attractions in a city or area. This is about exploring the world, NOT checking their personal calendar. Examples: 'what's happening tonight', 'things to do in Toronto', 'any events this weekend', 'what's going on in the city'.",
     "isGreeting — true for greeting-only messages (e.g. 'hi', 'hello', 'hey there').",
     "isSmallTalk — true for rapport chatter (e.g. 'how are you?', 'what's up?', 'thanks'). Should be false for planning requests.",
     "isMetaConversationQuery — true when user comments on assistant behavior/style/memory (e.g. 'didn't I tell you my name?', 'this feels awkward', 'why are you suggesting this right away?').",
     "isCapabilityQuery — true when the user asks what beetlebot has enabled/can do (integrations, packs, autopilots, approval settings, features, setup help).",
+    "If user asks 'what integrations do you have enabled right now?' (or equivalent), set isCapabilityQuery=true and capabilityTopic='integrations'.",
     "isLocationInfoQuery — true for factual questions about a location/restaurant/place (hours, address, details, info), without asking for recommendation lists.",
     "isExplicitSuggestionRequest — true only when the user directly asks for suggestions/options/ideas/recommendations.",
+    "Planning asks like 'plan my Friday night', 'date night ideas', or 'plan me something at 5pm' are suggestion requests, not calendar writes, unless user explicitly asks to add/edit calendar events.",
     "wantsBestEffortNow — true when user says to proceed without more questions (e.g. 'either', 'figure it out', 'propose something already', 'just pick').",
     "If user says 'either', 'show me either', 'surprise me', 'i don't know figure it out', or 'propose something already', set wantsBestEffortNow=true and isExplicitSuggestionRequest=true.",
+    "requiresBackupOption — true when user explicitly asks for a backup/fallback/plan B option.",
+    "If user asks for a backup option (e.g., 'include a backup option', 'add a fallback', 'give me plan B'), set requiresBackupOption=true.",
     "If prior assistant asked a binary choice and user answered one option (or said either), do not ask the same binary question again.",
     "isProfileCaptureTurn — true if this looks like a short profile-answer (like name/city) to a prior assistant question.",
     "If previous assistant asked for name and user replies with a short token like 'Richardson' or 'Jimmy', set isProfileCaptureTurn=true and extractedPreferredName.",
@@ -1028,7 +1103,7 @@ async function classifyMessageIntent(
       body: JSON.stringify({
         model: "openai/gpt-4o-mini",
         temperature: 0,
-        max_tokens: 260,
+        max_tokens: 320,
         messages: [{ role: "user", content: prompt }],
       }),
       signal: AbortSignal.timeout(5000),
@@ -1106,6 +1181,7 @@ async function classifyMessageIntent(
       isLocationInfoQuery: Boolean(parsed.isLocationInfoQuery),
       isExplicitSuggestionRequest: Boolean(parsed.isExplicitSuggestionRequest),
       wantsBestEffortNow: Boolean(parsed.wantsBestEffortNow),
+      requiresBackupOption: Boolean(parsed.requiresBackupOption),
       isMetaConversationQuery: Boolean(parsed.isMetaConversationQuery),
       isProfileCaptureTurn: Boolean(parsed.isProfileCaptureTurn),
       capabilityTopic,
@@ -1324,6 +1400,7 @@ async function confirmCalendarWriteIntentFromMessage(input: {
     "- True for add/create/schedule/block/move/reschedule/update/delete/remove calendar-event requests.",
     "- True when user asks to place a suggestion/option onto calendar.",
     "- True when the message specifies a date/time and asks to put that item on calendar.",
+    "- False for memory/recall questions about prior conversation actions (e.g., 'what event did I ask you to book yesterday?').",
     "- False for read-only schedule questions (next event, am I free, what's on my calendar).",
     "- False for general planning/discovery requests that do not ask to modify calendar.",
     "Examples:",
@@ -1331,6 +1408,8 @@ async function confirmCalendarWriteIntentFromMessage(input: {
     '- "move my dentist appointment to 3pm tomorrow" => true',
     '- "add option 2 to my calendar" => true',
     '- "schedule deep work tomorrow 9am-11am on my calendar" => true',
+    '- "plan me something at 5pm today in Toronto with a backup option" => false',
+    '- "Hola, puedes planearme algo simple para manana?" => false',
     '- "what is next on my calendar?" => false',
     '- "I\'m in Vancouver, find me a fun indoor plan for tomorrow" => false',
     "- If uncertain, return false.",
@@ -1361,6 +1440,57 @@ async function confirmCalendarWriteIntentFromMessage(input: {
       isCalendarWriteIntent?: boolean;
     };
     return Boolean(parsed.isCalendarWriteIntent);
+  } catch {
+    return false;
+  }
+}
+
+async function confirmProactiveCalendarIntentFromMessage(input: {
+  message: string;
+  lastAssistantMessage?: string;
+}): Promise<boolean> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return false;
+  const contextLine = input.lastAssistantMessage
+    ? `Previous assistant message: """${input.lastAssistantMessage.slice(0, 240)}"""`
+    : "";
+  const prompt = [
+    "Determine whether the user is explicitly asking to use their personal calendar as an anchor for this turn. Reply with strict JSON only.",
+    contextLine,
+    `User message: """${input.message}"""`,
+    'Return exactly: { "needsCalendarAnchor": boolean }',
+    "Rules:",
+    "- True only if the user explicitly asks to check/read their personal calendar, schedule, meetings, availability, or asks to plan around a personal event already in their calendar.",
+    "- False for general recommendation/planning requests that mention timeframes (Friday, weekend, tomorrow) without asking to use personal calendar data.",
+    "- False for generic 'ideas' requests unless the user explicitly references their own schedule/calendar.",
+    "- If uncertain, return false.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:3001",
+        "X-Title": "beetlebot",
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini",
+        temperature: 0,
+        max_tokens: 40,
+        messages: [{ role: "user", content: prompt }],
+      }),
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!response.ok) return false;
+    const payload = (await response.json()) as OpenRouterResponse;
+    const text = payload.choices?.[0]?.message?.content?.trim() ?? "";
+    const parsed = JSON.parse(stripSimpleCodeFence(text)) as {
+      needsCalendarAnchor?: boolean;
+    };
+    return Boolean(parsed.needsCalendarAnchor);
   } catch {
     return false;
   }
@@ -1574,6 +1704,7 @@ type CalendarToolEvent = {
   start: string;
   end: string;
   location?: string;
+  attendees?: string[];
   htmlLink?: string;
   calendarId?: string;
   calendarName?: string;
@@ -1613,6 +1744,11 @@ function parseCalendarToolEvents(payload: Record<string, unknown>): CalendarTool
       end,
       description: typeof raw.description === "string" ? raw.description : undefined,
       location: typeof raw.location === "string" ? raw.location : undefined,
+      attendees: Array.isArray(raw.attendees)
+        ? raw.attendees
+            .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+            .slice(0, 12)
+        : undefined,
       htmlLink: typeof raw.htmlLink === "string" ? raw.htmlLink : undefined,
       calendarId: typeof raw.calendarId === "string" ? raw.calendarId : undefined,
       calendarName: typeof raw.calendarName === "string" ? raw.calendarName : undefined,
@@ -1905,6 +2041,219 @@ async function tryAnswerCalendarIntent(input: {
   };
 }
 
+function formatLocalDayKey(date: Date, timezone?: string) {
+  const tz = timezone || "America/Toronto";
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return formatter.format(date);
+}
+
+function prettifyAttendeeLabel(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!trimmed.includes("@")) return trimmed;
+  const local = trimmed.split("@")[0] ?? "";
+  const words = local
+    .replace(/[._-]+/g, " ")
+    .split(" ")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  if (!words.length) return trimmed;
+  return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+}
+
+async function getMostRecentSuggestedRestaurantFromHistory() {
+  const messages = await db.conversationMessage.findMany({
+    where: {
+      role: "assistant",
+      createdAt: {
+        gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 80,
+    select: {
+      blocksJson: true,
+      createdAt: true,
+    },
+  });
+
+  for (const message of messages) {
+    const blocks = parseMessageBlocks(message.blocksJson ?? null);
+    if (!blocks?.length) continue;
+    for (const block of blocks) {
+      const cards =
+        block.type === "image_card"
+          ? [block]
+          : block.type === "image_gallery"
+            ? block.items
+            : block.type === "option_set"
+              ? block.items.map((item) => item.card)
+              : [];
+      for (const card of cards) {
+        const title = card.title?.trim();
+        if (!title) continue;
+        const category = (card.meta?.category ?? "").toLowerCase();
+        const restaurantSignal = /\b(restaurant|bistro|cafe|brunch|dining)\b/.test(
+          `${title.toLowerCase()} ${category}`,
+        );
+        if (restaurantSignal) {
+          return { title, createdAt: message.createdAt };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+async function getRecentBookingRequestFromHistory() {
+  const messages = await db.conversationMessage.findMany({
+    where: {
+      role: "user",
+      createdAt: {
+        gte: new Date(Date.now() - 72 * 60 * 60 * 1000),
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    select: {
+      content: true,
+      createdAt: true,
+    },
+  });
+
+  for (const message of messages) {
+    const normalized = normalizeMessageForIntentRules(message.content);
+    if (!/\bbook\b/.test(normalized)) continue;
+    if (normalized.includes("?")) continue;
+    const extracted =
+      message.content.match(/\bbook(?:\s+for\s+me)?\s+(.+?)(?:[.!?]|$)/i)?.[1]?.trim() ?? message.content.trim();
+    if (!extracted) continue;
+    return { requestText: extracted, createdAt: message.createdAt };
+  }
+  return null;
+}
+
+async function tryAnswerMemoryRecallQuestion(input: { message: string; timezone?: string }) {
+  const normalized = normalizeMessageForIntentRules(input.message);
+
+  const asksRestaurantRecall =
+    /\brestaurant\b/.test(normalized) &&
+    (/\brecommended\b/.test(normalized) || /\bremember\b/.test(normalized) || /\bwhat was\b/.test(normalized));
+  if (asksRestaurantRecall) {
+    const recentRestaurant = await getMostRecentSuggestedRestaurantFromHistory();
+    if (!recentRestaurant) {
+      return {
+        handled: true as const,
+        replyText:
+          "I don't have a reliable restaurant recommendation saved from earlier yet. If you share the neighborhood or vibe, I can recommend one now and keep it in memory.",
+        model: "policy/memory_recall",
+      };
+    }
+    return {
+      handled: true as const,
+      replyText: `The most recent restaurant I recommended was ${recentRestaurant.title}.`,
+      model: "policy/memory_recall",
+    };
+  }
+
+  const asksBookingRecall =
+    /\basked you to book\b/.test(normalized) ||
+    (/\bbook\b/.test(normalized) && /\b(yesterday|last night|two days ago)\b/.test(normalized));
+  if (asksBookingRecall) {
+    const bookingRequest = await getRecentBookingRequestFromHistory();
+    if (!bookingRequest) {
+      return {
+        handled: true as const,
+        replyText:
+          "I couldn't find a clear booking request in recent history. If you tell me the event name, I can book it now.",
+        model: "policy/memory_recall",
+      };
+    }
+    return {
+      handled: true as const,
+      replyText: `You asked me to book: ${bookingRequest.requestText}.`,
+      model: "policy/memory_recall",
+    };
+  }
+
+  const asksWhoMeetingToday = /\bwho am i meeting today\b/.test(normalized) || /\bwho.*meeting.*today\b/.test(normalized);
+  if (asksWhoMeetingToday) {
+    const conn = await getIntegrationConnection("google_calendar");
+    const hasReadScope = conn.status === "connected" && conn.grantedScopes.includes("read");
+    if (!hasReadScope) {
+      return {
+        handled: true as const,
+        replyText: "I need Google Calendar read access to check today's attendees.",
+        model: "policy/memory_recall",
+      };
+    }
+    const tool = getChatToolByName("google_calendar_events");
+    if (!tool) {
+      return {
+        handled: true as const,
+        replyText: "I can't access the calendar tool right now. Please try again in a moment.",
+        model: "policy/memory_recall",
+      };
+    }
+
+    const now = new Date();
+    const listResult = await tool.execute({
+      operation: "list_multi",
+      timeMin: new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString(),
+      timeMax: new Date(now.getTime() + 36 * 60 * 60 * 1000).toISOString(),
+      maxResultsPerCalendar: 40,
+    });
+    if (isRecord(listResult) && typeof listResult.error === "string" && listResult.error.trim()) {
+      return {
+        handled: true as const,
+        replyText: "I couldn't read today's events right now because the calendar tool returned an error.",
+        model: "policy/memory_recall",
+      };
+    }
+    const events = parseCalendarToolEvents(
+      (listResult && typeof listResult === "object" ? listResult : {}) as Record<string, unknown>,
+    );
+    const todayKey = formatLocalDayKey(now, input.timezone);
+    const todayEvents = events.filter((event) => formatLocalDayKey(new Date(event.start), input.timezone) === todayKey);
+    const attendees = Array.from(
+      new Set(
+        todayEvents
+          .flatMap((event) => event.attendees ?? [])
+          .map((attendee) => prettifyAttendeeLabel(attendee))
+          .filter((attendee): attendee is string => Boolean(attendee)),
+      ),
+    );
+    if (!todayEvents.length) {
+      return {
+        handled: true as const,
+        replyText: "You don't have any events on the calendar for today.",
+        model: "policy/memory_recall",
+      };
+    }
+    if (!attendees.length) {
+      const eventNames = todayEvents.slice(0, 3).map((event) => event.summary).join(", ");
+      return {
+        handled: true as const,
+        replyText: `I found today's events (${eventNames}), but attendee names are not listed on those events.`,
+        model: "policy/memory_recall",
+      };
+    }
+    return {
+      handled: true as const,
+      replyText: `Today you're meeting: ${attendees.slice(0, 8).join(", ")}.`,
+      model: "policy/memory_recall",
+    };
+  }
+
+  return { handled: false as const };
+}
+
 function formatResearchReply(input: {
   userMessage: string;
   recommendations: Awaited<ReturnType<typeof runResearchLoop>>["recommendations"];
@@ -2061,6 +2410,49 @@ export async function POST(request: Request) {
         };
       }
     }
+    const shouldRunProactiveCalendarGuard =
+      (intent.shouldProactiveCalendarCheck || intent.isUpcomingQuery) &&
+      !intent.isCalendarWrite &&
+      !intent.isActionCommand &&
+      !intent.isCapabilityQuery;
+    if (shouldRunProactiveCalendarGuard) {
+      const confirmedCalendarAnchor = await confirmProactiveCalendarIntentFromMessage({
+        message: body.message,
+        lastAssistantMessage,
+      });
+      if (!confirmedCalendarAnchor) {
+        intent = {
+          ...intent,
+          shouldProactiveCalendarCheck: false,
+          isUpcomingQuery: false,
+        };
+      }
+    }
+    const shouldRunCalendarWriteGuard =
+      intent.isCalendarWrite &&
+      !intent.isCapabilityQuery &&
+      intent.isExplicitSuggestionRequest &&
+      !intent.referencesPriorSuggestions;
+    if (shouldRunCalendarWriteGuard) {
+      const confirmedCalendarWrite = await confirmCalendarWriteIntentFromMessage({
+        message: body.message,
+        lastAssistantMessage,
+      });
+      if (!confirmedCalendarWrite) {
+        intent = {
+          ...intent,
+          isCalendarWrite: false,
+          isActionCommand: false,
+        };
+      }
+    }
+    if (isLikelyHistoricalRecallQuestion(body.message)) {
+      intent = {
+        ...intent,
+        isActionCommand: false,
+        isCalendarWrite: false,
+      };
+    }
     await extractImplicitPreferencesFromModel(intent);
 
     const preferenceProfile = await getPreferenceProfile();
@@ -2194,6 +2586,41 @@ export async function POST(request: Request) {
         : [];
 
     let orchestrationState: OrchestrationState = "recommendation_mode";
+    const hasWeatherReadScope = integrationConnections.some(
+      (connection) =>
+        connection.provider === "weather" &&
+        connection.status === "connected" &&
+        connection.grantedScopes.includes("read"),
+    );
+    const shouldInjectWeatherBrief =
+      hasWeatherReadScope &&
+      !isLightConversationTurn &&
+      !isCapabilityQuery &&
+      !isLocationInfoQuery &&
+      !shouldUseSafeNoIntentMode &&
+      (allowBestEffortSuggestions ||
+        isActionCmd ||
+        intent.isTravelQuery ||
+        intent.isDiscoveryQuery ||
+        intent.isResearchRequest ||
+        explicitSuggestionRequest ||
+        shouldProactiveCalendarCheck);
+
+    let weatherBrief: string | null = null;
+    if (shouldInjectWeatherBrief) {
+      try {
+        const weather = await getWeatherContext({
+          location: intent.extractedCity || preferredCity || undefined,
+        });
+        weatherBrief = buildWeatherBriefContext({
+          weather,
+          timezone: body.timezone,
+        });
+      } catch {
+        weatherBrief =
+          "WEATHER BRIEF: Weather context unavailable right now. Avoid weather-sensitive assumptions and include fallback options.";
+      }
+    }
 
     const shouldInjectPackContext =
       Boolean(packContext) &&
@@ -2251,6 +2678,24 @@ export async function POST(request: Request) {
         }),
       },
     ];
+    if (intent.requiresBackupOption) {
+      systemMessages.push({
+        role: "system",
+        content:
+          "User explicitly requested a backup/fallback option. Include a clearly labeled backup (or Plan B) option in the final answer.",
+      });
+    }
+    if (weatherBrief) {
+      systemMessages.push({
+        role: "system",
+        content: weatherBrief,
+      });
+      systemMessages.push({
+        role: "system",
+        content:
+          "When weather context is present, include one concise weather caveat in the user-facing reply (mention rain/precipitation risk and how the plan adapts).",
+      });
+    }
     if (threadSuggestions.length > 0 && shouldResolveThreadSuggestions) {
       const selectedSummary =
         resolvedSuggestions.length > 0
@@ -2294,8 +2739,29 @@ export async function POST(request: Request) {
       (!suggestionIntent ||
         suggestionIntent.selectedIndices.length === 0 ||
         suggestionIntent.confidence < 0.55);
+    const shouldForcePureLightReply =
+      !allowBestEffortSuggestions &&
+      (isGreetingTurn || isSmallTalkTurn) &&
+      !calendarIntent &&
+      !calendarWriteIntent &&
+      !isActionCmd;
 
-    if (shouldAskSuggestionClarification) {
+    const shouldTryMemoryRecall =
+      isLikelyHistoricalRecallQuestion(body.message) || /\bwho am i meeting today\b/i.test(body.message);
+    const memoryRecall = shouldTryMemoryRecall
+      ? await tryAnswerMemoryRecallQuestion({
+          message: body.message,
+          timezone: body.timezone,
+        })
+      : { handled: false as const };
+
+    if (memoryRecall.handled) {
+      orchestrationState = "smalltalk_mode";
+      replyText = memoryRecall.replyText;
+      responseModel = memoryRecall.model;
+      requestedModel = memoryRecall.model;
+      responseId = null;
+    } else if (shouldAskSuggestionClarification) {
       const quickChoices = threadSuggestions.slice(0, 4).map((suggestion) => `[${suggestion.index}] ${suggestion.title}`).join("\n");
       replyText = [
         "Quick check so I place the right one on your calendar:",
@@ -2327,6 +2793,7 @@ export async function POST(request: Request) {
       let calendarWriteExecuted = false;
       let calendarFindSucceeded = false;
       let calendarWriteVerificationFailed = false;
+      let calendarWriteOperation: "create" | "update" | "delete" | null = null;
       let toolCallsExecuted = 0;
       let lastToolErrorMessage: string | null = null;
 
@@ -2561,6 +3028,7 @@ export async function POST(request: Request) {
               const op = typeof args.operation === "string" ? args.operation : "";
               if (op === "create" || op === "update" || op === "delete") {
                 calendarWriteExecuted = true;
+                calendarWriteOperation = op;
               }
               if (op === "find" && isRecord(result) && result.found === true) {
                 calendarFindSucceeded = true;
@@ -2600,13 +3068,21 @@ export async function POST(request: Request) {
       }
       if (!replyText && toolCallsExecuted > 0) {
         try {
+          const writeVerbInstruction =
+            calendarWriteOperation === "create"
+              ? "If a calendar create succeeded, use the verb 'added' in your confirmation sentence."
+              : calendarWriteOperation === "update"
+                ? "If a calendar update succeeded, use the verb 'updated' in your confirmation sentence."
+                : calendarWriteOperation === "delete"
+                  ? "If a calendar delete succeeded, use the verb 'removed' in your confirmation sentence."
+                  : "";
           const finalReply = await generateModelReply({
             messages: [
               ...modelMessages,
               {
                 role: "system",
                 content:
-                  "Tool execution has finished. Provide a concise final user-facing status based strictly on tool results. If any tool returned an error, state that clearly and do not claim success.",
+                  `Tool execution has finished. Provide a concise final user-facing status based strictly on tool results. If any tool returned an error, state that clearly and do not claim success. ${writeVerbInstruction}`.trim(),
               },
             ],
             tools: [],
@@ -2673,7 +3149,9 @@ export async function POST(request: Request) {
             content:
               kind === "meta"
                 ? "Respond naturally to the user's feedback about your behavior. Acknowledge briefly, correct course, and ask a neutral 'How can I help now?' follow-up. Do NOT offer suggestions, plans, vibes, or time assumptions."
-                : shouldAskFeedback
+                : shouldForcePureLightReply
+                  ? "This is a pure greeting/small-talk turn. Keep it warm and concise in 1-2 short sentences. Do NOT offer plans, options, recommendations, or follow-up planning questions."
+                  : shouldAskFeedback
                   ? "This is a casual conversation turn. Keep it warm, concise, and non-assumptive. Optionally include one brief in-session follow-up like 'how did your last plan go?' to improve future recommendations. Do NOT suggest plans unless explicitly asked. Never ask vibe/timeframe planning questions on casual turns."
                   : "This is a casual conversation turn. Keep it warm, concise, and non-assumptive. Do NOT suggest plans unless explicitly asked. Never ask vibe/timeframe planning questions on casual turns.",
           },

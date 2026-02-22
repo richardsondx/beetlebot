@@ -34,6 +34,7 @@
 
 ## Weather
 - `GET /api/weather/context`
+  - Returns current context plus timeline fields (`hourly`, `daily`, `highRiskWindows`) for same-day and week-ahead planning.
 
 ## Approvals
 - `GET /api/approvals`

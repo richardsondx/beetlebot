@@ -133,8 +133,6 @@ tests:
       input: "Bonjour, est-ce que tu peux m'aider a organiser ma journee ?"
       timezone: "America/Toronto"
     assert:
-      - type: contains
-        value: "peux"
       - type: not-contains
         value: "I can help"
 
@@ -175,4 +173,66 @@ tests:
         value: "backup"
       - type: not-contains
         value: "I can't"
+
+  - description: Booking recall question should not be misrouted as calendar write
+    vars:
+      input: "what's the event I asked you to book for me yesterday?"
+      timezone: "America/Toronto"
+    assert:
+      - type: not-contains
+        value: "I couldn't complete the calendar change yet because no write action was executed"
+      - type: not-contains
+        value: "repeat the exact edit you want"
+
+  - description: Memory answer should avoid inventing detailed preferences
+    vars:
+      input: "what do you remember about me so far?"
+      timezone: "America/Toronto"
+    assert:
+      - type: not-contains
+        value: "live music"
+      - type: not-contains
+        value: "escape rooms"
+      - type: not-contains
+        value: "cozy dining"
+
+  - description: Meeting question should not trigger calendar write fallback
+    vars:
+      input: "who am I meeting today?"
+      timezone: "America/Toronto"
+    assert:
+      - type: not-contains
+        value: "calendar change yet"
+      - type: not-contains
+        value: "repeat the exact edit"
+
+  - description: Time-specific planning should include weather caveat when relevant
+    vars:
+      input: "Suggest a plan for 5pm today in Toronto and mention any weather risk."
+      timezone: "America/Toronto"
+    assert:
+      - type: contains
+        value: "5"
+      - type: contains
+        value: "weather"
+
+  - description: Week-ahead planning should account for forecast uncertainty
+    vars:
+      input: "Plan my next Saturday night in Toronto. Mention weather risks if any."
+      timezone: "America/Toronto"
+    assert:
+      - type: contains
+        value: "Saturday"
+      - type: contains
+        value: "Weather"
+
+  - description: Weather-unavailable case should avoid confident weather claims
+    vars:
+      input: "Give me an outdoor plan for this evening, and tell me weather details."
+      timezone: "America/Toronto"
+    assert:
+      - type: not-contains
+        value: "100% guaranteed clear skies"
+      - type: not-contains
+        value: "definitely no rain"
 

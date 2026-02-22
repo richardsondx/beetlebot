@@ -584,6 +584,22 @@ describe("chat orchestration", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    needsCalendarAnchor: true,
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
             id: "resp_anchor_plan_1",
             model: "openai/gpt-5-nano",
             choices: [{ message: { content: "Great, I checked your calendar anchor and here are some options before it." } }],
@@ -727,6 +743,22 @@ describe("chat orchestration", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    needsCalendarAnchor: true,
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
             id: "resp_anchor_plan_2",
             model: "openai/gpt-5-nano",
             choices: [{ message: { content: "Perfect — I checked your calendar and here are options you can do before your event." } }],
@@ -825,6 +857,38 @@ describe("chat orchestration", () => {
                   content: JSON.stringify({
                     shouldProactiveCalendarCheck: true,
                     isUpcomingQuery: true,
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    isCalendarWriteIntent: false,
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    needsCalendarAnchor: true,
                   }),
                 },
               },
@@ -960,6 +1024,22 @@ describe("chat orchestration", () => {
                     preferredName: null,
                     city: null,
                     homeArea: null,
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    needsCalendarAnchor: true,
                   }),
                 },
               },
@@ -1867,7 +1947,7 @@ describe("chat orchestration", () => {
     expect(payload.data?.model).toBe("tool/google_calendar_events");
     expect(connSpy).toHaveBeenCalled();
     expect(toolSpy).toHaveBeenCalledWith("google_calendar_events");
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
 
     const trace = await db.debugTrace.findFirst({
       where: {
@@ -2166,6 +2246,136 @@ describe("chat orchestration", () => {
     expect(suggestions[1]?.title).toBe("Le Gourmand");
   });
 
+  it("answers booking recall questions without forcing calendar write mode", async () => {
+    const thread = await createConversationThread("booking recall");
+    await addConversationMessage({
+      threadId: thread.id,
+      role: "user",
+      content: "Please book Velvet Lantern dinner for tomorrow at 7pm.",
+    });
+
+    const response = await chatPost(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: thread.id,
+          message: "what's the event I asked you to book for me yesterday?",
+          mode: "auto",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { data?: { reply?: string; model?: string } };
+    expect(payload.data?.model).toBe("policy/memory_recall");
+    expect(payload.data?.reply).toContain("Velvet Lantern");
+    expect(payload.data?.reply?.toLowerCase()).not.toContain("calendar change yet");
+  });
+
+  it("answers who-am-I-meeting-today from calendar attendees", async () => {
+    const now = Date.now();
+    const startIso = new Date(now + 30 * 60 * 1000).toISOString();
+    const endIso = new Date(now + 90 * 60 * 1000).toISOString();
+    await db.integrationConnection.upsert({
+      where: { provider: "google_calendar" },
+      update: {
+        status: "connected",
+        configJson: JSON.stringify({ grantedScopes: ["read"] }),
+      },
+      create: {
+        provider: "google_calendar",
+        kind: "calendar",
+        displayName: "Google Calendar",
+        status: "connected",
+        configJson: JSON.stringify({ grantedScopes: ["read"] }),
+      },
+    });
+
+    const mockedTool: ChatToolDefinition = {
+      name: "google_calendar_events",
+      description: "mock",
+      parameters: {},
+      execute: async () => ({
+        count: 1,
+        events: [
+          {
+            id: "evt_today",
+            summary: "Lunch Sync",
+            start: startIso,
+            end: endIso,
+            attendees: ["alex.morgan@example.com", "sam@example.com"],
+            calendarId: "managed",
+            calendarName: "Managed Calendar",
+          },
+        ],
+      }),
+    };
+    const toolSpy = vi.spyOn(toolRegistry, "getChatToolByName").mockImplementation((name) =>
+      name === "google_calendar_events" ? mockedTool : null,
+    );
+
+    const response = await chatPost(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          message: "who am i meeting today?",
+          mode: "auto",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { data?: { reply?: string; model?: string } };
+    expect(payload.data?.model).toBe("policy/memory_recall");
+    expect(payload.data?.reply?.toLowerCase()).toContain("today you're meeting");
+    expect(payload.data?.reply).toContain("Alex Morgan");
+    expect(payload.data?.reply).toContain("Sam");
+    toolSpy.mockRestore();
+  });
+
+  it("recalls restaurant recommendations from prior assistant option cards", async () => {
+    const thread = await createConversationThread("restaurant recall");
+    await addConversationMessage({
+      threadId: thread.id,
+      role: "assistant",
+      content: "Here is a dinner option.",
+      blocksJson: JSON.stringify([
+        {
+          type: "option_set",
+          items: [
+            {
+              index: 1,
+              card: {
+                type: "image_card",
+                title: "Sora Bistro",
+                subtitle: "Quiet modern Japanese spot",
+                imageUrl: "https://example.com/sora.jpg",
+                actionUrl: "https://example.com/sora",
+                meta: { category: "restaurant" },
+              },
+            },
+          ],
+        },
+      ]),
+    });
+
+    const response = await chatPost(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          threadId: thread.id,
+          message: "remember the restaurant you recommended two days ago? what was the name of that restaurant?",
+          mode: "auto",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { data?: { reply?: string; model?: string } };
+    expect(payload.data?.model).toBe("policy/memory_recall");
+    expect(payload.data?.reply).toContain("Sora Bistro");
+  });
+
   it("updates existing duplicate event when intent is clear", async () => {
     process.env.OPENROUTER_API_KEY = "test-key";
 
@@ -2350,5 +2560,259 @@ describe("chat orchestration", () => {
     expect(String(updateCall?.description)).toContain("Le Gourmand");
 
     toolSpy.mockRestore();
+  });
+
+  it("injects weather brief context for time-specific planning turns", async () => {
+    process.env.OPENROUTER_API_KEY = "test-key";
+    await db.integrationConnection.upsert({
+      where: { provider: "weather" },
+      update: {
+        status: "connected",
+        configJson: JSON.stringify({ defaultLocation: "Toronto", grantedScopes: ["read"] }),
+      },
+      create: {
+        provider: "weather",
+        kind: "context",
+        status: "connected",
+        displayName: "Weather",
+        configJson: JSON.stringify({ defaultLocation: "Toronto", grantedScopes: ["read"] }),
+      },
+    });
+
+    let openRouterCalls = 0;
+    let weatherBriefSeen = false;
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("geocoding-api.open-meteo.com")) {
+        return new Response(
+          JSON.stringify({
+            results: [{ latitude: 43.65, longitude: -79.38, name: "Toronto", country: "Canada" }],
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.includes("api.open-meteo.com")) {
+        return new Response(
+          JSON.stringify({
+            current: { temperature_2m: 7.8, precipitation_probability: 55, weather_code: 3 },
+            hourly: {
+              time: ["2026-02-22T17:00:00Z", "2026-02-22T18:00:00Z"],
+              temperature_2m: [7.4, 7.1],
+              precipitation_probability: [72, 68],
+              weather_code: [61, 61],
+            },
+            daily: {
+              time: ["2026-02-22", "2026-02-23", "2026-02-24", "2026-02-25", "2026-02-26", "2026-02-27", "2026-02-28"],
+              temperature_2m_max: [8, 7, 6, 5, 7, 8, 9],
+              temperature_2m_min: [2, 1, 0, -1, 1, 2, 3],
+              precipitation_probability_max: [70, 55, 40, 30, 35, 42, 65],
+              weather_code: [61, 3, 3, 3, 3, 3, 61],
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.includes("openrouter.ai")) {
+        openRouterCalls += 1;
+        const body = JSON.parse(String(init?.body ?? "{}")) as { messages?: Array<{ content?: string }> };
+        const messageContents = (body.messages ?? []).map((m) => (typeof m.content === "string" ? m.content : ""));
+        weatherBriefSeen = weatherBriefSeen || messageContents.some((content) => content.includes("WEATHER BRIEF:"));
+        if (openRouterCalls === 1) {
+          return new Response(
+            JSON.stringify({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      isActionCommand: false,
+                      isCalendarWrite: false,
+                      isCalendarQuery: false,
+                      shouldProactiveCalendarCheck: false,
+                      referencesPriorSuggestions: false,
+                      isTravelQuery: false,
+                      isUpcomingQuery: false,
+                      isResearchRequest: false,
+                      isDiscoveryQuery: true,
+                      isGreeting: false,
+                      isSmallTalk: false,
+                      isCapabilityQuery: false,
+                      isLocationInfoQuery: false,
+                      isExplicitSuggestionRequest: true,
+                      wantsBestEffortNow: false,
+                      isMetaConversationQuery: false,
+                      isProfileCaptureTurn: false,
+                      isProximityPreferenceQuery: false,
+                      capabilityTopic: "general",
+                      suggestedMode: "explore",
+                      extractedPreferredName: null,
+                      extractedCity: "Toronto",
+                      extractedHomeArea: null,
+                      preferenceFeedback: null,
+                      autopilotOperation: "none",
+                      autopilotTargetName: null,
+                      autopilotCreateFields: null,
+                      autopilotOperationConfidence: 0,
+                    }),
+                  },
+                },
+              ],
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            id: "resp_weather_1",
+            model: "openai/gpt-5-nano",
+            choices: [{ message: { content: "At 5 PM rain looks likely, so I suggest an indoor-first option." } }],
+          }),
+          { status: 200 },
+        );
+      }
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await chatPost(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          message: "Plan me something for 5pm today in Toronto.",
+          mode: "auto",
+          timezone: "America/Toronto",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(weatherBriefSeen).toBe(true);
+  });
+
+  it("injects week-ahead weather signal for future planning requests", async () => {
+    process.env.OPENROUTER_API_KEY = "test-key";
+    await db.integrationConnection.upsert({
+      where: { provider: "weather" },
+      update: {
+        status: "connected",
+        configJson: JSON.stringify({ defaultLocation: "Toronto", grantedScopes: ["read"] }),
+      },
+      create: {
+        provider: "weather",
+        kind: "context",
+        status: "connected",
+        displayName: "Weather",
+        configJson: JSON.stringify({ defaultLocation: "Toronto", grantedScopes: ["read"] }),
+      },
+    });
+
+    let openRouterCalls = 0;
+    let capturedWeatherBrief = "";
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("geocoding-api.open-meteo.com")) {
+        return new Response(
+          JSON.stringify({
+            results: [{ latitude: 43.65, longitude: -79.38, name: "Toronto", country: "Canada" }],
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.includes("api.open-meteo.com")) {
+        return new Response(
+          JSON.stringify({
+            current: { temperature_2m: 6.8, precipitation_probability: 31, weather_code: 3 },
+            hourly: {
+              time: ["2026-02-22T17:00:00Z", "2026-02-22T18:00:00Z"],
+              temperature_2m: [6.2, 6.1],
+              precipitation_probability: [22, 26],
+              weather_code: [3, 3],
+            },
+            daily: {
+              time: ["2026-02-22", "2026-02-23", "2026-02-24", "2026-02-25", "2026-02-26", "2026-02-27", "2026-02-28"],
+              temperature_2m_max: [8, 7, 7, 8, 6, 5, 4],
+              temperature_2m_min: [2, 1, 1, 2, 0, -1, -2],
+              precipitation_probability_max: [25, 30, 22, 35, 40, 52, 74],
+              weather_code: [3, 3, 3, 3, 3, 51, 61],
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.includes("openrouter.ai")) {
+        openRouterCalls += 1;
+        const body = JSON.parse(String(init?.body ?? "{}")) as { messages?: Array<{ content?: string }> };
+        const weatherMessage = (body.messages ?? [])
+          .map((m) => (typeof m.content === "string" ? m.content : ""))
+          .find((content) => content.includes("WEATHER BRIEF:"));
+        if (weatherMessage) capturedWeatherBrief = weatherMessage;
+        if (openRouterCalls === 1) {
+          return new Response(
+            JSON.stringify({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      isActionCommand: false,
+                      isCalendarWrite: false,
+                      isCalendarQuery: false,
+                      shouldProactiveCalendarCheck: false,
+                      referencesPriorSuggestions: false,
+                      isTravelQuery: false,
+                      isUpcomingQuery: false,
+                      isResearchRequest: false,
+                      isDiscoveryQuery: true,
+                      isGreeting: false,
+                      isSmallTalk: false,
+                      isCapabilityQuery: false,
+                      isLocationInfoQuery: false,
+                      isExplicitSuggestionRequest: true,
+                      wantsBestEffortNow: false,
+                      isMetaConversationQuery: false,
+                      isProfileCaptureTurn: false,
+                      isProximityPreferenceQuery: false,
+                      capabilityTopic: "general",
+                      suggestedMode: "travel",
+                      extractedPreferredName: null,
+                      extractedCity: "Toronto",
+                      extractedHomeArea: null,
+                      preferenceFeedback: null,
+                      autopilotOperation: "none",
+                      autopilotTargetName: null,
+                      autopilotCreateFields: null,
+                      autopilotOperationConfidence: 0,
+                    }),
+                  },
+                },
+              ],
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            id: "resp_weather_2",
+            model: "openai/gpt-5-nano",
+            choices: [{ message: { content: "Next week looks mixed, so keep an indoor backup for Saturday." } }],
+          }),
+          { status: 200 },
+        );
+      }
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await chatPost(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          message: "Plan something fun for next Saturday night in Toronto.",
+          mode: "auto",
+          timezone: "America/Toronto",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(capturedWeatherBrief).toContain("Week-ahead signal");
   });
 });

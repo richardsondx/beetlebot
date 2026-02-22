@@ -25,6 +25,7 @@ export type CalendarEventSummary = {
   htmlLink?: string;
   start: string;
   end: string;
+  attendees?: string[];
 };
 
 export type CalendarAvailability = {
@@ -471,6 +472,11 @@ function normalizeGoogleEvent(event: Record<string, unknown>): CalendarEventSumm
   const end =
     (typeof endObj?.dateTime === "string" ? endObj.dateTime : null) ||
     (typeof endObj?.date === "string" ? endObj.date : null);
+  const attendeeEmails = Array.isArray(event.attendees)
+    ? event.attendees
+        .map((entry) => (entry && typeof entry === "object" ? (entry as Record<string, unknown>).email : null))
+        .filter((email): email is string => typeof email === "string" && email.trim().length > 0)
+    : [];
 
   if (!id || !start || !end) return null;
 
@@ -483,6 +489,7 @@ function normalizeGoogleEvent(event: Record<string, unknown>): CalendarEventSumm
     htmlLink: typeof event.htmlLink === "string" ? event.htmlLink : undefined,
     start,
     end,
+    attendees: attendeeEmails.length ? attendeeEmails : undefined,
   };
 }
 

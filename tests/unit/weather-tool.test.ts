@@ -9,6 +9,34 @@ vi.mock("../../lib/weather/service", () => ({
     recommendation: "Outdoor plans look reasonable with a light backup option.",
     provider: "open_meteo",
     connected: true,
+    generatedAt: "2026-02-22T12:00:00.000Z",
+    isFallback: false,
+    hourly: [
+      {
+        time: "2026-02-22T17:00:00.000Z",
+        tempC: 8.1,
+        rainProbability: 0.72,
+        weatherCode: 61,
+        summary: "Rain likely",
+      },
+    ],
+    daily: [
+      {
+        date: "2026-03-01",
+        tempMaxC: 7.5,
+        tempMinC: 1.1,
+        rainProbabilityMax: 0.64,
+        weatherCode: 61,
+        summary: "Rain likely",
+      },
+    ],
+    highRiskWindows: [
+      {
+        start: "2026-02-22T17:00:00.000Z",
+        end: "2026-02-22T19:00:00.000Z",
+        peakRainProbability: 0.74,
+      },
+    ],
   })),
 }));
 vi.mock("../../lib/integrations/scope-guard", () => ({
@@ -31,6 +59,34 @@ describe("weatherContextTool", () => {
       recommendation: "Outdoor plans look reasonable with a light backup option.",
       provider: "open_meteo",
       connected: true,
+      generatedAt: "2026-02-22T12:00:00.000Z",
+      isFallback: false,
+      hourly: [
+        {
+          time: "2026-02-22T17:00:00.000Z",
+          tempC: 8.1,
+          rainProbability: 0.72,
+          weatherCode: 61,
+          summary: "Rain likely",
+        },
+      ],
+      daily: [
+        {
+          date: "2026-03-01",
+          tempMaxC: 7.5,
+          tempMinC: 1.1,
+          rainProbabilityMax: 0.64,
+          weatherCode: 61,
+          summary: "Rain likely",
+        },
+      ],
+      highRiskWindows: [
+        {
+          start: "2026-02-22T17:00:00.000Z",
+          end: "2026-02-22T19:00:00.000Z",
+          peakRainProbability: 0.74,
+        },
+      ],
     });
   });
 });

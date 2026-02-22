@@ -7,7 +7,7 @@ export const weatherContextTool: ChatToolDefinition = {
   integration: "weather",
   operationScopes: { forecast: "read" },
   description:
-    "Get current weather context for a location. Use this before planning outdoor activities or travel windows.",
+    "Get weather context for a location, including current conditions plus hourly and weekly forecast signals for planning.",
   parameters: {
     type: "object",
     properties: {

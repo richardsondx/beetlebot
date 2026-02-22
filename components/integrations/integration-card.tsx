@@ -48,6 +48,45 @@ function redactUrl(value: string) {
   }
 }
 
+function EyeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      aria-hidden
+      className={className}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z"
+      />
+      <circle cx="12" cy="12" r="3.2" />
+    </svg>
+  );
+}
+
+function EyeOffIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      aria-hidden
+      className={className}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 4.5 21 19.5M9.6 6.16A9.66 9.66 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a18.67 18.67 0 0 1-3.16 3.84M14.8 14.33A3.2 3.2 0 0 1 9.67 9.2M6.14 11.01A18.27 18.27 0 0 0 2.5 12s3.5 6.5 9.5 6.5a9.5 9.5 0 0 0 4.26-.98"
+      />
+    </svg>
+  );
+}
+
 async function api<T>(
   path: string,
   method: "GET" | "POST" | "PATCH",
@@ -84,16 +123,26 @@ function CopyableField({
         {label}
       </label>
       <div className="flex items-center gap-2">
-        <code className="flex-1 truncate rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
-          {displayValue}
-        </code>
-        <button
-          type="button"
-          onClick={() => setRevealed((prev) => !prev)}
-          className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300 transition-colors hover:bg-white/10"
-        >
-          {revealed ? "Hide" : "Show"}
-        </button>
+        <div className="relative flex-1">
+          <input
+            readOnly
+            value={displayValue}
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 pr-10 font-mono text-xs text-slate-200 focus:border-teal-400/50 focus:outline-none focus:ring-1 focus:ring-teal-400/30"
+          />
+          <button
+            type="button"
+            onClick={() => setRevealed((prev) => !prev)}
+            className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-200"
+            aria-label={revealed ? "Hide URL" : "Show URL"}
+            title={revealed ? "Hide URL" : "Show URL"}
+          >
+            {revealed ? (
+              <EyeOffIcon className="h-4 w-4" />
+            ) : (
+              <EyeIcon className="h-4 w-4" />
+            )}
+          </button>
+        </div>
         <button
           type="button"
           onClick={() => {
@@ -347,10 +396,12 @@ function WhatsAppSetup({
   onSubmit,
   loading,
   webhookUrl,
+  verifyToken,
 }: {
   onSubmit: (body: Record<string, unknown>) => void;
   loading: boolean;
   webhookUrl?: string;
+  verifyToken?: string;
 }) {
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -380,6 +431,18 @@ function WhatsAppSetup({
           value={webhookUrl}
           defaultRevealed={false}
         />
+      )}
+      {verifyToken ? (
+        <CopyableField
+          label="Verify Token — paste this exact value in Meta webhook setup"
+          value={verifyToken}
+          defaultRevealed={true}
+        />
+      ) : (
+        <p className="rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs text-amber-200">
+          Set <code className="font-mono">WHATSAPP_WEBHOOK_VERIFY_TOKEN</code> in your
+          environment, then restart beetlebot before verifying the webhook in Meta.
+        </p>
       )}
 
       <div className="space-y-3">
@@ -707,9 +770,11 @@ function ScopeToggles({
 export function IntegrationCard({
   integration,
   publicBaseUrl,
+  whatsAppVerifyToken,
 }: {
   integration: IntegrationConnection;
   publicBaseUrl?: string;
+  whatsAppVerifyToken?: string;
 }) {
   const [state, setState] = useState(integration);
   const [loading, setLoading] = useState(false);
@@ -727,6 +792,18 @@ export function IntegrationCard({
   const whatsAppWebhookUrl = normalizedPublicBaseUrl
     ? `${normalizedPublicBaseUrl}/api/webhooks/whatsapp`
     : undefined;
+  const connectedWebhookField =
+    state.provider === "telegram" && telegramWebhookUrl
+      ? {
+          label: "Webhook URL — add this in your Telegram bot webhook setup",
+          value: telegramWebhookUrl,
+        }
+      : state.provider === "whatsapp" && whatsAppWebhookUrl
+        ? {
+            label: "Webhook URL — add this in your WhatsApp webhook configuration",
+            value: whatsAppWebhookUrl,
+          }
+        : null;
 
   async function handleConnect(body: Record<string, unknown>) {
     setLoading(true);
@@ -800,7 +877,13 @@ export function IntegrationCard({
       case "telegram":
         return <TelegramSetup {...props} webhookUrl={telegramWebhookUrl} />;
       case "whatsapp":
-        return <WhatsAppSetup {...props} webhookUrl={whatsAppWebhookUrl} />;
+        return (
+          <WhatsAppSetup
+            {...props}
+            webhookUrl={whatsAppWebhookUrl}
+            verifyToken={whatsAppVerifyToken}
+          />
+        );
       case "weather":
         return <WeatherSetup {...props} config={state.config} />;
       case "opentable":
@@ -834,6 +917,20 @@ export function IntegrationCard({
       {/* Connected view */}
       {hasSession && !showSetup && (
         <div className="mt-4 space-y-3">
+          {connectedWebhookField && (
+            <CopyableField
+              label={connectedWebhookField.label}
+              value={connectedWebhookField.value}
+              defaultRevealed={true}
+            />
+          )}
+          {state.provider === "whatsapp" && whatsAppVerifyToken && (
+            <CopyableField
+              label="Verify Token — paste this exact value in Meta webhook setup"
+              value={whatsAppVerifyToken}
+              defaultRevealed={true}
+            />
+          )}
           <div className="space-y-1 rounded-lg border border-white/5 bg-white/[0.02] p-3 text-xs text-slate-300">
             <p>
               <span className="text-slate-500">Account:</span>{" "}

@@ -18,6 +18,7 @@ export default async function SettingsPage() {
   ]);
   const publicBaseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim()
     || process.env.BEETLEBOT_BASE_URL?.trim();
+  const whatsAppVerifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim();
 
   return (
     <div className="h-full overflow-y-auto">
@@ -77,6 +78,7 @@ export default async function SettingsPage() {
               <IntegrationCard
                 key={integration.provider}
                 publicBaseUrl={publicBaseUrl}
+                whatsAppVerifyToken={whatsAppVerifyToken}
                 integration={integration as Parameters<typeof IntegrationCard>[0]["integration"]}
               />
             ))}

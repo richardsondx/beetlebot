@@ -127,7 +127,7 @@ export default async function AutopilotDetailPage({ params }: PageProps) {
             </div>
           ) : (
             <div className="space-y-2">
-              {upcoming.map((hold) => {
+              {upcoming.map((hold: SoftHoldRow) => {
                 const hs = holdStatusConfig[hold.status] ?? holdStatusConfig.held;
                 const sameDay = fmtDateShort(hold.startAt) === fmtDateShort(hold.endAt);
                 return (
@@ -173,7 +173,7 @@ export default async function AutopilotDetailPage({ params }: PageProps) {
           <section className="space-y-3">
             <h2 className="text-sm font-semibold text-slate-500">Past holds</h2>
             <div className="space-y-2 opacity-60">
-              {past.map((hold) => {
+              {past.map((hold: SoftHoldRow) => {
                 const hs = holdStatusConfig[hold.status] ?? holdStatusConfig.released;
                 return (
                   <div

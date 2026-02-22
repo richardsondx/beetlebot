@@ -34,6 +34,20 @@ const STATUS_STYLES: Record<string, string> = {
   error: "bg-rose-300/20 text-rose-100",
 };
 
+function normalizeBaseUrl(value?: string) {
+  return value?.trim().replace(/\/+$/, "");
+}
+
+function redactUrl(value: string) {
+  try {
+    const url = new URL(value);
+    const maskedHost = "•".repeat(url.host.length);
+    return `${url.protocol}//${maskedHost}${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "•".repeat(Math.max(12, Math.min(value.length, 64)));
+  }
+}
+
 async function api<T>(
   path: string,
   method: "GET" | "POST" | "PATCH",
@@ -51,8 +65,19 @@ async function api<T>(
 
 // ── Reusable form primitives ────────────────────────────────────────────
 
-function CopyableField({ label, value }: { label: string; value: string }) {
+function CopyableField({
+  label,
+  value,
+  defaultRevealed = false,
+}: {
+  label: string;
+  value: string;
+  defaultRevealed?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
+  const [revealed, setRevealed] = useState(defaultRevealed);
+  const displayValue = revealed ? value : redactUrl(value);
+
   return (
     <div>
       <label className="mb-1 block text-xs font-medium text-slate-400">
@@ -60,8 +85,15 @@ function CopyableField({ label, value }: { label: string; value: string }) {
       </label>
       <div className="flex items-center gap-2">
         <code className="flex-1 truncate rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
-          {value}
+          {displayValue}
         </code>
+        <button
+          type="button"
+          onClick={() => setRevealed((prev) => !prev)}
+          className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300 transition-colors hover:bg-white/10"
+        >
+          {revealed ? "Hide" : "Show"}
+        </button>
         <button
           type="button"
           onClick={() => {
@@ -159,14 +191,15 @@ function GoogleCalendarSetup({
   onSubmit,
   loading,
   config,
+  publicBaseUrl,
 }: {
   onSubmit: (body: Record<string, unknown>) => void;
   loading: boolean;
   config?: Record<string, string>;
+  publicBaseUrl?: string;
 }) {
   const hasStoredCreds = Boolean(config?.clientId && config?.clientSecret);
-
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const appUrl = normalizeBaseUrl(publicBaseUrl);
   const redirectUri =
     config?.redirectUri ??
     (appUrl
@@ -218,6 +251,7 @@ function GoogleCalendarSetup({
         <CopyableField
           label="Redirect URI — add this to your Google OAuth client"
           value={redirectUri}
+          defaultRevealed={false}
         />
       )}
 
@@ -258,9 +292,11 @@ function GoogleCalendarSetup({
 function TelegramSetup({
   onSubmit,
   loading,
+  webhookUrl,
 }: {
   onSubmit: (body: Record<string, unknown>) => void;
   loading: boolean;
+  webhookUrl?: string;
 }) {
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -280,6 +316,14 @@ function TelegramSetup({
         link="https://t.me/BotFather"
         linkLabel="Open BotFather"
       />
+
+      {webhookUrl && (
+        <CopyableField
+          label="Webhook URL — add this in your Telegram bot webhook setup"
+          value={webhookUrl}
+          defaultRevealed={false}
+        />
+      )}
 
       <Field
         label="Bot Token"
@@ -302,9 +346,11 @@ function TelegramSetup({
 function WhatsAppSetup({
   onSubmit,
   loading,
+  webhookUrl,
 }: {
   onSubmit: (body: Record<string, unknown>) => void;
   loading: boolean;
+  webhookUrl?: string;
 }) {
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -327,6 +373,14 @@ function WhatsAppSetup({
         link="https://developers.facebook.com/apps/"
         linkLabel="Open Meta for Developers"
       />
+
+      {webhookUrl && (
+        <CopyableField
+          label="Webhook URL — add this in your WhatsApp webhook configuration"
+          value={webhookUrl}
+          defaultRevealed={false}
+        />
+      )}
 
       <div className="space-y-3">
         <Field
@@ -652,8 +706,10 @@ function ScopeToggles({
 
 export function IntegrationCard({
   integration,
+  publicBaseUrl,
 }: {
   integration: IntegrationConnection;
+  publicBaseUrl?: string;
 }) {
   const [state, setState] = useState(integration);
   const [loading, setLoading] = useState(false);
@@ -664,6 +720,13 @@ export function IntegrationCard({
 
   const isConnected = state.status === "connected";
   const hasSession = isConnected || state.status === "error";
+  const normalizedPublicBaseUrl = normalizeBaseUrl(publicBaseUrl);
+  const telegramWebhookUrl = normalizedPublicBaseUrl
+    ? `${normalizedPublicBaseUrl}/api/webhooks/telegram`
+    : undefined;
+  const whatsAppWebhookUrl = normalizedPublicBaseUrl
+    ? `${normalizedPublicBaseUrl}/api/webhooks/whatsapp`
+    : undefined;
 
   async function handleConnect(body: Record<string, unknown>) {
     setLoading(true);
@@ -727,11 +790,17 @@ export function IntegrationCard({
     const props = { onSubmit: handleConnect, loading };
     switch (state.provider) {
       case "google_calendar":
-        return <GoogleCalendarSetup {...props} config={state.config} />;
+        return (
+          <GoogleCalendarSetup
+            {...props}
+            config={state.config}
+            publicBaseUrl={normalizedPublicBaseUrl}
+          />
+        );
       case "telegram":
-        return <TelegramSetup {...props} />;
+        return <TelegramSetup {...props} webhookUrl={telegramWebhookUrl} />;
       case "whatsapp":
-        return <WhatsAppSetup {...props} />;
+        return <WhatsAppSetup {...props} webhookUrl={whatsAppWebhookUrl} />;
       case "weather":
         return <WeatherSetup {...props} config={state.config} />;
       case "opentable":

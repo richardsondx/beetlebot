@@ -1,6 +1,5 @@
 import { IntegrationCard } from "@/components/integrations/integration-card";
 import { OauthResultBanner } from "@/components/integrations/oauth-result-banner";
-import { PublicCallbackUrlsCard } from "@/components/integrations/public-callback-urls-card";
 import { SafetySettingsCard } from "@/components/safety-settings";
 import { listIntegrationConnections } from "@/lib/repositories/integrations";
 import { getSafetySettings } from "@/lib/repositories/settings";
@@ -73,12 +72,11 @@ export default async function SettingsPage() {
             <OauthResultBanner />
           </Suspense>
 
-          <PublicCallbackUrlsCard baseUrl={publicBaseUrl} />
-
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {integrations.map((integration) => (
               <IntegrationCard
                 key={integration.provider}
+                publicBaseUrl={publicBaseUrl}
                 integration={integration as Parameters<typeof IntegrationCard>[0]["integration"]}
               />
             ))}

@@ -354,6 +354,168 @@ export async function ensureSeedData() {
       ]),
       installed: false,
     },
+    {
+      slug: "flights-compare",
+      name: "Flights Compare",
+      city: "Any",
+      modes: JSON.stringify(["explore", "relax"]),
+      style: "predictable",
+      budgetRange: "$150-$900",
+      needs: JSON.stringify(["calendar:read", "weather:read", "maps:read"]),
+      description:
+        "Compares flight options side by side by time, stops, and total travel time. Typical range, not a live price.",
+      instructions:
+        "Ask for origin, destination, dates, and party size. Show at least 2 flight options side by side. List departure time, arrival time, stops, and total travel time for each option. State the tradeoff in plain words, such as cheaper but longer, or faster but earlier. Do not book a flight. Do not state a price as live. Ask the user to pick an option before any next step. If weather may delay travel, say so and suggest an earlier departure. Keep a backup option in the plan.",
+      tags: JSON.stringify(["flights", "compare", "travel"]),
+      dataSources: JSON.stringify([
+        {
+          url: "https://www.google.com/travel/flights",
+          label: "Google Flights",
+          hint: "Flight search and comparison",
+        },
+        {
+          url: "https://www.skyscanner.ca/",
+          label: "Skyscanner",
+          hint: "Flight search and comparison",
+        },
+      ]),
+      installed: false,
+    },
+    {
+      slug: "hotels-compare",
+      name: "Hotels Compare",
+      city: "Any",
+      modes: JSON.stringify(["explore", "relax", "family"]),
+      style: "curated",
+      budgetRange: "$90-$350",
+      needs: JSON.stringify(["calendar:read", "weather:read", "maps:read"]),
+      description:
+        "Compares hotel options side by side by location, room type, and stay dates. Typical range, not a live price.",
+      instructions:
+        "Ask for city, dates, party size, and must haves such as free cancellation or breakfast. Show at least 2 hotel options side by side. List location, room type, and stay dates for each option. State the tradeoff in plain words, such as closer to the centre but smaller room, or quieter but farther out. Do not book a hotel. Do not state a price as live. Ask the user to pick an option before any next step. If the trip spans bad weather, favour a hotel near indoor options. Keep a backup option in the plan.",
+      tags: JSON.stringify(["hotels", "compare", "travel"]),
+      dataSources: JSON.stringify([
+        {
+          url: "https://www.booking.com/",
+          label: "Booking.com",
+          hint: "Hotel search and comparison",
+        },
+        {
+          url: "https://www.google.com/travel/hotels",
+          label: "Google Hotels",
+          hint: "Hotel search and comparison",
+        },
+      ]),
+      installed: false,
+    },
+    {
+      slug: "weekend-escape",
+      name: "Weekend Escape",
+      city: "Toronto + Nearby",
+      modes: JSON.stringify(["explore", "relax", "social", "family"]),
+      style: "predictable",
+      budgetRange: "$120-$450",
+      needs: JSON.stringify(["calendar:read", "weather:read", "maps:read"]),
+      description:
+        "Plans a short weekend trip near Toronto with a weather fallback and drive buffers. Typical range, not a live price.",
+      instructions:
+        "Ask for the weekend dates, who is going, and how far the group will drive. Build a plan with a main outdoor option and an indoor backup. Check the weather before the trip and swap to the backup if rain is forecast. Add drive buffers of at least 30 minutes between stops. List one place to eat and one place to rest. Do not book travel or a hotel. Ask the user to approve the plan before any hold is made. Keep the plan to one weekend only.",
+      tags: JSON.stringify(["weekend", "escape", "toronto", "short-trip"]),
+      dataSources: JSON.stringify([
+        {
+          url: "https://www.destinationtoronto.com/",
+          label: "Destination Toronto",
+          hint: "Toronto and nearby trip ideas",
+        },
+        {
+          url: "https://www.ontarioparks.ca/park-locator",
+          label: "Ontario Parks Park Locator",
+          hint: "Parks near Toronto for a weekend trip",
+        },
+      ]),
+      installed: false,
+    },
+    {
+      slug: "family-trip",
+      name: "Family Trip",
+      city: "Canada",
+      modes: JSON.stringify(["family", "explore", "relax"]),
+      style: "predictable",
+      budgetRange: "$300-$1200",
+      needs: JSON.stringify(["calendar:read", "weather:read", "maps:read"]),
+      description:
+        "Plans a family trip with kid friendly stops, rest breaks, and a backup for bad weather. Typical range, not a live price.",
+      instructions:
+        "Ask for dates, the ages of the children, and how long the family will travel each day. Plan no more than 2 main activities per day. Add rest breaks and meal stops. Check the weather and keep an indoor backup for each outdoor activity. List travel time between stops in plain words. Do not book travel or a hotel. Ask a parent to approve the plan before any hold is made. Keep costs in the typical range and say the range is not a live price.",
+      tags: JSON.stringify(["family", "kids", "trip", "canada"]),
+      dataSources: JSON.stringify([
+        {
+          url: "https://parks.canada.ca/voyage-travel/hebergement-accommodation",
+          label: "Parks Canada Accommodation and Camping",
+          hint: "Family stays in national parks",
+        },
+        {
+          url: "https://www.destinationcanada.com/en",
+          label: "Destination Canada",
+          hint: "Family trip ideas across Canada",
+        },
+      ]),
+      installed: false,
+    },
+    {
+      slug: "solo-city-break",
+      name: "Solo City Break",
+      city: "Toronto",
+      modes: JSON.stringify(["explore", "relax", "social"]),
+      style: "curated",
+      budgetRange: "$100-$400",
+      needs: JSON.stringify(["calendar:read", "weather:read", "maps:read"]),
+      description:
+        "Plans a solo city break in Toronto with walkable stops and a quiet backup plan. Typical range, not a live price.",
+      instructions:
+        "Ask for the dates, interests, and daily budget band. Build a plan with walkable stops in one area per day. Include one meal stop, one rest stop, and one evening option. Check the weather and keep an indoor backup for outdoor stops. Keep travel time between stops under 30 minutes where possible. Do not book travel or a hotel. Ask the user to approve the plan before any hold is made. Keep the plan to one city only.",
+      tags: JSON.stringify(["solo", "city-break", "toronto"]),
+      dataSources: JSON.stringify([
+        {
+          url: "https://www.destinationtoronto.com/",
+          label: "Destination Toronto",
+          hint: "Toronto city break ideas",
+        },
+        {
+          url: "https://www.toronto.ca/explore-enjoy/festivals-events/festivals-events-calendar/",
+          label: "City of Toronto",
+          hint: "Official city festivals and events calendar",
+        },
+      ]),
+      installed: false,
+    },
+    {
+      slug: "business-trip",
+      name: "Business Trip",
+      city: "Any",
+      modes: JSON.stringify(["explore", "relax"]),
+      style: "predictable",
+      budgetRange: "$200-$800",
+      needs: JSON.stringify(["calendar:read", "weather:read", "maps:read"]),
+      description:
+        "Plans a short business trip around meetings, with travel buffers and a backup for delays. Typical range, not a live price.",
+      instructions:
+        "Ask for meeting dates, meeting times, and the meeting location. Build the plan around the meetings first. Add travel buffers of at least 45 minutes before each meeting. Show a flight or train option and a hotel option near the meeting. Check the weather and flag any delay risk in plain words. Keep one backup travel option in the plan. Do not book travel or a hotel. Ask the user to approve the plan before any hold is made. Keep the plan to the work days only.",
+      tags: JSON.stringify(["business", "work-trip", "travel"]),
+      dataSources: JSON.stringify([
+        {
+          url: "https://www.google.com/travel/flights",
+          label: "Google Flights",
+          hint: "Flight search and comparison",
+        },
+        {
+          url: "https://www.google.com/travel/hotels",
+          label: "Google Hotels",
+          hint: "Hotel search and comparison",
+        },
+      ]),
+      installed: false,
+    },
   ];
 
   const existingPackSlugs = new Set(

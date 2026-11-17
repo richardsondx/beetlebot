@@ -32,10 +32,14 @@ import { FlightCompareView } from "@/components/chat/blocks/flight-compare";
 import { HotelSetView } from "@/components/chat/blocks/hotel-set";
 import { MapStripView } from "@/components/chat/blocks/map-strip";
 import { NearbyRowView } from "@/components/chat/blocks/nearby-row";
+import { ItineraryTimelineView } from "@/components/chat/blocks/itinerary-timeline";
 
 type ChatMode = ModeDefinition;
 
 // ── Suggestion chips (§4.1): a click fills and sends ─────────────────────────
+
+/** Beach compare titles, kept in step with BEACH_COUNTRY in lib/travel/beach-compare.ts. */
+const BEACH_TITLES = new Set(["Bali", "Maldives", "Palawan"]);
 
 const SUGGESTION_CHIPS = [
   "Plan a rainy Saturday in Toronto",
@@ -97,17 +101,27 @@ function ImageCardView({
   index,
   category,
   compare,
+  selected,
   onSelect,
 }: {
   card: ImageCard;
   index?: number;
   category?: string;
   compare?: boolean;
+  selected?: boolean;
   onSelect?: (card: ImageCard) => void;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [activeImage, setActiveImage] = useState(card.imageUrl);
   const hasRealImage = card.imageUrl && !card.imageUrl.includes("placehold.co") && !imgFailed;
+  // Gallery: the hero plus up to 4 extra real photos, at most 5 total.
+  const galleryImages = hasRealImage
+    ? [
+        { imageUrl: card.imageUrl, sourceName: card.sourceName },
+        ...(card.gallery ?? []).filter((g) => g.imageUrl !== card.imageUrl),
+      ].slice(0, 5)
+    : [];
 
   return (
     <div className="group overflow-hidden rounded-2xl border border-[#E7E5E0] bg-white transition-all duration-200 hover:border-[#E7E5E0] hover:shadow-xl hover:shadow-black/10">
@@ -126,6 +140,11 @@ function ImageCardView({
           <div className="absolute right-2.5 top-2.5 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 backdrop-blur-md ring-1 ring-[#E7E5E0]">
             <span className="text-xs">{categoryIcon()}</span>
             <span className="text-[10px] capitalize text-[#6B6862]">{category}</span>
+          </div>
+        )}
+        {selected && (
+          <div className="absolute left-2.5 top-10 z-10 rounded-full bg-[#C8811A] px-2 py-0.5 text-[10px] font-bold text-white">
+            Selected
           </div>
         )}
         {hasRealImage ? (
@@ -155,11 +174,43 @@ function ImageCardView({
         <div className="border-b border-[#E7E5E0]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={card.imageUrl}
+            src={activeImage}
             alt={card.alt ?? card.title}
             className="h-auto w-full object-cover"
             loading="lazy"
           />
+          {galleryImages.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto p-2">
+              {galleryImages.map((g, gi) => (
+                <button
+                  key={`${g.imageUrl}-${gi}`}
+                  type="button"
+                  onClick={() => setActiveImage(g.imageUrl)}
+                  aria-label={`Show photo ${gi + 1} of ${card.title}`}
+                  className={`h-14 w-20 shrink-0 overflow-hidden rounded-lg ring-2 ${
+                    activeImage === g.imageUrl ? "ring-[#C8811A]" : "ring-transparent"
+                  }`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={g.imageUrl}
+                    alt={`${card.title} photo ${gi + 1}`}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="px-3 pb-2 text-[11px] text-[#9A968F]">
+            {galleryImages.length > 1
+              ? `Photo ${Math.max(1, galleryImages.findIndex((g) => g.imageUrl === activeImage) + 1)} of ${galleryImages.length}`
+              : "Photo 1 of 1"}
+            {activeImage !== card.imageUrl ||
+            galleryImages.find((g) => g.imageUrl === activeImage)?.sourceName
+              ? ` · Photo: ${galleryImages.find((g) => g.imageUrl === activeImage)?.sourceName ?? card.sourceName ?? ""}`
+              : ""}
+          </p>
         </div>
       )}
       <div className="p-3.5">
@@ -205,7 +256,7 @@ function ImageCardView({
               Choose this
             </button>
           )}
-          {compare && onSelect && (
+          {compare && onSelect && !selected && (
             <button
               type="button"
               onClick={() => onSelect(card)}
@@ -213,6 +264,11 @@ function ImageCardView({
             >
               Pick {card.title}
             </button>
+          )}
+          {compare && selected && (
+            <span className="w-full rounded-full bg-[#C8811A]/15 px-4 py-2.5 text-center text-sm font-bold text-[#8A5710]">
+              Selected
+            </span>
           )}
           {card.actionUrl && (
             <a
@@ -285,6 +341,11 @@ function OptionSetView({
   const isCompare = optionSet.variant === "compare";
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeDot, setActiveDot] = useState(0);
+  const [selectedTitle, setSelectedTitle] = useState<string | null>(null);
+  const handleCompareSelect = (card: ImageCard) => {
+    setSelectedTitle(card.title);
+    onSelect?.(card);
+  };
   const onCompareScroll = () => {
     const el = scrollRef.current;
     if (!el || optionSet.items.length === 0) return;
@@ -292,6 +353,36 @@ function OptionSetView({
     setActiveDot(Math.max(0, Math.min(optionSet.items.length - 1, idx)));
   };
   if (isCompare) {
+    const picked = selectedTitle
+      ? optionSet.items.find((item) => item.card.title === selectedTitle)
+      : undefined;
+    if (picked) {
+      return (
+        <div className="mt-3">
+          {optionSet.prompt && (
+            <p className="mb-3 text-xs font-medium text-[#6B6862]">{optionSet.prompt}</p>
+          )}
+          <ImageCardView
+            card={picked.card}
+            index={picked.index}
+            category={picked.card.category}
+            compare
+            selected
+            onSelect={handleCompareSelect}
+          />
+          <p className="mt-3 text-xs text-[#6B6862]">
+            Picked {picked.card.title}.{" "}
+            <button
+              type="button"
+              onClick={() => setSelectedTitle(null)}
+              className="font-semibold text-[#8A5710] underline-offset-2 hover:underline"
+            >
+              Change
+            </button>
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="mt-3">
         {optionSet.prompt && (
@@ -314,7 +405,7 @@ function OptionSetView({
                 index={index}
                 category={card.category}
                 compare
-                onSelect={onSelect}
+                onSelect={handleCompareSelect}
               />
             </div>
           ))}
@@ -504,6 +595,8 @@ function RichBlockRenderer({
       return <MapStripView block={block} />;
     case "nearby_row":
       return <NearbyRowView block={block} />;
+    case "itinerary_timeline":
+      return <ItineraryTimelineView block={block} />;
     default:
       return null;
   }
@@ -743,10 +836,37 @@ export function ChatInterface() {
   }
 
   function handleCardSelect(card: ImageCard) {
+    // A beach compare pick carries the choice into the trip plan.
+    // Local set, kept in step with BEACH_COUNTRY in
+    // lib/travel/beach-compare.ts: importing that module here would pull
+    // the server-only photo resolver (node:fs) into the client bundle.
+    if (BEACH_TITLES.has(card.title)) {
+      handleSelectDestination(card.title);
+      return;
+    }
     const msg = card.actionUrl
       ? `I'd like to go with "${card.title}". Here's the link: ${card.actionUrl}`
       : `I'd like to go with "${card.title}".`;
     void submitMessage(msg);
+  }
+
+  function handleSelectDestination(destination: string) {
+    void submitAction(
+      `Picked ${destination}.`,
+      { type: "select_destination", destination },
+      (payload) => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: newId(),
+            role: "assistant",
+            text: payload.reply,
+            blocks: payload.blocks,
+            followUps: payload.followUps,
+          },
+        ]);
+      },
+    );
   }
 
   async function submitAction(

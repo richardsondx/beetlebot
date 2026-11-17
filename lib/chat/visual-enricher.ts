@@ -231,6 +231,28 @@ async function enrichOptionsWithBousier(options: RawOption[]): Promise<ImageCard
         : friendly
       : opt.sourceName;
 
+    // Extra real photos of the same place, from the ranked Bousier
+    // candidates. Hero plus extras cap at 5, the ImageGallery maximum.
+    // A tap on the photo opens the gallery; a card with no extra
+    // candidates keeps the single-photo expand.
+    const gallery = (result?.imageCandidates ?? [])
+      .filter(
+        (c) =>
+          c.imageUrl !== imageUrl &&
+          !c.imageUrl.includes("placehold.co") &&
+          c.imageUrl.startsWith("https://"),
+      )
+      .slice(0, 4)
+      .map((c) => ({
+        imageUrl: c.imageUrl,
+        sourceName:
+          c.sourceName === "wikipedia_summary"
+            ? "Wikipedia"
+            : c.sourceName === "canonical_metadata"
+              ? "Official site"
+              : c.sourceName,
+      }));
+
     const meta: Record<string, string> = { ...(opt.meta ?? {}) };
 
     return {
@@ -244,6 +266,7 @@ async function enrichOptionsWithBousier(options: RawOption[]): Promise<ImageCard
       meta: Object.keys(meta).length > 0 ? meta : undefined,
       actionUrl: opt.actionUrl ?? wikiUrlForDestination(opt.title),
       sourceName,
+      gallery: gallery.length > 0 ? gallery : undefined,
     };
   });
 }

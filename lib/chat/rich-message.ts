@@ -30,6 +30,8 @@ export type ImageCard = {
   sourceName?: string;
   /** True when no price exists yet; the UI shows "Price coming soon" where the price would go. */
   pricePending?: boolean;
+  /** Extra real photos of the same place, at most 5 total with the hero. Shown when the photo is tapped. */
+  gallery?: Array<{ imageUrl: string; sourceName?: string }>;
 };
 
 export type TextBlock = {
@@ -157,6 +159,37 @@ export type NearbyRowBlock = {
   emptyText: string;
 };
 
+// ── Visual itinerary timeline (one card per day, stops vertical) ───────────
+
+export type ItineraryTimelineStop = {
+  /** Pin number, 1-based, matching the map strip. Null when unpinned. */
+  pin: number | null;
+  name: string;
+  /** Suggested start time, for example "09:00". */
+  time: string;
+  category?: string;
+  /** From-hotel distance line, for example "1.2 km from hotel · ~14 min walk". */
+  distanceLine: string | null;
+  mapsUrl: string;
+  /** Real stop photo, null when none resolved; the row then stays compact text. */
+  photoUrl: string | null;
+  photoSourceName: string | null;
+  photoFallback: string;
+};
+
+export type ItineraryTimelineDay = {
+  day: number;
+  /** "Day 2 · Tue" when a start date is known, else "Day 2". */
+  label: string;
+  stops: ItineraryTimelineStop[];
+};
+
+export type ItineraryTimelineBlock = {
+  type: "itinerary_timeline";
+  hotelName: string;
+  days: ItineraryTimelineDay[];
+};
+
 // ── Hotel set block (in-chat Hello Axel prices) ─────────────────────────────
 
 export type HotelPrice = {
@@ -207,7 +240,8 @@ export type RichBlock =
   | FlightCompareBlock
   | HotelSetBlock
   | MapStripBlock
-  | NearbyRowBlock;
+  | NearbyRowBlock
+  | ItineraryTimelineBlock;
 
 // ── Top-level message ──────────────────────────────────────────────────────
 
@@ -307,6 +341,20 @@ export function toPlainText(msg: AssistantMessage): string {
           parts.push(
             `${place.name} (${place.category}${rating}) · ${place.walkText} · ${place.mapsUrl}`,
           );
+        });
+        break;
+      }
+      case "itinerary_timeline": {
+        parts.push(`Itinerary near ${block.hotelName} (times are suggested)`);
+        block.days.forEach((day) => {
+          day.stops.forEach((stop) => {
+            const walk = stop.distanceLine
+              ? (stop.distanceLine.split(" · ").pop() ?? stop.distanceLine)
+              : "location unknown";
+            parts.push(
+              `Day ${day.day}: ${stop.time} ${stop.name} (${walk}) ${stop.mapsUrl}`,
+            );
+          });
         });
         break;
       }
@@ -576,6 +624,64 @@ export function isNearbyRowBlock(raw: unknown): NearbyRowBlock | null {
   };
 }
 
+/** Validate an untrusted itinerary_timeline block, dropping bad fields. */
+export function isItineraryTimelineBlock(raw: unknown): ItineraryTimelineBlock | null {
+  const b = raw as Record<string, unknown>;
+  if (!b || b.type !== "itinerary_timeline") return null;
+  if (typeof b.hotelName !== "string" || !b.hotelName.trim()) return null;
+  if (!Array.isArray(b.days) || b.days.length === 0) return null;
+  const days: ItineraryTimelineDay[] = [];
+  for (const rawDay of b.days.slice(0, 14)) {
+    const d = rawDay as Record<string, unknown>;
+    if (typeof d.day !== "number" || !Array.isArray(d.stops)) continue;
+    const stops: ItineraryTimelineStop[] = [];
+    for (const rawStop of (d.stops as unknown[]).slice(0, 12)) {
+      const s = rawStop as Record<string, unknown>;
+      if (typeof s.name !== "string" || !s.name.trim()) continue;
+      if (typeof s.mapsUrl !== "string" || !s.mapsUrl.startsWith("https://")) continue;
+      if (typeof s.time !== "string" || !s.time.trim()) continue;
+      stops.push({
+        pin:
+          typeof s.pin === "number" && Number.isInteger(s.pin) && s.pin > 0
+            ? s.pin
+            : null,
+        name: s.name.slice(0, 200),
+        time: s.time.slice(0, 8),
+        category:
+          typeof s.category === "string" ? s.category.slice(0, 50) : undefined,
+        distanceLine:
+          typeof s.distanceLine === "string" ? s.distanceLine.slice(0, 80) : null,
+        mapsUrl: s.mapsUrl.slice(0, 2048),
+        photoUrl:
+          typeof s.photoUrl === "string" && s.photoUrl.startsWith("https://")
+            ? s.photoUrl.slice(0, 2048)
+            : null,
+        photoSourceName:
+          typeof s.photoSourceName === "string"
+            ? s.photoSourceName.slice(0, 100)
+            : null,
+        photoFallback:
+          typeof s.photoFallback === "string" ? s.photoFallback.slice(0, 200) : "No photo found",
+      });
+    }
+    if (stops.length === 0) continue;
+    days.push({
+      day: d.day,
+      label:
+        typeof d.label === "string" && d.label.trim()
+          ? d.label.slice(0, 40)
+          : `Day ${d.day}`,
+      stops,
+    });
+  }
+  if (days.length === 0) return null;
+  return {
+    type: "itinerary_timeline",
+    hotelName: b.hotelName.slice(0, 200),
+    days,
+  };
+}
+
 /** Serialize a single ImageCard to readable text with URL at the end. */
 export function cardToText(card: ImageCard): string {
   const lines: string[] = [card.title];
@@ -649,6 +755,13 @@ export function extractOptions(
     if (block.type === "nearby_row") {
       for (const place of block.places) {
         out.push({ index: counter++, title: place.name, url: place.mapsUrl });
+      }
+    }
+    if (block.type === "itinerary_timeline") {
+      for (const day of block.days) {
+        for (const stop of day.stops) {
+          out.push({ index: counter++, title: stop.name, url: stop.mapsUrl });
+        }
       }
     }
   }

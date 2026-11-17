@@ -16,10 +16,15 @@ export const createAutopilotSchema = z.object({
 export const updateAutopilotSchema = createAutopilotSchema.partial();
 
 export const chatActionSchema = z.object({
-  type: z.enum(["select_flight", "select_hotel", "check_hotel_price"]),
+  type: z.enum(["select_flight", "select_hotel", "check_hotel_price", "select_destination"]),
   offerId: z.string().max(200).optional(),
   searchId: z.string().max(200).optional(),
   hotelId: z.string().max(200).optional(),
+  destination: z.string().max(80).optional(),
+  depart: z.string().max(12).optional(),
+  return: z.string().max(12).optional(),
+  budgetCad: z.number().int().positive().max(100000).optional(),
+  travelers: z.number().int().min(1).max(9).optional(),
 });
 
 export const chatSchema = z.object({

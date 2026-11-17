@@ -25,6 +25,7 @@ import type {
 import { resolveImageBatch } from "@/lib/media/bousier";
 import { resolveHotelPhoto } from "@/lib/media/hotel-photo";
 import { buildMapStrip, type MapStopInput, type MapStripData } from "@/lib/travel/map-strip";
+import type { ItineraryStopInput } from "@/lib/travel/itinerary-timeline";
 import {
   buildNearbyRow,
   type NearbyPlace,
@@ -132,6 +133,32 @@ export const BEACH_SAMPLE_NEARBY: Record<string, NearbyPlaceInput[]> = {
     { name: "Pangulasian Island Beach", category: "tourist_attraction", lat: 11.1137, lng: 119.3358 },
   ],
 };
+
+/**
+ * Suggested start times per sample stop, in the order the stops are
+ * listed. Times are suggestions, labelled "suggested" where they show.
+ */
+export const BEACH_SAMPLE_STOP_TIMES: Record<string, string[]> = {
+  Bali: ["09:00", "10:00"],
+  Maldives: ["09:00"],
+  Palawan: ["09:00"],
+};
+
+/** Day stops for a beach destination, with suggested times attached. */
+export function beachItineraryStops(title: string): ItineraryStopInput[] {
+  const dest = BEACH_DESTINATIONS.find(
+    (d) => d.title.toLowerCase() === title.trim().toLowerCase(),
+  );
+  if (!dest) return [];
+  const times = BEACH_SAMPLE_STOP_TIMES[dest.title] ?? [];
+  return (BEACH_SAMPLE_STOPS[dest.title] ?? []).map((stop, i) => ({
+    ...stop,
+    day: stop.day ?? 1,
+    time: times[i],
+    category: "Beach",
+    sourceUrl: dest.wikiUrl,
+  }));
+}
 
 /** Build the map strip for a beach destination, or null for an unknown title. */
 export function buildBeachMapStrip(title: string): MapStripData | null {

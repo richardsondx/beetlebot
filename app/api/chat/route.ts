@@ -57,6 +57,29 @@ import {
 } from "@/lib/chat/stream";
 import { parseTripQuery, shortDateLabel } from "@/lib/travel/trip-parse";
 import {
+  beachItineraryStops,
+  buildBeachHotelCards,
+  buildBeachMapStrip,
+  buildBeachNearbyRow,
+  isBeachCompareTitles,
+  resolveBeachComparePhotos,
+} from "@/lib/travel/beach-compare";
+import {
+  buildItineraryTimeline,
+  resolveItineraryTimelinePhotos,
+  toItineraryTimelineBlock,
+} from "@/lib/travel/itinerary-timeline";
+import { toMapStripBlock } from "@/lib/travel/map-strip";
+import { toNearbyRowBlock } from "@/lib/travel/nearby";
+import {
+  buildTripPick,
+  messageNamesBeachDestination,
+  parseBeachPickReply,
+  pickMissingInputQuestion,
+  tripPickPriceLines,
+  tripPickTitle,
+} from "@/lib/travel/trip-pick";
+import {
   effectiveTripQuery,
   hasDuffelToken,
   searchFlights,
@@ -2353,7 +2376,17 @@ type ChatPayload = {
  * Short-circuits the model flow: the reply is templated, no model call.
  */
 async function handleChatAction(input: {
-  action: { type: string; offerId?: string; searchId?: string; hotelId?: string };
+  action: {
+    type: string;
+    offerId?: string;
+    searchId?: string;
+    hotelId?: string;
+    destination?: string;
+    depart?: string;
+    return?: string;
+    budgetCad?: number;
+    travelers?: number;
+  };
   message: string;
   thread: { id: string };
   emit: ChatEventEmitter;
@@ -2416,6 +2449,74 @@ async function handleChatAction(input: {
       refreshed && hotel?.price
         ? `Checked ${hotel.name}: ${hotel.price.total !== null ? `$${hotel.price.total} total` : "price found"}.`
         : "No live price yet for that hotel. Try again in a bit, or check the rate on the hotel site.";
+  } else if (action.type === "select_destination") {
+    // Beach pick: carry destination, hotel, flight, dates, budget, and
+    // travelers into the trip plan. Dates and budget stay null when the
+    // user has not given them; the reply asks one short question.
+    const destination = action.destination ?? parseBeachPickReply(message);
+    const hotelCards = await buildBeachHotelCards();
+    const pickedCard = destination
+      ? hotelCards.find((h) => h.id === `beach-${destination.toLowerCase()}`)
+      : undefined;
+    const pick = destination
+      ? buildTripPick(destination, {
+          photoUrl: pickedCard?.photoUrl ?? null,
+          photoSourceName: pickedCard?.photoSourceName ?? null,
+          depart: action.depart ?? null,
+          return: action.return ?? null,
+          budgetCad: action.budgetCad ?? null,
+          travelers: action.travelers,
+        })
+      : null;
+    if (!pick || !pickedCard) {
+      reply = "I couldn't find that beach anymore. Ask me to compare beaches again and I'll pull fresh options.";
+    } else {
+      const question = pickMissingInputQuestion(pick);
+      const hero = (await resolveBeachComparePhotos()).items.find(
+        (item) => item.card.title === pick.destination,
+      )?.card;
+      const strip = buildBeachMapStrip(pick.destination);
+      const nearby = await buildBeachNearbyRow(pick.destination);
+      const stops = beachItineraryStops(pick.destination);
+      const timeline = await resolveItineraryTimelinePhotos(
+        buildItineraryTimeline({
+          hotelName: pick.hotel.name,
+          hotel: { lat: pick.hotel.lat, lng: pick.hotel.lng },
+          stops,
+          startDate: pick.depart ?? undefined,
+        }),
+        stops,
+      );
+      const priceSummary = tripPickPriceLines(pick).join("\n");
+      reply = question
+        ? `${tripPickTitle(pick)} is in your plan.\n\n${question.question}\n\n${priceSummary}`
+        : `${tripPickTitle(pick)} is in your plan.\n\n${priceSummary}`;
+      blocks = [
+        ...(hero
+          ? [{ ...hero, type: "image_card" as const }]
+          : []),
+        {
+          type: "hotel_set",
+          stay: {
+            checkIn: pick.depart ?? "",
+            checkOut: pick.return ?? "",
+            adults: pick.travelers,
+          },
+          hotels: [pickedCard],
+          checkedAt: pickedCard.checkedAt ?? "",
+        },
+        ...(strip ? [toMapStripBlock(strip)] : []),
+        toNearbyRowBlock(pick.hotel.name, nearby),
+        toItineraryTimelineBlock(timeline),
+        { type: "text_block", text: priceSummary },
+      ];
+      followUps = question
+        ? question.followUps
+        : [
+            { label: "Add this to my calendar", message: `Add ${pick.destination} trip to my calendar` },
+            { label: "Check the weather", message: `Check the weather in ${pick.destination}` },
+          ];
+    }
   } else {
     reply = "Got it.";
   }
@@ -2471,6 +2572,39 @@ async function runChatFlow(
         emit,
         requestId,
       });
+    }
+
+    // Typed beach pick: "2", "Maldives", or "Pick Bali" works like
+    // tapping Pick. A bare number only counts when the last assistant
+    // reply in this thread showed a beach compare, so it never hijacks
+    // a flight or hotel pick.
+    const typedPick = parseBeachPickReply(body.message);
+    if (typedPick) {
+      let isBeachTurn = messageNamesBeachDestination(body.message);
+      if (!isBeachTurn) {
+        const recent = await getConversationMessages(thread.id);
+        const lastAssistant = [...recent]
+          .reverse()
+          .find((m) => m.role === "assistant");
+        const blocks = lastAssistant
+          ? parseMessageBlocks(lastAssistant.blocksJson)
+          : null;
+        isBeachTurn = (blocks ?? []).some(
+          (b) =>
+            b.type === "option_set" &&
+            b.variant === "compare" &&
+            isBeachCompareTitles(b.items.map((i) => i.card.title)),
+        );
+      }
+      if (isBeachTurn) {
+        return handleChatAction({
+          action: { type: "select_destination", destination: typedPick },
+          message: body.message,
+          thread,
+          emit,
+          requestId,
+        });
+      }
     }
 
     // Trip fast-parse: start the flight search in parallel with the reply.

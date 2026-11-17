@@ -7,6 +7,7 @@ import type { ImageCard, RichBlock } from "./rich-message";
 import {
   isFlightCompareBlock,
   isHotelSetBlock,
+  isItineraryTimelineBlock,
   isMapStripBlock,
   isNearbyRowBlock,
 } from "./rich-message";
@@ -140,6 +141,12 @@ export function sanitiseBlocks(raw: unknown[]): RichBlock[] {
         if (block) safe.push(block);
         break;
       }
+
+      case "itinerary_timeline": {
+        const block = isItineraryTimelineBlock(b);
+        if (block) safe.push(block);
+        break;
+      }
     }
   }
 
@@ -187,6 +194,28 @@ function sanitiseCard(b: Record<string, unknown>): ImageCard | null {
         .filter((r): r is { label: string; value: string } => r !== null)
     : undefined;
 
+  // Extra gallery photos of the same place, at most 5 total with the hero.
+  const gallery = Array.isArray(b.gallery)
+    ? (b.gallery as unknown[])
+        .slice(0, MAX_CARDS_PER_GALLERY)
+        .map((g): { imageUrl: string; sourceName?: string } | null => {
+          const item = g as Record<string, unknown>;
+          if (typeof item?.imageUrl !== "string") return null;
+          if (item.imageUrl.includes("placehold.co")) return null;
+          if (!isValidImageUrl(item.imageUrl)) return null;
+          return {
+            imageUrl: item.imageUrl.slice(0, MAX_IMAGE_URL_LENGTH),
+            sourceName:
+              typeof item.sourceName === "string"
+                ? item.sourceName.slice(0, 100)
+                : undefined,
+          };
+        })
+        .filter(
+          (g): g is { imageUrl: string; sourceName?: string } => g !== null,
+        )
+    : undefined;
+
   return {
     type: "image_card",
     title: b.title.slice(0, 200),
@@ -202,5 +231,6 @@ function sanitiseCard(b: Record<string, unknown>): ImageCard | null {
     sourceName:
       typeof b.sourceName === "string" ? b.sourceName.slice(0, 100) : undefined,
     pricePending: b.pricePending === true ? true : undefined,
+    gallery: gallery?.length ? gallery : undefined,
   };
 }

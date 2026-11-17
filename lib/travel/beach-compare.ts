@@ -252,7 +252,10 @@ export async function resolveBeachComparePhotos(
       title: dest.title,
       actionUrl: dest.wikiUrl,
     })),
-    { mode: "balanced", timeoutMs: 2200 },
+    // 5500ms so the tier caps (3000 + 2000) are not clipped: the
+    // Wikipedia page takes about 1.6s, the summary about 1.0s, and
+    // three parallel page fetches contend for the proxy.
+    { mode: "balanced", timeoutMs: 5500 },
   );
   return {
     ...optionSet,

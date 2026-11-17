@@ -40,7 +40,7 @@
 
 [![31-second demo of Beetlebot planning a New York weekend](docs/showcase/demo-poster.png)](docs/showcase/demo-480p.mp4)
 
-> A 31-second screen recording of the real app with real model replies (Muse Spark), Nov 17, 2026. Ask for a weekend in New York. Beetlebot shows flight cards side by side with prices, and you tap Delta. It then shows hotel cards, answers a dinner question from a chip, and you send the itinerary request. The recording ends there. It does not show the itinerary, a calendar hold, or an approval step. Flight prices come from a saved Duffel search and are labeled "Sample" on screen. Hotel prices are saved Hello Axel rates checked Nov 16, 2026. 480p.
+> A 31-second screen recording of the real app with real model replies (Muse Spark), Nov 17, 2026. The recording shows the previous dark design; the app now uses the light theme shown in the screenshots below. Ask for a weekend in New York. Beetlebot shows flight cards side by side with prices, and you tap Delta. It then shows hotel cards, answers a dinner question from a chip, and you send the itinerary request. The recording ends there. It does not show the itinerary, a calendar hold, or an approval step. Flight prices come from a saved Duffel search and are labeled "Sample" on screen. Hotel prices are saved Hello Axel rates checked Nov 16, 2026. 480p.
 
 ---
 
@@ -76,10 +76,10 @@ The demo above covers steps 1 and 2 and ends as the itinerary request is sent. S
 | ![Activity grouped by day](docs/showcase/activity-light.png) | ![Chat on phone](docs/showcase/chat-phone-light.png) | ![Packs on phone](docs/showcase/packs-phone-light.png) |
 | Every agent action grouped by Today, Yesterday, and date. | Chat is the main screen, with the bottom tab bar on phone. | Installed and Popular packs, each with a visual icon. |
 
-| Autopilots | Settings | Compare options |
+| Autopilots | Settings | Compare in chat |
 |---|---|---|
-| ![Autopilots list](docs/showcase/autopilots-light.png) | ![Settings](docs/showcase/settings-light.png) | ![Compare options page](docs/showcase/compare-light.png) |
-| Recurring plans Beetlebot runs for you. 2 active here, each with an On switch. | Profile, approvals, spend cap, and the model in use: Muse Spark, meta/muse-spark-1.3. | The full compare page, flights and hotels side by side. Flights from the Duffel search on Nov 16, 2026; hotel prices from a saved Hello Axel check, not live. |
+| ![Autopilots list](docs/showcase/autopilots-light.png) | ![Settings](docs/showcase/settings-light.png) | ![Compare in chat](docs/showcase/compare-light.png) |
+| Recurring plans Beetlebot runs for you. 2 active here, each with an On switch. | Profile, approvals, spend cap, and the model in use: Muse Spark, meta/muse-spark-1.3. | The compare happens in chat, not on a separate page. Flight cards appear in the thread, side by side, and you tap the one you want. Flights from the Duffel search on Nov 16, 2026; hotel prices from a saved Hello Axel check, not live. |
 
 Screenshots from the real app, Nov 17, 2026. Flight prices are from the Duffel search on Nov 16, 2026, and will differ now.
 

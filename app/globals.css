@@ -1,9 +1,41 @@
 @import "tailwindcss";
 
-:root {
-  --bg: #060b12;
-  --card: #0d1422;
-  --text: #e6edf6;
+@theme {
+  --color-bg: #ffffff;
+  --color-bg-subtle: #f7f7f5;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f2f1ee;
+  --color-border: #e7e5e0;
+  --color-border-strong: #d6d3cc;
+  --color-text: #1c1b19;
+  --color-text-muted: #6b6862;
+  --color-text-faint: #9a968f;
+  --color-accent: #c8811a;
+  --color-accent-hover: #a96b12;
+  --color-accent-soft: #fbf1e1;
+  --color-on-accent: #ffffff;
+  --color-accent-text: #8a5710;
+  --color-success: #2f7d4f;
+  --color-warning: #b4690e;
+  --color-danger: #c23b32;
+  --color-focus: #c8811a66;
+  --color-tint-amber: #fbf1e1;
+  --color-tint-green: #e6f4ea;
+  --color-tint-blue: #e5effb;
+  --color-tint-rose: #fbe8ec;
+  --color-tint-violet: #efeafb;
+  --color-tint-slate: #eef0f3;
+  --color-tint-amber-icon: #a96b12;
+  --color-tint-green-icon: #2f7d4f;
+  --color-tint-blue-icon: #2f5fa8;
+  --color-tint-rose-icon: #b0405a;
+  --color-tint-violet-icon: #6146a8;
+  --color-tint-slate-icon: #4a5361;
+  --shadow-sm: 0 1px 2px rgba(28, 27, 25, 0.06);
+  --shadow-md: 0 4px 12px rgba(28, 27, 25, 0.08);
+  --shadow-lg: 0 12px 32px rgba(28, 27, 25, 0.12);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: ui-serif, Georgia, "Times New Roman", serif;
 }
 
 * {
@@ -12,15 +44,29 @@
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
+  background: #ffffff;
+  color: #1c1b19;
   font-family:
-    Inter,
     ui-sans-serif,
     system-ui,
     -apple-system,
-    Segoe UI,
+    "Segoe UI",
+    Roboto,
     sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid #c8811a66;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
 }
 
 /* Hide scrollbar for gallery carousels while keeping scroll functionality */
@@ -75,4 +121,3 @@ body {
 .landing-bounce {
   animation: landingBounce 2s ease-in-out infinite;
 }
-

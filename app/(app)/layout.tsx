@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { NavLink } from "@/components/ui/nav-link";
 
+const showDebug = process.env.BEETLEBOT_DEBUG !== "false";
+
 const nav = [
   { href: "/chat", label: "Chat" },
   { href: "/autopilots", label: "Autopilots" },
   { href: "/packs", label: "Packs" },
   { href: "/calendar", label: "Calendar" },
-  { href: "/audit", label: "Audit" },
+  { href: "/audit", label: "Activity" },
   { href: "/settings", label: "Settings" },
-  { href: "/debug", label: "Debug" },
+  ...(showDebug ? [{ href: "/debug", label: "Debug" }] : []),
 ];
 
 export default function AppLayout({

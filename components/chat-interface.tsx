@@ -16,7 +16,15 @@ type ChatMode = ModeDefinition;
 
 // ── Quick actions ───────────────────────────────────────────────────────────
 
-const quickActions = [
+type QuickAction = {
+  title: string;
+  subtitle: string;
+  icon: string;
+  /** Fill the composer with this text instead of sending the title. */
+  prompt?: string;
+};
+
+const quickActions: QuickAction[] = [
   {
     title: "Plan my Friday",
     subtitle: "Find a fun evening plan under your current budget.",
@@ -36,6 +44,12 @@ const quickActions = [
     title: "Rainy day replan",
     subtitle: "Swap outdoor activities with indoor alternatives.",
     icon: "🌧️",
+  },
+  {
+    title: "Weekend trip",
+    subtitle: "Compare live flights and hotels for a city break.",
+    icon: "✈️",
+    prompt: "Weekend in New York from Toronto, Fri to Mon, 1 adult",
   },
 ];
 
@@ -724,7 +738,7 @@ export function ChatInterface() {
                 How can I help you today?
               </h2>
               <p className="mt-2 text-sm text-slate-400">
-                Autonomous planning for your social life.
+                Plans for your free time, from Friday night to weekend trips.
               </p>
             </div>
             <div className="grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
@@ -732,7 +746,14 @@ export function ChatInterface() {
                 <button
                   key={action.title}
                   type="button"
-                  onClick={() => void submitMessage(action.title)}
+                  onClick={() => {
+                    if (action.prompt) {
+                      setInput(action.prompt);
+                      setTimeout(() => inputRef.current?.focus(), 50);
+                    } else {
+                      void submitMessage(action.title);
+                    }
+                  }}
                   className="group rounded-xl border border-white/8 bg-[#0d1422] p-4 text-left transition-all hover:border-amber-300/30 hover:bg-[#111d30]"
                 >
                   <div className="mb-2 text-2xl">{action.icon}</div>
@@ -838,16 +859,22 @@ export function ChatInterface() {
             <button
               type="submit"
               disabled={loading || !input.trim()}
-              aria-label="Send message"
+              aria-label="Send"
               className="mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-[#060b12] transition-all hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-30"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 16 16"
-                fill="currentColor"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
                 className="h-4 w-4"
               >
-                <path d="M8 2a.75.75 0 0 1 .75.75v8.69l1.72-1.72a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 1 1 1.06-1.06l1.72 1.72V2.75A.75.75 0 0 1 8 2Z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 14V2m0 0-4 4m4-4 4 4"
+                />
               </svg>
             </button>
           </div>

@@ -1,4 +1,4 @@
-import { getComparePayload } from "@/lib/travel/compare";
+import { formatFlightRange, getComparePayload } from "@/lib/travel/compare";
 
 export default function TravelComparePage() {
   const payload = getComparePayload();
@@ -50,7 +50,10 @@ export default function TravelComparePage() {
                   <td className="px-4 py-3">
                     {option.slices[0].from} to {option.slices[0].to}
                     <div className="text-xs text-slate-500">
-                      {option.slices[0].departAt} to {option.slices[0].arriveAt}
+                      {formatFlightRange(
+                        option.slices[0].departAt,
+                        option.slices[0].arriveAt,
+                      )}
                     </div>
                     <div className="text-xs text-slate-500">
                       {option.slices[0].flightNumbers.join(", ")}
@@ -59,7 +62,10 @@ export default function TravelComparePage() {
                   <td className="px-4 py-3">
                     {option.slices[1].from} to {option.slices[1].to}
                     <div className="text-xs text-slate-500">
-                      {option.slices[1].departAt} to {option.slices[1].arriveAt}
+                      {formatFlightRange(
+                        option.slices[1].departAt,
+                        option.slices[1].arriveAt,
+                      )}
                     </div>
                     <div className="text-xs text-slate-500">
                       {option.slices[1].flightNumbers.join(", ")}

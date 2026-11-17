@@ -87,7 +87,7 @@ export default function LandingPage() {
             href="/chat"
             className="rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-[#060b12] transition-all hover:bg-amber-300 hover:shadow-lg hover:shadow-amber-400/20"
           >
-            Launch Beetlebot
+            Start planning
           </Link>
         </div>
       </nav>
@@ -122,7 +122,8 @@ export default function LandingPage() {
           <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-slate-400 sm:text-xl">
             The open-source AI that autonomously plans your life — date nights,
             weekend adventures, rainy day rescues. It reads your calendar, knows
-            the season, watches the weather, and handles the rest.
+            the season, watches the weather, and plans it with live prices. You
+            book with the airline or hotel.
           </p>
 
           {/* CTAs */}

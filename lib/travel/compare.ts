@@ -292,3 +292,29 @@ export function getComparePayload() {
     planObject: buildPlanObject(FLIGHT_SEARCH.options[0]),
   };
 }
+
+const FLIGHT_DAY_FORMAT = new Intl.DateTimeFormat("en-US", {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+});
+const FLIGHT_TIME_FORMAT = new Intl.DateTimeFormat("en-US", {
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+/** Format one flight leg for humans, for example "Fri, Dec 11, 6:50 PM – 8:46 PM". */
+export function formatFlightRange(departAt: string, arriveAt: string): string {
+  const depart = new Date(departAt);
+  const arrive = new Date(arriveAt);
+  if (Number.isNaN(depart.getTime()) || Number.isNaN(arrive.getTime())) {
+    return `${departAt} to ${arriveAt}`;
+  }
+  const day = FLIGHT_DAY_FORMAT.format(depart);
+  const departTime = FLIGHT_TIME_FORMAT.format(depart);
+  const arriveTime = FLIGHT_TIME_FORMAT.format(arrive);
+  if (depart.toDateString() === arrive.toDateString()) {
+    return `${day}, ${departTime} – ${arriveTime}`;
+  }
+  return `${day}, ${departTime} – ${FLIGHT_DAY_FORMAT.format(arrive)}, ${arriveTime}`;
+}

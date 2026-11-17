@@ -202,6 +202,15 @@ describe("beach compare ask detection", () => {
     );
   });
 
+  it("spots the short compare ask that the classifier called small talk", () => {
+    // The fix5 drive classified this as smalltalk_mode, so no compare
+    // was stored. The detector must catch it so the route bypasses
+    // the small talk path.
+    expect(
+      mentionsBeachCompare("Bali vs Maldives vs Palawan, which should I pick?"),
+    ).toBe(true);
+  });
+
   it("does not fire on one beach or on no beach", () => {
     expect(mentionsBeachCompare("Plan a beach trip to Bali")).toBe(false);
     expect(mentionsBeachCompare("suggest a beach destination")).toBe(false);

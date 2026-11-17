@@ -2889,6 +2889,10 @@ async function runChatFlow(
       !isCapabilityHelpTurn &&
       !isLocationInfoQuery &&
       !allowBestEffortSuggestions &&
+      // A beach compare ask is a recommendation, never small talk: the
+      // classifier sometimes calls it small talk, which skips the
+      // compare step entirely and stores no compare.
+      !mentionsBeachCompare(body.message) &&
       (isGreetingTurn || isSmallTalkTurn || isProfileCaptureTurn || isMetaConversationQuery);
     const shouldRunResearch =
       !isActionCmd &&

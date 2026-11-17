@@ -66,10 +66,15 @@ The demo above covers steps 1 and 2 and ends as the itinerary request is sent. S
 
 ## Showcase
 
-| Packs | Autopilots | In chat |
+| In chat | Packs | Calendar |
 |---|---|---|
-| ![Packs page](docs/showcase/packs.png) | ![Autopilots page](docs/showcase/autopilots.png) | ![Travel compare in chat](docs/showcase/demo-poster.png) |
-| Browse packs and install the ones you want. 6 available here, 1 installed. | Each autopilot has a goal, a trigger, an action, and an approval step. 2 active here. | Ask in chat and the flight cards appear in the thread, side by side. Tap the one you want. Prices from a saved Duffel search, marked Sample, not live. |
+| ![Travel compare in chat](docs/showcase/chat-light.png) | ![Packs directory](docs/showcase/packs-light.png) | ![Calendar grouped by day](docs/showcase/calendar-light.png) |
+| Ask in chat and the flight cards appear in the thread, side by side. Tap the one you want. Prices from a saved Duffel search, marked Sample, not live. | Packs as a plugins directory, each with a visual icon. 1 installed here. | Holds grouped by day, Today first, with a collapsed Past. |
+
+| Activity | Chat on phone | Packs on phone |
+|---|---|---|
+| ![Activity grouped by day](docs/showcase/activity-light.png) | ![Chat on phone](docs/showcase/chat-phone-light.png) | ![Packs on phone](docs/showcase/packs-phone-light.png) |
+| Every agent action grouped by Today, Yesterday, and date. | Chat is the main screen, with the bottom tab bar on phone. | Installed and Popular packs, each with a visual icon. |
 
 Screenshots from the real app, Nov 17, 2026. Flight prices are from the Duffel search on Nov 16, 2026, and will differ now.
 

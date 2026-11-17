@@ -18,7 +18,7 @@ import { streamChatResponse } from "@/hooks/use-chat-stream";
 import { CHAT_MODES, DEFAULT_CHAT_MODE, type ModeDefinition } from "@/lib/constants";
 import { Composer } from "@/components/chat/composer";
 import { Greeting } from "@/components/chat/greeting";
-import { AssistantMessage, ThinkingDots, UserBubble } from "@/components/chat/message-bubble";
+import { ThinkingDots, UserBubble } from "@/components/chat/message-bubble";
 import { Logo } from "@/components/ui/logo";
 import { FollowUpChips } from "@/components/chat/follow-up-chips";
 import { StatusLine } from "@/components/chat/status-line";
@@ -79,7 +79,7 @@ type ChatMessage = {
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
-function categoryIcon(_category?: string): string {
+function categoryIcon(): string {
   return "";
 }
 
@@ -109,7 +109,7 @@ function ImageCardView({
         )}
         {category && (
           <div className="absolute right-2.5 top-2.5 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 backdrop-blur-md ring-1 ring-[#E7E5E0]">
-            <span className="text-xs">{categoryIcon(category)}</span>
+            <span className="text-xs">{categoryIcon()}</span>
             <span className="text-[10px] capitalize text-[#6B6862]">{category}</span>
           </div>
         )}
@@ -125,7 +125,7 @@ function ImageCardView({
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-3">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F2F1EE] text-3xl ring-1 ring-[#E7E5E0]">
-              {categoryIcon(category)}
+              {categoryIcon()}
             </div>
             <span className="max-w-[80%] text-center text-xs text-[#6B6862] leading-snug">
               {card.title}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Logo } from "@/components/ui/logo";
 
 export function greetingFor(date: Date, name: string): string {
@@ -20,10 +20,7 @@ export function displayName(): string {
 
 /** Serif greeting (§4.1), 36/44 desktop, 28/36 mobile. */
 export function Greeting({ name }: { name?: string }) {
-  const [resolved, setResolved] = useState(name ?? "Richardson");
-  useEffect(() => {
-    if (!name) setResolved(displayName());
-  }, [name]);
+  const [resolved] = useState(() => name ?? displayName());
   return (
     <div className="flex flex-col items-center text-center">
       <span className="mb-4 flex h-8 w-8 items-center justify-center text-[#C8811A]">

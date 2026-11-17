@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 /**
  * Profile card (§4.6). No display-name / default-city field exists in the
@@ -8,18 +8,21 @@ import { useEffect, useState } from "react";
  * same `beetlebot.displayName` key.
  */
 export function ProfileCard() {
-  const [name, setName] = useState("Richardson");
-  const [city, setCity] = useState("Toronto");
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
+  const [name, setName] = useState(() => {
     try {
-      setName(window.localStorage.getItem("beetlebot.displayName") || "Richardson");
-      setCity(window.localStorage.getItem("beetlebot.defaultCity") || "Toronto");
+      return window.localStorage.getItem("beetlebot.displayName") || "Richardson";
     } catch {
-      // Ignore storage access issues.
+      return "Richardson";
     }
-  }, []);
+  });
+  const [city, setCity] = useState(() => {
+    try {
+      return window.localStorage.getItem("beetlebot.defaultCity") || "Toronto";
+    } catch {
+      return "Toronto";
+    }
+  });
+  const [saved, setSaved] = useState(false);
 
   function save() {
     try {

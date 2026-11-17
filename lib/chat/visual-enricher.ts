@@ -234,7 +234,10 @@ async function enrichOptionsWithBousier(options: RawOption[]): Promise<ImageCard
   });
   const resolved = await resolveImageBatch(inputs, {
     mode: "balanced",
-    timeoutMs: Number(process.env.BOUSIER_TIMEOUT_MS ?? 1500),
+    // 3000ms: the measured Wikipedia page fetch is 1.6s, so the old
+    // 1500ms budget timed out on every call and cards came back
+    // photo-less. The compare path keeps its higher 5500ms budget.
+    timeoutMs: Number(process.env.BOUSIER_TIMEOUT_MS ?? 3000),
   });
 
   return options.map((opt, idx) => {

@@ -43,7 +43,12 @@ export type BousierResolvedImage = {
   imageLastCheckedAt: string;
 };
 
-const DEFAULT_TIMEOUT_MS = Number(process.env.BOUSIER_TIMEOUT_MS ?? 1500);
+// Default photo budget for the normal enrichment path. Measured Nov 17,
+// 2026: the full Wikipedia page takes 1.6s through this proxy, so the
+// old 1500ms budget timed out on every call and the live lookup went
+// 0/6. 3000ms clears that fetch with headroom while keeping reply
+// latency bounded; the compare path keeps its higher 5500ms budget.
+const DEFAULT_TIMEOUT_MS = Number(process.env.BOUSIER_TIMEOUT_MS ?? 3000);
 const DEFAULT_MODE = (process.env.BOUSIER_MODE ?? "balanced").toLowerCase();
 const TIER3_FLAG = process.env.BOUSIER_ENABLE_TIER3 === "true";
 const TIER4_FLAG = process.env.BOUSIER_ENABLE_TIER4 === "true";

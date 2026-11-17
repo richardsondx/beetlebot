@@ -108,6 +108,52 @@ export type FlightCompareBlock = {
   failed?: boolean;
 };
 
+// ── Map strip block (hotel pin plus numbered day stops) ───────────────────
+
+export type MapStripStop = {
+  /** Pin number, 1-based. Null when the stop has no coordinates. */
+  pin: number | null;
+  name: string;
+  day?: number;
+  distanceText: string | null;
+  walkText: string | null;
+  mapsUrl: string;
+};
+
+export type MapStripBlock = {
+  type: "map_strip";
+  hotelName: string;
+  hotelLat: number;
+  hotelLng: number;
+  hotelMapsUrl: string;
+  /** Static Maps image URL, null when no Google key exists. */
+  staticMapsUrl: string | null;
+  /** Named reason shown when no map image exists. */
+  mapFallback: string;
+  stops: MapStripStop[];
+};
+
+// ── Near your hotel row (places within 800 m) ─────────────────────────────
+
+export type NearbyPlaceCard = {
+  name: string;
+  category: string;
+  rating: number | null;
+  walkText: string;
+  mapsUrl: string;
+  photoUrl: string | null;
+  photoSourceName: string | null;
+  photoFallback: string;
+};
+
+export type NearbyRowBlock = {
+  type: "nearby_row";
+  hotelName: string;
+  places: NearbyPlaceCard[];
+  /** Empty state text, shown when no place is within 800 m. */
+  emptyText: string;
+};
+
 // ── Hotel set block (in-chat Hello Axel prices) ─────────────────────────────
 
 export type HotelPrice = {
@@ -156,7 +202,9 @@ export type RichBlock =
   | ImageGallery
   | OptionSet
   | FlightCompareBlock
-  | HotelSetBlock;
+  | HotelSetBlock
+  | MapStripBlock
+  | NearbyRowBlock;
 
 // ── Top-level message ──────────────────────────────────────────────────────
 
@@ -226,6 +274,36 @@ export function toPlainText(msg: AssistantMessage): string {
           );
         });
         parts.push("Reply 1, 2, or 3 to pick.");
+        break;
+      }
+      case "map_strip": {
+        parts.push(`Map near ${block.hotelName}`);
+        if (block.staticMapsUrl) parts.push(block.staticMapsUrl);
+        block.stops.forEach((stop) => {
+          if (stop.pin === null) {
+            parts.push(`${stop.name} · location unknown · ${stop.mapsUrl}`);
+          } else {
+            parts.push(
+              `${stop.pin} · ${stop.name} · ${stop.distanceText} · ${stop.walkText} · ${stop.mapsUrl}`,
+            );
+          }
+        });
+        parts.push(`Hotel on Google Maps: ${block.hotelMapsUrl}`);
+        break;
+      }
+      case "nearby_row": {
+        parts.push(`Near ${block.hotelName}`);
+        if (block.places.length === 0) {
+          parts.push(block.emptyText);
+          break;
+        }
+        block.places.forEach((place) => {
+          const rating =
+            place.rating !== null ? `, ${place.rating} stars` : "";
+          parts.push(
+            `${place.name} (${place.category}${rating}) · ${place.walkText} · ${place.mapsUrl}`,
+          );
+        });
         break;
       }
     }
@@ -407,6 +485,93 @@ export function isHotelSetBlock(raw: unknown): HotelSetBlock | null {
   };
 }
 
+/** Validate an untrusted map_strip block, dropping bad fields. */
+export function isMapStripBlock(raw: unknown): MapStripBlock | null {
+  const b = raw as Record<string, unknown>;
+  if (!b || b.type !== "map_strip") return null;
+  if (typeof b.hotelName !== "string" || !b.hotelName.trim()) return null;
+  if (typeof b.hotelLat !== "number" || typeof b.hotelLng !== "number") return null;
+  if (!Array.isArray(b.stops) || b.stops.length === 0) return null;
+  const stops: MapStripStop[] = [];
+  for (const rawStop of b.stops.slice(0, 12)) {
+    const s = rawStop as Record<string, unknown>;
+    if (typeof s.name !== "string" || !s.name.trim()) continue;
+    if (typeof s.mapsUrl !== "string" || !s.mapsUrl.startsWith("https://")) continue;
+    stops.push({
+      pin:
+        typeof s.pin === "number" && Number.isInteger(s.pin) && s.pin > 0
+          ? s.pin
+          : null,
+      name: s.name.slice(0, 200),
+      day: typeof s.day === "number" ? s.day : undefined,
+      distanceText:
+        typeof s.distanceText === "string" ? s.distanceText.slice(0, 40) : null,
+      walkText:
+        typeof s.walkText === "string" ? s.walkText.slice(0, 40) : null,
+      mapsUrl: s.mapsUrl.slice(0, 2048),
+    });
+  }
+  if (stops.length === 0) return null;
+  return {
+    type: "map_strip",
+    hotelName: b.hotelName.slice(0, 200),
+    hotelLat: b.hotelLat,
+    hotelLng: b.hotelLng,
+    hotelMapsUrl:
+      typeof b.hotelMapsUrl === "string" && b.hotelMapsUrl.startsWith("https://")
+        ? b.hotelMapsUrl.slice(0, 2048)
+        : `https://www.google.com/maps/search/?api=1&query=${b.hotelLat},${b.hotelLng}`,
+    staticMapsUrl:
+      typeof b.staticMapsUrl === "string" && b.staticMapsUrl.startsWith("https://")
+        ? b.staticMapsUrl.slice(0, 2048)
+        : null,
+    mapFallback:
+      typeof b.mapFallback === "string" ? b.mapFallback.slice(0, 300) : "",
+    stops,
+  };
+}
+
+/** Validate an untrusted nearby_row block, dropping bad fields. */
+export function isNearbyRowBlock(raw: unknown): NearbyRowBlock | null {
+  const b = raw as Record<string, unknown>;
+  if (!b || b.type !== "nearby_row") return null;
+  if (typeof b.hotelName !== "string" || !b.hotelName.trim()) return null;
+  if (!Array.isArray(b.places)) return null;
+  const places: NearbyPlaceCard[] = [];
+  for (const rawPlace of b.places.slice(0, 5)) {
+    const p = rawPlace as Record<string, unknown>;
+    if (typeof p.name !== "string" || !p.name.trim()) continue;
+    if (typeof p.mapsUrl !== "string" || !p.mapsUrl.startsWith("https://")) continue;
+    places.push({
+      name: p.name.slice(0, 200),
+      category: typeof p.category === "string" ? p.category.slice(0, 50) : "",
+      rating:
+        typeof p.rating === "number" && Number.isFinite(p.rating) ? p.rating : null,
+      walkText: typeof p.walkText === "string" ? p.walkText.slice(0, 40) : "",
+      mapsUrl: p.mapsUrl.slice(0, 2048),
+      photoUrl:
+        typeof p.photoUrl === "string" && p.photoUrl.startsWith("https://")
+          ? p.photoUrl.slice(0, 2048)
+          : null,
+      photoSourceName:
+        typeof p.photoSourceName === "string"
+          ? p.photoSourceName.slice(0, 100)
+          : null,
+      photoFallback:
+        typeof p.photoFallback === "string" ? p.photoFallback.slice(0, 200) : "No photo found",
+    });
+  }
+  return {
+    type: "nearby_row",
+    hotelName: b.hotelName.slice(0, 200),
+    places,
+    emptyText:
+      typeof b.emptyText === "string" && b.emptyText.trim()
+        ? b.emptyText.slice(0, 200)
+        : "Nothing found within a 10 min walk",
+  };
+}
+
 /** Serialize a single ImageCard to readable text with URL at the end. */
 export function cardToText(card: ImageCard): string {
   const lines: string[] = [card.title];
@@ -464,6 +629,21 @@ export function extractOptions(
         if (hotel.sourceUrl) {
           out.push({ index: counter++, title: hotel.name, url: hotel.sourceUrl });
         }
+      }
+    }
+    if (block.type === "map_strip") {
+      out.push({
+        index: counter++,
+        title: `Map near ${block.hotelName}`,
+        url: block.hotelMapsUrl,
+      });
+      for (const stop of block.stops) {
+        out.push({ index: counter++, title: stop.name, url: stop.mapsUrl });
+      }
+    }
+    if (block.type === "nearby_row") {
+      for (const place of block.places) {
+        out.push({ index: counter++, title: place.name, url: place.mapsUrl });
       }
     }
   }

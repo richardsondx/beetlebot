@@ -24,6 +24,12 @@ import type {
 } from "@/lib/chat/rich-message";
 import { resolveImageBatch } from "@/lib/media/bousier";
 import { resolveHotelPhoto } from "@/lib/media/hotel-photo";
+import { buildMapStrip, type MapStopInput, type MapStripData } from "@/lib/travel/map-strip";
+import {
+  buildNearbyRow,
+  type NearbyPlace,
+  type NearbyPlaceInput,
+} from "@/lib/travel/nearby";
 
 export const BEACH_COMPARE_CAP = 3;
 export const BEACH_COMPARE_PROMPT = "Which beach?";
@@ -41,6 +47,9 @@ export type BeachDestination = {
   country: string;
   hotelName: string;
   hotelArea: string;
+  /** Hotel coordinates, checked against public listings. */
+  hotelLat: number;
+  hotelLng: number;
   /** Sample nightly rate in USD, labelled Sample everywhere it shows. */
   sampleNightlyUsd: number;
   /** Sample round-trip flight price in CAD, labelled Sample. */
@@ -54,6 +63,8 @@ export const BEACH_DESTINATIONS: BeachDestination[] = [
     country: "Indonesia",
     hotelName: "Alila Villas Uluwatu",
     hotelArea: "Uluwatu, Bali",
+    hotelLat: -8.8456,
+    hotelLng: 115.1372,
     sampleNightlyUsd: 420,
     sampleFlightCad: 1240,
     wikiUrl: "https://en.wikipedia.org/wiki/Bali",
@@ -63,6 +74,8 @@ export const BEACH_DESTINATIONS: BeachDestination[] = [
     country: "Maldives",
     hotelName: "Soneva Fushi",
     hotelArea: "Baa Atoll, Maldives",
+    hotelLat: 5.1121,
+    hotelLng: 73.078,
     sampleNightlyUsd: 890,
     sampleFlightCad: 1480,
     wikiUrl: "https://en.wikipedia.org/wiki/Maldives",
@@ -72,11 +85,78 @@ export const BEACH_DESTINATIONS: BeachDestination[] = [
     country: "Philippines",
     hotelName: "Pangulasian Island Resort",
     hotelArea: "El Nido, Palawan",
+    hotelLat: 11.1132,
+    hotelLng: 119.3358,
     sampleNightlyUsd: 310,
     sampleFlightCad: 1320,
     wikiUrl: "https://en.wikipedia.org/wiki/Palawan",
   },
 ];
+
+/**
+ * Sample day stops per destination, for the map strip. Bali stops are
+ * real places near Uluwatu with public coordinates. The Maldives and
+ * Palawan stops sit on the resort island itself, at the hotel
+ * coordinates, because the resorts occupy their own islands.
+ */
+export const BEACH_SAMPLE_STOPS: Record<string, MapStopInput[]> = {
+  Bali: [
+    { name: "Uluwatu Temple", lat: -8.8192, lng: 115.0845, day: 1 },
+    { name: "Padang Padang Beach", lat: -8.8135, lng: 115.103, day: 2 },
+  ],
+  Maldives: [
+    { name: "House reef, Kunfunadhoo Island", lat: 5.1121, lng: 73.078, day: 1 },
+  ],
+  Palawan: [
+    { name: "Pangulasian Island Beach", lat: 11.1132, lng: 119.3358, day: 1 },
+  ],
+};
+
+/**
+ * Sample nearby places per destination, all on the resort grounds, so
+ * within 800 m of the hotel. Offsets are small on-site approximations,
+ * about 50 to 100 m from the hotel pin. No rating is claimed: none is
+ * published for these venues, so the row shows no rating chip.
+ */
+export const BEACH_SAMPLE_NEARBY: Record<string, NearbyPlaceInput[]> = {
+  Bali: [
+    { name: "CIRE", category: "restaurant", lat: -8.8451, lng: 115.1372 },
+    { name: "The Warung", category: "restaurant", lat: -8.8456, lng: 115.1377 },
+    { name: "Spa Alila", category: "tourist_attraction", lat: -8.8461, lng: 115.1372 },
+  ],
+  Maldives: [
+    { name: "Fresh in the Garden", category: "restaurant", lat: 5.1126, lng: 73.078 },
+    { name: "Out of the Blue", category: "restaurant", lat: 5.1121, lng: 73.0785 },
+  ],
+  Palawan: [
+    { name: "Pangulasian Island Beach", category: "tourist_attraction", lat: 11.1137, lng: 119.3358 },
+  ],
+};
+
+/** Build the map strip for a beach destination, or null for an unknown title. */
+export function buildBeachMapStrip(title: string): MapStripData | null {
+  const dest = BEACH_DESTINATIONS.find(
+    (d) => d.title.toLowerCase() === title.trim().toLowerCase(),
+  );
+  if (!dest) return null;
+  return buildMapStrip({
+    hotelName: dest.hotelName,
+    hotel: { lat: dest.hotelLat, lng: dest.hotelLng },
+    stops: BEACH_SAMPLE_STOPS[dest.title] ?? [],
+  });
+}
+
+/** Build the nearby row for a beach destination from its sample places. */
+export async function buildBeachNearbyRow(title: string): Promise<NearbyPlace[]> {
+  const dest = BEACH_DESTINATIONS.find(
+    (d) => d.title.toLowerCase() === title.trim().toLowerCase(),
+  );
+  if (!dest) return [];
+  return buildNearbyRow(
+    { lat: dest.hotelLat, lng: dest.hotelLng },
+    BEACH_SAMPLE_NEARBY[dest.title] ?? [],
+  );
+}
 
 function moneyUsd(amount: number): string {
   return `$${amount}`;

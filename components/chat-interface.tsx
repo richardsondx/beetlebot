@@ -25,6 +25,8 @@ import { StatusLine } from "@/components/chat/status-line";
 import { BlockSkeleton } from "@/components/chat/block-skeleton";
 import { FlightCompareView } from "@/components/chat/blocks/flight-compare";
 import { HotelSetView } from "@/components/chat/blocks/hotel-set";
+import { MapStripView } from "@/components/chat/blocks/map-strip";
+import { NearbyRowView } from "@/components/chat/blocks/nearby-row";
 
 type ChatMode = ModeDefinition;
 
@@ -482,6 +484,10 @@ function RichBlockRenderer({
           onCheckPrice={(hotel) => onCheckHotelPrice?.(hotel)}
         />
       );
+    case "map_strip":
+      return <MapStripView block={block} />;
+    case "nearby_row":
+      return <NearbyRowView block={block} />;
     default:
       return null;
   }

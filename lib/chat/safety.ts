@@ -4,7 +4,12 @@
  */
 
 import type { ImageCard, RichBlock } from "./rich-message";
-import { isFlightCompareBlock, isHotelSetBlock } from "./rich-message";
+import {
+  isFlightCompareBlock,
+  isHotelSetBlock,
+  isMapStripBlock,
+  isNearbyRowBlock,
+} from "./rich-message";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -120,6 +125,18 @@ export function sanitiseBlocks(raw: unknown[]): RichBlock[] {
 
       case "hotel_set": {
         const block = isHotelSetBlock(b);
+        if (block) safe.push(block);
+        break;
+      }
+
+      case "map_strip": {
+        const block = isMapStripBlock(b);
+        if (block) safe.push(block);
+        break;
+      }
+
+      case "nearby_row": {
+        const block = isNearbyRowBlock(b);
         if (block) safe.push(block);
         break;
       }

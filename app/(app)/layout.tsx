@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { NavLink } from "@/components/ui/nav-link";
 
 const nav = [
@@ -16,13 +17,13 @@ export default function AppLayout({
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#060b12] text-slate-100">
       <header className="flex shrink-0 items-center gap-3 border-b border-white/8 px-4 py-3">
-        <a
+        <Link
           href="/"
           className="mr-2 flex items-center gap-2 rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-sm font-semibold text-amber-200 transition-colors hover:bg-amber-300/15"
         >
           <span>🪲</span>
           <span>beetlebot</span>
-        </a>
+        </Link>
         <nav className="flex flex-wrap gap-1">
           {nav.map((item) => (
             <NavLink key={item.href} href={item.href} label={item.label} />

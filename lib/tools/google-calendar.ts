@@ -195,9 +195,6 @@ export const googleCalendarEventsTool: ChatToolDefinition = {
               }> => response.status === "fulfilled",
             )
             .map((response) => response.value);
-          const failedResponses = eventResponses.filter(
-            (response): response is PromiseRejectedResult => response.status === "rejected",
-          );
           const events = successfulResponses.flatMap((result) =>
             result.events.map((event) => ({
               ...event,

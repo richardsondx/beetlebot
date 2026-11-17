@@ -258,7 +258,7 @@ function getTropicalWetDryPhase(month: number, hemisphere: Hemisphere) {
   return "dry" as const;
 }
 
-function getTropicalEquatorialPhase(_month: number) {
+function getTropicalEquatorialPhase() {
   return "year_round_warm" as const;
 }
 
@@ -596,7 +596,7 @@ export function buildSeasonContext(timezone?: string): string {
       profiles = TROPICAL_WET_DRY_PROFILES;
       break;
     case "tropical_equatorial":
-      phase = getTropicalEquatorialPhase(month);
+      phase = getTropicalEquatorialPhase();
       profiles = TROPICAL_EQUATORIAL_PROFILES;
       break;
     case "arid":

@@ -12,16 +12,21 @@ describe("google_calendar_events tool", () => {
   it("returns partial results when one calendar fails in list_multi", async () => {
     vi.spyOn(scopeGuard, "assertIntegrationScope").mockResolvedValue(undefined);
     vi.spyOn(googleCalendarApi, "listGoogleCalendars").mockResolvedValue({
+      count: 2,
       calendars: [
         { id: "cal_1", summary: "Calendar One", primary: true },
         { id: "cal_2", summary: "Calendar Two", primary: false },
       ],
     });
-    vi.spyOn(googleCalendarApi, "listGoogleCalendarEvents").mockImplementation(async ({ calendarId }) => {
+    vi.spyOn(googleCalendarApi, "listGoogleCalendarEvents").mockImplementation(async (input) => {
+      const calendarId = input?.calendarId;
       if (calendarId === "cal_1") {
         throw new Error("calendar unavailable");
       }
       return {
+        calendarId: calendarId ?? "",
+        timeMin: "",
+        timeMax: "",
         count: 1,
         events: [
           {
@@ -55,6 +60,7 @@ describe("google_calendar_events tool", () => {
   it("returns an error when all calendars fail in list_multi", async () => {
     vi.spyOn(scopeGuard, "assertIntegrationScope").mockResolvedValue(undefined);
     vi.spyOn(googleCalendarApi, "listGoogleCalendars").mockResolvedValue({
+      count: 1,
       calendars: [{ id: "cal_1", summary: "Calendar One", primary: true }],
     });
     vi.spyOn(googleCalendarApi, "listGoogleCalendarEvents").mockRejectedValue(new Error("token expired"));

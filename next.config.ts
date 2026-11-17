@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // The sandbox proxy ends Node TLS fetches; system certs let the
+    // build fetch Google Fonts at build time.
+    turbopackUseSystemTlsCerts: true,
+  },
   images: {
     remotePatterns: [
       // Unsplash

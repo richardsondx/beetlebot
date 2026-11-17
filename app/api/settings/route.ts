@@ -1,4 +1,4 @@
-import { fromError, ok, fail } from "@/lib/api/http";
+import { fromError, ok } from "@/lib/api/http";
 import { updateSafetySettingsSchema } from "@/lib/api/schemas";
 import { getSafetySettings, updateSafetySettings } from "@/lib/repositories/settings";
 

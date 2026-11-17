@@ -319,9 +319,9 @@ export async function getWeatherContext(input: WeatherContextInput = {}): Promis
     const coords = await withRetry(() => geocodeLocation(locationInput));
     const forecast = await withRetry(() => fetchOpenMeteoForecast(coords));
     const current = forecast.current;
-    const tempC = Number(current.temperature_2m ?? 0);
-    const rainProbability = clampProbability(Number(current.precipitation_probability ?? 0) / 100);
-    const summary = weatherSummaryFromCode(Number(current.weather_code ?? -1));
+    const tempC = Number(current?.temperature_2m ?? 0);
+    const rainProbability = clampProbability(Number(current?.precipitation_probability ?? 0) / 100);
+    const summary = weatherSummaryFromCode(Number(current?.weather_code ?? -1));
     const hourly = normalizeHourlyTimeline(forecast.hourly ?? {});
     const daily = normalizeDailyTimeline(forecast.daily ?? {});
     const highRiskWindows = buildHighRiskWindows(hourly);

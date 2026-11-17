@@ -76,20 +76,28 @@ export function isDestinationSuggestion(card: {
  * A value counts as a price only when it looks like money: a currency
  * symbol or code with a number. A flight time such as "~4.5h from YYZ"
  * under a "flight" key is travel time, not a price, and must not block
- * the price-pending state.
+ * the price-pending state. A bare price-level marker such as "$$" is
+ * not a price either: it has the symbol but no amount, so a card
+ * carrying only "$$" must show "Price coming soon", not look priced.
  */
 const MONEY_PATTERN = /[$€£]|USD|CAD|EUR|GBP/i;
+const HAS_NUMBER = /\d/;
+
+/** True when the value carries both a money marker and an amount. */
+function looksLikeMoney(value: string): boolean {
+  return MONEY_PATTERN.test(value) && HAS_NUMBER.test(value);
+}
 
 /** True when the card already carries a price in a meta chip or a compare row. */
 export function cardHasPrice(card: ImageCard): boolean {
   const metaHasPrice = Object.entries(card.meta ?? {}).some(
     ([key, value]) =>
-      /price|nightly|flight|total/i.test(key) && MONEY_PATTERN.test(value),
+      /price|nightly|flight|total/i.test(key) && looksLikeMoney(value),
   );
   if (metaHasPrice) return true;
   return (card.compareRows ?? []).some(
     (row) =>
-      PRICE_LABELS.has(normalise(row.label)) && MONEY_PATTERN.test(row.value),
+      PRICE_LABELS.has(normalise(row.label)) && looksLikeMoney(row.value),
   );
 }
 

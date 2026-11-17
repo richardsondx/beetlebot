@@ -238,4 +238,25 @@ describe("price-pending and flight-time meta", () => {
       ),
     ).toBe(true);
   });
+
+  it("does not count a bare '$$' price marker as a price", () => {
+    expect(cardHasPrice(destinationCard({ meta: { price: "$$" } }))).toBe(
+      false,
+    );
+    expect(
+      cardHasPrice(
+        destinationCard({
+          compareRows: [{ label: "Per night", value: "$$" }],
+        }),
+      ),
+    ).toBe(false);
+    expect(cardHasPrice(destinationCard({ meta: { price: "$" } }))).toBe(
+      false,
+    );
+  });
+
+  it("marks a destination with only '$$' as price-pending", () => {
+    const card = applyPricePending(destinationCard({ meta: { price: "$$" } }));
+    expect(card.pricePending).toBe(true);
+  });
 });

@@ -3771,6 +3771,7 @@ async function runChatFlow(
       ? { text: replyText, blocks: undefined as RichBlock[] | undefined }
       : await enrichLlmReply(replyText, {
           asyncUpgrade: true,
+          userMessage: body.message,
           onAsyncUpgrade: async (upgradedCards) => {
             const assistantId = await assistantMessageIdReady;
             const mergedBlocks = applyUpgradedCardsToBlocks(currentBlocks, upgradedCards);

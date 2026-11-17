@@ -20,6 +20,8 @@ import { sanitiseBlocks } from "./safety";
 import {
   applyBeachCompareRows,
   isBeachCompareTitles,
+  mentionsBeachCompare,
+  resolveBeachComparePhotos,
 } from "@/lib/travel/beach-compare";
 import {
   applyPricePending,
@@ -56,6 +58,9 @@ type EnrichOptions = {
   asyncUpgrade?: boolean;
   /** Optional callback when upgraded cards are found in background pass. */
   onAsyncUpgrade?: (cards: ImageCard[]) => Promise<void> | void;
+  /** The user's message, so a compare ask can be answered visually even
+   * when the model replies in prose with no options. */
+  userMessage?: string;
 };
 
 // ── Enrichment entry point ─────────────────────────────────────────────────
@@ -78,8 +83,15 @@ export async function enrichLlmReply(
     };
   }
 
-  // No visual options → plain message
+  // No visual options → plain message, unless the user asked for a
+  // beach compare. The model sometimes answers a compare ask in prose
+  // with no options JSON; the ask already names the three options, so
+  // the compare is built directly instead of showing text only.
   if (!payload.options?.length) {
+    if (mentionsBeachCompare(options.userMessage ?? "")) {
+      const compare = await resolveBeachComparePhotos();
+      return { text: payload.text, blocks: [compare] };
+    }
     return { text: payload.text };
   }
 

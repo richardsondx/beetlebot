@@ -75,7 +75,7 @@ import type { PackDataSource } from "@/lib/types";
 import { MODE_IDS } from "@/lib/constants";
 import { getBousierTelemetry } from "@/lib/media/bousier";
 
-const DEFAULT_MODEL = "openai/gpt-5-nano";
+const DEFAULT_MODEL = "meta/muse-spark-1.3";
 let runtimeModelOverride: string | null = null;
 const MAX_TOOL_ROUNDS = 3;
 

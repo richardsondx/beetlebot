@@ -116,13 +116,13 @@ export function SoftHoldActions({ hold }: Props) {
 
   if (mode === "delete") {
     return (
-      <div className="mt-3 rounded-lg border border-rose-300/20 bg-rose-300/8 p-3">
-        <p className="text-xs text-rose-200">Permanently delete this hold?</p>
+      <div className="mt-3 rounded-lg border border-[#E7E5E0] bg-[#FBE8EC] p-3">
+        <p className="text-xs text-[#C23B32]">Permanently delete this hold?</p>
         <div className="mt-2 flex items-center gap-2">
           <button
             onClick={() => void handleDelete()}
             disabled={deleting}
-            className="rounded-md border border-rose-300/30 bg-rose-300/15 px-2.5 py-1 text-xs text-rose-200 hover:bg-rose-300/25 disabled:opacity-50"
+            className="rounded-md border border-[#E7E5E0] bg-[#FBE8EC] px-2.5 py-1 text-xs text-[#C23B32] hover:bg-[#FBE8EC] disabled:opacity-50"
           >
             {deleting ? "Deleting..." : "Yes, delete"}
           </button>
@@ -131,25 +131,25 @@ export function SoftHoldActions({ hold }: Props) {
               setMode("view");
               setError("");
             }}
-            className="text-xs text-slate-500 hover:text-slate-300"
+            className="text-xs text-[#6B6862] hover:text-[#6B6862]"
           >
             Cancel
           </button>
         </div>
-        {error && <p className="mt-2 text-xs text-rose-300">{error}</p>}
+        {error && <p className="mt-2 text-xs text-[#C23B32]">{error}</p>}
       </div>
     );
   }
 
   if (mode === "release") {
     return (
-      <div className="mt-3 rounded-lg border border-rose-300/20 bg-rose-300/8 p-3">
-        <p className="text-xs text-rose-200">Release this hold?</p>
+      <div className="mt-3 rounded-lg border border-[#E7E5E0] bg-[#FBE8EC] p-3">
+        <p className="text-xs text-[#C23B32]">Release this hold?</p>
         <div className="mt-2 flex items-center gap-2">
           <button
             onClick={() => void handleRelease()}
             disabled={releasing}
-            className="rounded-md border border-rose-300/30 bg-rose-300/15 px-2.5 py-1 text-xs text-rose-200 hover:bg-rose-300/25 disabled:opacity-50"
+            className="rounded-md border border-[#E7E5E0] bg-[#FBE8EC] px-2.5 py-1 text-xs text-[#C23B32] hover:bg-[#FBE8EC] disabled:opacity-50"
           >
             {releasing ? "Releasing..." : "Yes, release"}
           </button>
@@ -158,47 +158,47 @@ export function SoftHoldActions({ hold }: Props) {
               setMode("view");
               setError("");
             }}
-            className="text-xs text-slate-500 hover:text-slate-300"
+            className="text-xs text-[#6B6862] hover:text-[#6B6862]"
           >
             Cancel
           </button>
         </div>
-        {error && <p className="mt-2 text-xs text-rose-300">{error}</p>}
+        {error && <p className="mt-2 text-xs text-[#C23B32]">{error}</p>}
       </div>
     );
   }
 
   if (mode === "edit") {
     return (
-      <form onSubmit={(e) => void handleSave(e)} className="mt-3 space-y-3 rounded-lg border border-white/10 bg-[#0a1120] p-3">
-        <label className="block text-xs text-slate-400">
+      <form onSubmit={(e) => void handleSave(e)} className="mt-3 space-y-3 rounded-lg border border-[#E7E5E0] bg-white p-3">
+        <label className="block text-xs text-[#6B6862]">
           Title
           <input
             required
             value={form.title}
             onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-            className="mt-1 w-full rounded-md border border-white/10 bg-[#060b12] px-2.5 py-1.5 text-xs text-slate-100 outline-none focus:border-amber-300/40 focus:ring-1 focus:ring-amber-300/20"
+            className="mt-1 w-full rounded-md border border-[#E7E5E0] bg-white px-2.5 py-1.5 text-xs text-[#1C1B19] outline-none focus:border-[#E7E5E0] focus:ring-1 focus:ring-[#E7E5E0]"
           />
         </label>
         <div className="grid gap-2 sm:grid-cols-2">
-          <label className="block text-xs text-slate-400">
+          <label className="block text-xs text-[#6B6862]">
             Start
             <input
               required
               type="datetime-local"
               value={form.startAt}
               onChange={(e) => setForm((prev) => ({ ...prev, startAt: e.target.value }))}
-              className="mt-1 w-full rounded-md border border-white/10 bg-[#060b12] px-2.5 py-1.5 text-xs text-slate-100 outline-none focus:border-amber-300/40 focus:ring-1 focus:ring-amber-300/20"
+              className="mt-1 w-full rounded-md border border-[#E7E5E0] bg-white px-2.5 py-1.5 text-xs text-[#1C1B19] outline-none focus:border-[#E7E5E0] focus:ring-1 focus:ring-[#E7E5E0]"
             />
           </label>
-          <label className="block text-xs text-slate-400">
+          <label className="block text-xs text-[#6B6862]">
             End
             <input
               required
               type="datetime-local"
               value={form.endAt}
               onChange={(e) => setForm((prev) => ({ ...prev, endAt: e.target.value }))}
-              className="mt-1 w-full rounded-md border border-white/10 bg-[#060b12] px-2.5 py-1.5 text-xs text-slate-100 outline-none focus:border-amber-300/40 focus:ring-1 focus:ring-amber-300/20"
+              className="mt-1 w-full rounded-md border border-[#E7E5E0] bg-white px-2.5 py-1.5 text-xs text-[#1C1B19] outline-none focus:border-[#E7E5E0] focus:ring-1 focus:ring-[#E7E5E0]"
             />
           </label>
         </div>
@@ -206,7 +206,7 @@ export function SoftHoldActions({ hold }: Props) {
           <button
             type="submit"
             disabled={saving || !hasChanges}
-            className="rounded-md border border-amber-300/25 bg-amber-300/15 px-2.5 py-1 text-xs text-amber-100 hover:bg-amber-300/25 disabled:opacity-50"
+            className="rounded-md border border-[#E7E5E0] bg-[#FBF1E1] px-2.5 py-1 text-xs text-[#8A5710] hover:bg-[#A96B12]/25 disabled:opacity-50"
           >
             {saving ? "Saving..." : "Save"}
           </button>
@@ -221,12 +221,12 @@ export function SoftHoldActions({ hold }: Props) {
                 endAt: isoToLocalInput(hold.endAtIso),
               });
             }}
-            className="text-xs text-slate-500 hover:text-slate-300"
+            className="text-xs text-[#6B6862] hover:text-[#6B6862]"
           >
             Cancel
           </button>
         </div>
-        {error && <p className="text-xs text-rose-300">{error}</p>}
+        {error && <p className="text-xs text-[#C23B32]">{error}</p>}
       </form>
     );
   }
@@ -235,21 +235,21 @@ export function SoftHoldActions({ hold }: Props) {
     <div className="mt-2 flex items-center gap-2">
       <button
         onClick={() => setMode("edit")}
-        className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-300 hover:border-white/20 hover:text-slate-100"
+        className="rounded-md border border-[#E7E5E0] bg-[#F2F1EE] px-2 py-1 text-xs text-[#6B6862] hover:border-[#E7E5E0] hover:text-[#1C1B19]"
       >
         Edit
       </button>
       {hold.status === "held" && (
         <button
           onClick={() => setMode("release")}
-          className="rounded-md border border-rose-300/20 bg-rose-300/8 px-2 py-1 text-xs text-rose-300 hover:bg-rose-300/15"
+          className="rounded-md border border-[#E7E5E0] bg-[#FBE8EC] px-2 py-1 text-xs text-[#C23B32] hover:bg-[#FBE8EC]"
         >
           Release
         </button>
       )}
       <button
         onClick={() => setMode("delete")}
-        className="rounded-md border border-rose-300/20 bg-rose-300/8 px-2 py-1 text-xs text-rose-300 hover:bg-rose-300/15"
+        className="rounded-md border border-[#E7E5E0] bg-[#FBE8EC] px-2 py-1 text-xs text-[#C23B32] hover:bg-[#FBE8EC]"
       >
         Delete
       </button>

@@ -6,7 +6,7 @@ const FEATURES = [
     title: "Autopilots",
     headline: "Set a goal. It runs itself.",
     description:
-      '"Empty Weekend + Weather" fires every Friday at noon. If Saturday is open and rain is coming, Beetlebot books an indoor plan — before you even think about it.',
+      '"Empty Weekend + Weather" fires every Friday at noon. If Saturday is open and rain is coming, Beetlebot lines up an indoor plan — before you even think about it.',
   },
   {
     icon: "📦",

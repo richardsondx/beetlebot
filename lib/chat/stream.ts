@@ -86,6 +86,19 @@ export function newRequestId(): string {
 export function mapChatError(error: unknown): ChatErrorInfo {
   const raw = error instanceof Error ? error.message : String(error ?? "");
   const dev = process.env.NODE_ENV === "development";
+  if (/budget/i.test(raw)) {
+    const reset = raw.match(/resets?\s+(\d{4})-(\d{2})-(\d{2})/);
+    let when = "next month";
+    if (reset) {
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      when = `${months[Number(reset[2]) - 1]} ${Number(reset[3])}`;
+    }
+    return {
+      code: "MODEL_BUDGET",
+      message: `The AI budget for this month is spent, it resets ${when}.`,
+      retryable: false,
+    };
+  }
   if (/401|403/.test(raw)) {
     return {
       code: "MODEL_AUTH",

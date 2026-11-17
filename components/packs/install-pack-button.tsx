@@ -76,25 +76,25 @@ export function InstallPackButton({ slug, installed, needs }: InstallPackButtonP
     return (
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-1.5 text-xs text-emerald-300/80">
+          <span className="flex items-center gap-1.5 text-xs text-[#2F7D4F]">
             <span className="text-[10px]">✓</span>
             Installed
           </span>
           {confirmUninstall ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500">Remove this pack?</span>
+              <span className="text-xs text-[#6B6862]">Remove this pack?</span>
               <button
                 type="button"
                 onClick={() => void onUninstall()}
                 disabled={loading}
-                className="rounded px-2 py-1 text-xs text-rose-300 transition-colors hover:bg-rose-400/10 disabled:opacity-50"
+                className="rounded px-2 py-1 text-xs text-[#C23B32] transition-colors hover:bg-[#FBE8EC] disabled:opacity-50"
               >
                 {loading ? "Removing…" : "Yes, remove"}
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmUninstall(false)}
-                className="rounded px-2 py-1 text-xs text-slate-500 transition-colors hover:text-slate-300"
+                className="rounded px-2 py-1 text-xs text-[#6B6862] transition-colors hover:text-[#6B6862]"
               >
                 Cancel
               </button>
@@ -104,13 +104,13 @@ export function InstallPackButton({ slug, installed, needs }: InstallPackButtonP
               type="button"
               onClick={() => setConfirmUninstall(true)}
               disabled={loading}
-              className="text-xs text-slate-600 transition-colors hover:text-rose-300 disabled:opacity-50"
+              className="text-xs text-[#9A968F] transition-colors hover:text-[#C23B32] disabled:opacity-50"
             >
               Uninstall
             </button>
           )}
         </div>
-        {error && <p className="text-xs text-rose-300">{error}</p>}
+        {error && <p className="text-xs text-[#C23B32]">{error}</p>}
       </div>
     );
   }
@@ -121,13 +121,13 @@ export function InstallPackButton({ slug, installed, needs }: InstallPackButtonP
         type="button"
         onClick={() => void onInstall()}
         disabled={loading}
-        className="rounded-lg bg-amber-300/20 px-3 py-2 text-xs text-amber-100 transition-colors hover:bg-amber-300/30 disabled:opacity-60"
+        className="rounded-lg bg-[#FBF1E1] px-3 py-2 text-xs text-[#8A5710] transition-colors hover:bg-[#A96B12]/30 disabled:opacity-60"
       >
         {loading ? "Installing…" : "Install pack"}
       </button>
-      {error && <p className="text-xs text-rose-300">{error}</p>}
+      {error && <p className="text-xs text-[#C23B32]">{error}</p>}
       {scopeIssues.length > 0 && (
-        <div className="rounded-lg border border-amber-300/20 bg-amber-300/5 px-3 py-2 text-xs text-amber-300">
+        <div className="rounded-lg border border-[#E7E5E0] bg-[#FBF1E1] px-3 py-2 text-xs text-[#8A5710]">
           <p className="mb-1 font-medium">Missing integration permissions:</p>
           <ul className="space-y-0.5">
             {scopeIssues.map((issue) => (

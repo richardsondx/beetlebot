@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { InstallPackButton } from "@/components/packs/install-pack-button";
 import { getPackBySlug } from "@/lib/repositories/packs";
+import { PackTile } from "@/components/ui/pack-tile";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -15,59 +16,62 @@ export default async function PackDetailPage({ params }: PageProps) {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-3xl space-y-6 px-6 py-6">
-        <Link href="/packs" className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300">
+        <Link href="/packs" className="inline-flex items-center gap-1 text-xs text-[#6B6862] hover:text-[#6B6862]">
           ← Packs
         </Link>
 
-        <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-6">
+        <section className="rounded-2xl border border-[#E7E5E0] bg-white p-6">
           <div className="mb-4 flex items-start justify-between gap-4">
-            <h1 className="text-xl font-semibold">{pack.name}</h1>
+            <div className="flex items-start gap-4">
+              <PackTile slug={pack.slug} />
+              <h1 className="text-2xl font-semibold leading-8 text-[#1C1B19]">{pack.name}</h1>
+            </div>
             <div className="flex shrink-0 items-center gap-2">
               {pack.installed && (
-                <span className="rounded-full border border-emerald-300/25 bg-emerald-300/10 px-2.5 py-0.5 text-xs text-emerald-200">
+                <span className="rounded-full border border-[#E7E5E0] bg-[#E6F4EA] px-2.5 py-0.5 text-xs text-[#2F7D4F]">
                   installed
                 </span>
               )}
               <Link
                 href={`/packs/${pack.slug}/edit`}
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300 transition-colors hover:bg-white/10"
+                className="rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] px-3 py-1 text-xs text-[#6B6862] transition-colors hover:bg-[#F2F1EE]"
               >
                 Edit
               </Link>
             </div>
           </div>
 
-          <p className="mb-6 text-sm leading-relaxed text-slate-400">{pack.description}</p>
+          <p className="mb-6 text-sm leading-relaxed text-[#6B6862]">{pack.description}</p>
 
           <div className="grid gap-3 sm:grid-cols-2">
             {pack.city && (
-              <div className="rounded-lg border border-white/8 bg-white/3 p-3">
-                <p className="mb-1 text-xs text-slate-500">City / Region</p>
-                <p className="text-sm text-slate-200">📍 {pack.city}</p>
+              <div className="rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] p-3">
+                <p className="mb-1 text-xs text-[#6B6862]">City / Region</p>
+                <p className="text-sm text-[#1C1B19]">📍 {pack.city}</p>
               </div>
             )}
             {pack.budgetRange && (
-              <div className="rounded-lg border border-white/8 bg-white/3 p-3">
-                <p className="mb-1 text-xs text-slate-500">Typical budget</p>
-                <p className="text-sm text-slate-200">{pack.budgetRange}</p>
+              <div className="rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] p-3">
+                <p className="mb-1 text-xs text-[#6B6862]">Typical budget</p>
+                <p className="text-sm text-[#1C1B19]">{pack.budgetRange}</p>
               </div>
             )}
             {pack.style && (
-              <div className="rounded-lg border border-white/8 bg-white/3 p-3">
-                <p className="mb-1 text-xs text-slate-500">Style</p>
-                <span className="rounded-md border border-amber-300/15 bg-amber-300/8 px-2 py-0.5 text-xs text-amber-200">
+              <div className="rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] p-3">
+                <p className="mb-1 text-xs text-[#6B6862]">Style</p>
+                <span className="rounded-md border border-[#E7E5E0] bg-[#FBF1E1] px-2 py-0.5 text-xs text-[#8A5710]">
                   {pack.style}
                 </span>
               </div>
             )}
             {pack.modes && pack.modes.length > 0 && (
-              <div className="rounded-lg border border-white/8 bg-white/3 p-3">
-                <p className="mb-1.5 text-xs text-slate-500">Modes</p>
+              <div className="rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] p-3">
+                <p className="mb-1.5 text-xs text-[#6B6862]">Modes</p>
                 <div className="flex flex-wrap gap-1.5">
                   {pack.modes.map((m: string) => (
                     <span
                       key={m}
-                      className="rounded-md border border-sky-300/15 bg-sky-300/8 px-1.5 py-0.5 text-xs text-sky-300"
+                      className="rounded-md border border-[#E7E5E0] bg-[#E5EFFB] px-1.5 py-0.5 text-xs text-[#2F5FA8]"
                     >
                       {m}
                     </span>
@@ -78,31 +82,31 @@ export default async function PackDetailPage({ params }: PageProps) {
           </div>
 
           {pack.instructions && (
-            <div className="mt-4 rounded-lg border border-white/8 bg-white/3 p-3">
-              <p className="mb-1.5 text-xs text-slate-500">Strategy / Instructions</p>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-300">
+            <div className="mt-4 rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] p-3">
+              <p className="mb-1.5 text-xs text-[#6B6862]">Strategy / Instructions</p>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#6B6862]">
                 {pack.instructions}
               </p>
             </div>
           )}
 
           {pack.dataSources && pack.dataSources.length > 0 && (
-            <div className="mt-4 rounded-lg border border-white/8 bg-white/3 p-3">
-              <p className="mb-1.5 text-xs text-slate-500">Data sources</p>
+            <div className="mt-4 rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] p-3">
+              <p className="mb-1.5 text-xs text-[#6B6862]">Data sources</p>
               <div className="space-y-1.5">
                 {pack.dataSources.map((ds: { url: string; label: string; hint?: string }) => (
                   <div key={ds.url} className="flex items-center gap-2 text-sm">
-                    <span className="text-slate-500">🔗</span>
+                    <span className="text-[#6B6862]">🔗</span>
                     <a
                       href={ds.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sky-300 underline decoration-sky-300/30 hover:decoration-sky-300/60"
+                      className="text-[#2F5FA8] underline decoration-sky-300/30 hover:decoration-sky-300/60"
                     >
                       {ds.label}
                     </a>
                     {ds.hint && (
-                      <span className="text-xs text-slate-500">— {ds.hint}</span>
+                      <span className="text-xs text-[#6B6862]">— {ds.hint}</span>
                     )}
                   </div>
                 ))}
@@ -111,13 +115,13 @@ export default async function PackDetailPage({ params }: PageProps) {
           )}
 
           {pack.tags && pack.tags.length > 0 && (
-            <div className="mt-4 rounded-lg border border-white/8 bg-white/3 p-3">
-              <p className="mb-1.5 text-xs text-slate-500">Tags</p>
+            <div className="mt-4 rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] p-3">
+              <p className="mb-1.5 text-xs text-[#6B6862]">Tags</p>
               <div className="flex flex-wrap gap-1.5">
                 {pack.tags.map((t: string) => (
                   <span
                     key={t}
-                    className="rounded-md border border-violet-300/15 bg-violet-300/8 px-1.5 py-0.5 text-xs text-violet-300"
+                    className="rounded-md border border-[#E7E5E0] bg-[#EFEAFB] px-1.5 py-0.5 text-xs text-[#6146A8]"
                   >
                     {t}
                   </span>
@@ -127,13 +131,13 @@ export default async function PackDetailPage({ params }: PageProps) {
           )}
 
           {pack.needs && pack.needs.length > 0 && (
-            <div className="mt-4 rounded-lg border border-white/8 bg-white/3 p-3">
-              <p className="mb-1.5 text-xs text-slate-500">Requirements</p>
+            <div className="mt-4 rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] p-3">
+              <p className="mb-1.5 text-xs text-[#6B6862]">Requirements</p>
               <div className="flex flex-wrap gap-1.5">
                 {pack.needs.map((n: string) => (
                   <span
                     key={n}
-                    className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-slate-300"
+                    className="rounded-md border border-[#E7E5E0] bg-[#F2F1EE] px-2 py-0.5 text-xs text-[#6B6862]"
                   >
                     {n}
                   </span>
@@ -142,7 +146,7 @@ export default async function PackDetailPage({ params }: PageProps) {
             </div>
           )}
 
-          <div className="mt-6 border-t border-white/8 pt-5">
+          <div className="mt-6 border-t border-[#E7E5E0] pt-5">
             <InstallPackButton slug={pack.slug} installed={pack.installed} needs={pack.needs} />
           </div>
         </section>

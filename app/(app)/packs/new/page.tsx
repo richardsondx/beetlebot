@@ -51,11 +51,11 @@ function toSlug(name: string) {
 }
 
 const inputCls =
-  "w-full rounded-lg border border-white/10 bg-[#060b12] px-3 py-2.5 text-sm text-slate-100 placeholder-slate-600 outline-none transition-colors focus:border-amber-300/40 focus:ring-1 focus:ring-amber-300/20";
+  "w-full rounded-lg border border-[#E7E5E0] bg-white px-3 py-2.5 text-sm text-[#1C1B19] placeholder-slate-600 outline-none transition-colors focus:border-[#E7E5E0] focus:ring-1 focus:ring-[#E7E5E0]";
 const labelCls = "flex flex-col gap-1.5 text-sm";
-const labelTextCls = "text-slate-400";
-const hintCls = "text-xs text-slate-600";
-const sectionHintCls = "mb-4 text-xs leading-relaxed text-slate-500";
+const labelTextCls = "text-[#6B6862]";
+const hintCls = "text-xs text-[#9A968F]";
+const sectionHintCls = "mb-4 text-xs leading-relaxed text-[#6B6862]";
 
 export default function NewPackPage() {
   const [form, setForm] = useState<FormState>(initialState);
@@ -154,18 +154,18 @@ export default function NewPackPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-4xl space-y-6 px-6 py-6">
-        <Link href="/packs" className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300">
+        <Link href="/packs" className="inline-flex items-center gap-1 text-xs text-[#6B6862] hover:text-[#6B6862]">
           &larr; Packs
         </Link>
 
         <header>
           <div className="mb-1 flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-300/10 text-lg">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#E5EFFB] text-lg">
               📦
             </span>
             <h1 className="text-2xl font-semibold">Create Pack</h1>
           </div>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-[#6B6862]">
             A pack bundles domain expertise, planning strategies, and preferences into something anyone can install and benefit from.
           </p>
         </header>
@@ -173,8 +173,8 @@ export default function NewPackPage() {
         <div className="grid gap-6 lg:grid-cols-5">
           <form onSubmit={onSubmit} className="space-y-5 lg:col-span-3">
             {/* Identity */}
-            <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <section className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
                 Identity
               </h2>
               <p className={sectionHintCls}>
@@ -224,8 +224,8 @@ export default function NewPackPage() {
             </section>
 
             {/* Strategy */}
-            <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <section className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
                 Strategy
               </h2>
               <p className={sectionHintCls}>
@@ -245,8 +245,8 @@ export default function NewPackPage() {
             </section>
 
             {/* Data Sources */}
-            <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <section className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
                 Data sources
               </h2>
               <p className={sectionHintCls}>
@@ -280,7 +280,7 @@ export default function NewPackPage() {
                       <button
                         type="button"
                         onClick={() => removeDataSource(idx)}
-                        className="shrink-0 rounded-lg border border-white/10 bg-white/3 px-2 text-sm text-slate-500 transition-colors hover:border-rose-400/30 hover:text-rose-400"
+                        className="shrink-0 rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] px-2 text-sm text-[#6B6862] transition-colors hover:border-rose-400/30 hover:text-rose-400"
                         title="Remove"
                       >
                         &times;
@@ -293,15 +293,15 @@ export default function NewPackPage() {
               <button
                 type="button"
                 onClick={addDataSource}
-                className="mt-3 rounded-lg border border-dashed border-white/15 px-3 py-2 text-xs text-slate-400 transition-colors hover:border-white/25 hover:text-slate-300"
+                className="mt-3 rounded-lg border border-dashed border-[#E7E5E0] px-3 py-2 text-xs text-[#6B6862] transition-colors hover:border-[#E7E5E0] hover:text-[#6B6862]"
               >
                 + Add data source
               </button>
             </section>
 
             {/* Modes */}
-            <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <section className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
                 Modes
               </h2>
               <p className={sectionHintCls}>
@@ -318,7 +318,7 @@ export default function NewPackPage() {
                       className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-all ${
                         selected
                           ? mode.activeColor + " border-current"
-                          : "border-white/10 bg-white/3 text-slate-400 hover:border-white/20 hover:text-slate-300"
+                          : "border-[#E7E5E0] bg-[#F2F1EE] text-[#6B6862] hover:border-[#E7E5E0] hover:text-[#6B6862]"
                       }`}
                     >
                       <span>{mode.icon}</span>
@@ -328,13 +328,13 @@ export default function NewPackPage() {
                 })}
               </div>
               {form.modes.length === 0 && (
-                <p className="mt-2 text-xs text-slate-600">Select at least one mode</p>
+                <p className="mt-2 text-xs text-[#9A968F]">Select at least one mode</p>
               )}
             </section>
 
             {/* Coverage & Style */}
-            <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <section className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
                 Coverage &amp; style
               </h2>
               <p className={sectionHintCls}>
@@ -376,8 +376,8 @@ export default function NewPackPage() {
                         title={s.description}
                         className={`rounded-lg border px-3 py-1.5 text-sm transition-all ${
                           selected
-                            ? "border-amber-300/30 bg-amber-300/10 text-amber-200"
-                            : "border-white/10 bg-white/3 text-slate-400 hover:border-white/20 hover:text-slate-300"
+                            ? "border-[#E7E5E0] bg-[#FBF1E1] text-[#8A5710]"
+                            : "border-[#E7E5E0] bg-[#F2F1EE] text-[#6B6862] hover:border-[#E7E5E0] hover:text-[#6B6862]"
                         }`}
                       >
                         {s.label}
@@ -386,14 +386,14 @@ export default function NewPackPage() {
                   })}
                 </div>
                 {!form.style && (
-                  <p className="mt-2 text-xs text-slate-600">Select a planning style</p>
+                  <p className="mt-2 text-xs text-[#9A968F]">Select a planning style</p>
                 )}
               </div>
             </section>
 
             {/* Requirements & Discovery */}
-            <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <section className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
                 Requirements &amp; discovery
               </h2>
               <p className={sectionHintCls}>
@@ -418,7 +418,7 @@ export default function NewPackPage() {
             </section>
 
             {error && (
-              <div className="flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+              <div className="flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-[#C23B32]">
                 <span>⚠</span>
                 <span>{error}</span>
               </div>
@@ -428,11 +428,11 @@ export default function NewPackPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="rounded-lg border border-amber-300/25 bg-amber-300/15 px-5 py-2.5 text-sm font-medium text-amber-100 transition-colors hover:bg-amber-300/25 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-[#E7E5E0] bg-[#FBF1E1] px-5 py-2.5 text-sm font-medium text-[#8A5710] transition-colors hover:bg-[#A96B12]/25 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? "Creating…" : "Create pack"}
               </button>
-              <Link href="/packs" className="text-sm text-slate-500 hover:text-slate-300">
+              <Link href="/packs" className="text-sm text-[#6B6862] hover:text-[#6B6862]">
                 Cancel
               </Link>
             </div>
@@ -441,35 +441,35 @@ export default function NewPackPage() {
           {/* Preview */}
           <div className="lg:col-span-2">
             <div className="sticky top-6 space-y-4">
-              <div className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <div className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
                   Config preview
                 </h2>
-                <pre className="overflow-auto rounded-lg border border-white/8 bg-[#060b12] p-3 text-xs leading-relaxed text-slate-300">
+                <pre className="overflow-auto rounded-lg border border-[#E7E5E0] bg-white p-3 text-xs leading-relaxed text-[#6B6862]">
                   {JSON.stringify(preview, null, 2)}
                 </pre>
               </div>
 
               {/* Quick guide */}
-              <div className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <div className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
                   Quick guide
                 </h2>
-                <ul className="space-y-2 text-xs leading-relaxed text-slate-500">
+                <ul className="space-y-2 text-xs leading-relaxed text-[#6B6862]">
                   <li>
-                    <span className="text-slate-300">Instructions</span> are the most important field — they tell the agent what expertise and strategies to use.
+                    <span className="text-[#6B6862]">Instructions</span> are the most important field — they tell the agent what expertise and strategies to use.
                   </li>
                   <li>
-                    <span className="text-slate-300">Data sources</span> give the agent live web access. Add URLs of event calendars, listing pages, or APIs the pack should fetch.
+                    <span className="text-[#6B6862]">Data sources</span> give the agent live web access. Add URLs of event calendars, listing pages, or APIs the pack should fetch.
                   </li>
                   <li>
-                    <span className="text-slate-300">Modes</span> determine when the pack activates based on the user&apos;s planning context.
+                    <span className="text-[#6B6862]">Modes</span> determine when the pack activates based on the user&apos;s planning context.
                   </li>
                   <li>
-                    <span className="text-slate-300">Style</span> sets the planning vibe — structured vs spontaneous.
+                    <span className="text-[#6B6862]">Style</span> sets the planning vibe — structured vs spontaneous.
                   </li>
                   <li>
-                    <span className="text-slate-300">Tags</span> help people find your pack when browsing the catalog.
+                    <span className="text-[#6B6862]">Tags</span> help people find your pack when browsing the catalog.
                   </li>
                 </ul>
               </div>

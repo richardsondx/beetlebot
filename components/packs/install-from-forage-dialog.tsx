@@ -63,7 +63,7 @@ export function InstallFromForageDialog() {
       <button
         type="button"
         onClick={openPanel}
-        className="shrink-0 rounded-lg border border-sky-300/25 bg-sky-300/10 px-4 py-2 text-sm text-sky-100 transition-colors hover:bg-sky-300/20"
+        className="shrink-0 rounded-lg border border-[#E7E5E0] bg-[#E5EFFB] px-4 py-2 text-sm text-sky-100 transition-colors hover:bg-[#E5EFFB]"
       >
         + From BeetlePack
       </button>
@@ -71,8 +71,8 @@ export function InstallFromForageDialog() {
   }
 
   return (
-    <div className="w-full rounded-xl border border-sky-300/20 bg-sky-300/5 p-4">
-      <p className="mb-2 text-xs text-sky-300/70">
+    <div className="w-full rounded-xl border border-[#E7E5E0] bg-[#E5EFFB] p-4">
+      <p className="mb-2 text-xs text-[#2F5FA8]">
         Install a pack from the{" "}
         <a
           href="https://forage.beetlebot.dev/packs"
@@ -91,12 +91,12 @@ export function InstallFromForageDialog() {
           value={packRef}
           onChange={(e) => setPackRef(e.target.value)}
           disabled={loading}
-          className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-sky-300/40 disabled:opacity-60"
+          className="min-w-0 flex-1 rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] px-3 py-2 text-sm text-white placeholder-[#9A968F] outline-none focus:border-[#E7E5E0] disabled:opacity-60"
         />
         <button
           type="submit"
           disabled={loading || !packRef.trim()}
-          className="shrink-0 rounded-lg bg-sky-300/20 px-3 py-2 text-sm text-sky-100 transition-colors hover:bg-sky-300/30 disabled:opacity-50"
+          className="shrink-0 rounded-lg bg-[#E5EFFB] px-3 py-2 text-sm text-sky-100 transition-colors hover:bg-[#E5EFFB] disabled:opacity-50"
         >
           {loading ? "Installing…" : "Install"}
         </button>
@@ -104,13 +104,13 @@ export function InstallFromForageDialog() {
           type="button"
           onClick={closePanel}
           disabled={loading}
-          className="shrink-0 rounded-lg px-3 py-2 text-sm text-slate-500 transition-colors hover:text-slate-300 disabled:opacity-50"
+          className="shrink-0 rounded-lg px-3 py-2 text-sm text-[#6B6862] transition-colors hover:text-[#6B6862] disabled:opacity-50"
         >
           Cancel
         </button>
       </form>
-      {error && <p className="mt-2 text-xs text-rose-300">{error}</p>}
-      {success && <p className="mt-2 text-xs text-emerald-300">✓ {success}</p>}
+      {error && <p className="mt-2 text-xs text-[#C23B32]">{error}</p>}
+      {success && <p className="mt-2 text-xs text-[#2F7D4F]">✓ {success}</p>}
     </div>
   );
 }

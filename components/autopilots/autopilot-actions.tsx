@@ -24,31 +24,31 @@ const approvalOptions = [
     value: "ask_first",
     label: "Ask first",
     description: "Proposes, you confirm.",
-    active: "border-teal-300/50 bg-teal-300/15 ring-1 ring-teal-300/30",
-    idle: "border-teal-300/20 bg-teal-300/8",
-    text: "text-teal-200",
+    active: "border-[#E7E5E0] bg-[#E6F4EA] ring-1 ring-teal-300/30",
+    idle: "border-[#E7E5E0] bg-[#E6F4EA]",
+    text: "text-[#2F7D4F]",
   },
   {
     value: "auto_hold",
     label: "Auto hold",
     description: "Soft-hold, no confirm.",
-    active: "border-sky-300/50 bg-sky-300/15 ring-1 ring-sky-300/30",
-    idle: "border-sky-300/20 bg-sky-300/8",
-    text: "text-sky-200",
+    active: "border-[#E7E5E0] bg-[#E5EFFB] ring-1 ring-sky-300/30",
+    idle: "border-[#E7E5E0] bg-[#E5EFFB]",
+    text: "text-[#2F5FA8]",
   },
   {
     value: "auto_execute",
     label: "Auto execute",
     description: "Books without asking.",
-    active: "border-violet-300/50 bg-violet-300/15 ring-1 ring-violet-300/30",
-    idle: "border-violet-300/20 bg-violet-300/8",
-    text: "text-violet-200",
+    active: "border-[#E7E5E0] bg-[#EFEAFB] ring-1 ring-violet-300/30",
+    idle: "border-[#E7E5E0] bg-[#EFEAFB]",
+    text: "text-[#6146A8]",
   },
 ] as const;
 
 const inputCls =
-  "w-full rounded-lg border border-white/10 bg-[#060b12] px-3 py-2.5 text-sm text-slate-100 placeholder-slate-600 outline-none transition-colors focus:border-amber-300/40 focus:ring-1 focus:ring-amber-300/20";
-const labelCls = "flex flex-col gap-1.5 text-sm text-slate-400";
+  "w-full rounded-lg border border-[#E7E5E0] bg-white px-3 py-2.5 text-sm text-[#1C1B19] placeholder-slate-600 outline-none transition-colors focus:border-[#E7E5E0] focus:ring-1 focus:ring-[#E7E5E0]";
+const labelCls = "flex flex-col gap-1.5 text-sm text-[#6B6862]";
 
 export function AutopilotActions({ autopilot }: Props) {
   const router = useRouter();
@@ -123,13 +123,13 @@ export function AutopilotActions({ autopilot }: Props) {
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={() => setMode("edit")}
-          className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-300 transition-colors hover:border-white/20 hover:bg-white/8 hover:text-slate-100"
+          className="rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] px-3 py-1.5 text-sm text-[#6B6862] transition-colors hover:border-[#E7E5E0] hover:bg-[#F2F1EE] hover:text-[#1C1B19]"
         >
           Edit
         </button>
         <button
           onClick={() => setMode("delete")}
-          className="rounded-lg border border-rose-300/20 bg-rose-300/8 px-3 py-1.5 text-sm text-rose-300 transition-colors hover:bg-rose-300/15"
+          className="rounded-lg border border-[#E7E5E0] bg-[#FBE8EC] px-3 py-1.5 text-sm text-[#C23B32] transition-colors hover:bg-[#FBE8EC]"
         >
           Delete
         </button>
@@ -140,11 +140,11 @@ export function AutopilotActions({ autopilot }: Props) {
   /* ── Delete confirm ── */
   if (mode === "delete") {
     return (
-      <div className="rounded-2xl border border-rose-300/20 bg-rose-300/6 p-5">
-        <p className="text-sm font-medium text-rose-200">
+      <div className="rounded-2xl border border-[#E7E5E0] bg-[#FBE8EC] p-5">
+        <p className="text-sm font-medium text-[#C23B32]">
           Delete &ldquo;{autopilot.name}&rdquo;?
         </p>
-        <p className="mt-1 text-xs text-rose-300/70">
+        <p className="mt-1 text-xs text-[#C23B32]">
           This will remove the autopilot and all its runs. This cannot be undone.
         </p>
         {error && (
@@ -154,13 +154,13 @@ export function AutopilotActions({ autopilot }: Props) {
           <button
             onClick={() => void handleDelete()}
             disabled={deleting}
-            className="rounded-lg border border-rose-300/30 bg-rose-300/15 px-4 py-2 text-sm text-rose-200 transition-colors hover:bg-rose-300/25 disabled:opacity-50"
+            className="rounded-lg border border-[#E7E5E0] bg-[#FBE8EC] px-4 py-2 text-sm text-[#C23B32] transition-colors hover:bg-[#FBE8EC] disabled:opacity-50"
           >
             {deleting ? "Deleting…" : "Yes, delete"}
           </button>
           <button
             onClick={() => { setMode("view"); setError(""); }}
-            className="text-sm text-slate-500 hover:text-slate-300"
+            className="text-sm text-[#6B6862] hover:text-[#6B6862]"
           >
             Cancel
           </button>
@@ -173,19 +173,19 @@ export function AutopilotActions({ autopilot }: Props) {
   return (
     <form onSubmit={(e) => void handleSave(e)} className="space-y-5">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-200">Edit autopilot</h3>
+        <h3 className="text-sm font-semibold text-[#1C1B19]">Edit autopilot</h3>
         <button
           type="button"
           onClick={() => { setMode("view"); setError(""); }}
-          className="text-xs text-slate-500 hover:text-slate-300"
+          className="text-xs text-[#6B6862] hover:text-[#6B6862]"
         >
           Discard
         </button>
       </div>
 
       {/* Identity */}
-      <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-        <h4 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+      <section className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+        <h4 className="mb-4 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
           Identity
         </h4>
         <label className={labelCls}>
@@ -194,7 +194,7 @@ export function AutopilotActions({ autopilot }: Props) {
         </label>
         <label className={`${labelCls} mt-4`}>
           Objective
-          <span className="text-xs text-slate-600">The big picture — what is this autopilot working toward?</span>
+          <span className="text-xs text-[#9A968F]">The big picture — what is this autopilot working toward?</span>
           <textarea
             required
             value={form.goal}
@@ -217,8 +217,8 @@ export function AutopilotActions({ autopilot }: Props) {
       </section>
 
       {/* Mode */}
-      <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-        <h4 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+      <section className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+        <h4 className="mb-4 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
           Mode
         </h4>
         <div className="flex flex-wrap gap-2">
@@ -232,7 +232,7 @@ export function AutopilotActions({ autopilot }: Props) {
                 className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-all ${
                   selected
                     ? mode.activeColor + " border-current"
-                    : "border-white/10 bg-white/3 text-slate-400 hover:border-white/20 hover:text-slate-300"
+                    : "border-[#E7E5E0] bg-[#F2F1EE] text-[#6B6862] hover:border-[#E7E5E0] hover:text-[#6B6862]"
                 }`}
               >
                 <span>{mode.icon}</span>
@@ -244,15 +244,15 @@ export function AutopilotActions({ autopilot }: Props) {
       </section>
 
       {/* Trigger: When → Then */}
-      <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-        <h4 className="mb-5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+      <section className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+        <h4 className="mb-5 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
           Trigger
         </h4>
 
         {/* ── WHEN ── */}
         <div className="mb-2 flex items-center gap-2">
-          <span className="rounded bg-slate-700/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">When</span>
-          <span className="text-xs text-slate-600">What causes this autopilot to run?</span>
+          <span className="rounded bg-slate-700/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#6B6862]">When</span>
+          <span className="text-xs text-[#9A968F]">What causes this autopilot to run?</span>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           {([
@@ -266,14 +266,14 @@ export function AutopilotActions({ autopilot }: Props) {
               onClick={() => set("triggerType", opt.value)}
               className={`rounded-xl border p-3 text-left transition-all ${
                 form.triggerType === opt.value
-                  ? "border-amber-300/50 bg-amber-300/10 ring-1 ring-amber-300/25"
-                  : "border-white/10 bg-white/3 hover:border-white/20"
+                  ? "border-[#E7E5E0] bg-[#FBF1E1] ring-1 ring-[#E7E5E0]"
+                  : "border-[#E7E5E0] bg-[#F2F1EE] hover:border-[#E7E5E0]"
               }`}
             >
-              <p className={`text-sm font-medium ${form.triggerType === opt.value ? "text-amber-200" : "text-slate-300"}`}>
+              <p className={`text-sm font-medium ${form.triggerType === opt.value ? "text-[#8A5710]" : "text-[#6B6862]"}`}>
                 <span className="mr-1.5">{opt.icon}</span>{opt.label}
               </p>
-              <p className="mt-0.5 text-xs text-slate-500">{opt.description}</p>
+              <p className="mt-0.5 text-xs text-[#6B6862]">{opt.description}</p>
             </button>
           ))}
         </div>
@@ -292,12 +292,12 @@ export function AutopilotActions({ autopilot }: Props) {
         </label>
 
         {/* ── divider ── */}
-        <div className="my-5 border-t border-white/5" />
+        <div className="my-5 border-t border-[#E7E5E0]" />
 
         {/* ── THEN ── */}
         <div className="mb-2 flex items-center gap-2">
-          <span className="rounded bg-slate-700/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">Then</span>
-          <span className="text-xs text-slate-600">Tell Beetlebot what to do — like giving instructions to a smart assistant.</span>
+          <span className="rounded bg-slate-700/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#6B6862]">Then</span>
+          <span className="text-xs text-[#9A968F]">Tell Beetlebot what to do — like giving instructions to a smart assistant.</span>
         </div>
         <label className={labelCls}>
           <textarea
@@ -312,8 +312,8 @@ export function AutopilotActions({ autopilot }: Props) {
       </section>
 
       {/* Approval */}
-      <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-        <h4 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+      <section className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+        <h4 className="mb-4 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
           Approval mode
         </h4>
         <div className="grid gap-3 sm:grid-cols-3">
@@ -327,21 +327,21 @@ export function AutopilotActions({ autopilot }: Props) {
               }`}
             >
               <p className={`text-sm font-medium ${opt.text}`}>{opt.label}</p>
-              <p className="mt-0.5 text-xs text-slate-500">{opt.description}</p>
+              <p className="mt-0.5 text-xs text-[#6B6862]">{opt.description}</p>
             </button>
           ))}
         </div>
       </section>
 
       {/* Budget */}
-      <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-        <h4 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+      <section className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+        <h4 className="mb-4 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
           Budget cap
         </h4>
         <label className={labelCls}>
           Max spend per action (USD)
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">$</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#6B6862]">$</span>
             <input
               type="text"
               inputMode="numeric"
@@ -359,7 +359,7 @@ export function AutopilotActions({ autopilot }: Props) {
       </section>
 
       {error && (
-        <div className="flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+        <div className="flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-[#C23B32]">
           <span>⚠</span>
           <span>{error}</span>
         </div>
@@ -369,14 +369,14 @@ export function AutopilotActions({ autopilot }: Props) {
         <button
           type="submit"
           disabled={saving}
-          className="rounded-lg border border-amber-300/25 bg-amber-300/15 px-5 py-2.5 text-sm font-medium text-amber-100 transition-colors hover:bg-amber-300/25 disabled:opacity-50"
+          className="rounded-lg border border-[#E7E5E0] bg-[#FBF1E1] px-5 py-2.5 text-sm font-medium text-[#8A5710] transition-colors hover:bg-[#A96B12]/25 disabled:opacity-50"
         >
           {saving ? "Saving…" : "Save changes"}
         </button>
         <button
           type="button"
           onClick={() => { setMode("view"); setError(""); }}
-          className="text-sm text-slate-500 hover:text-slate-300"
+          className="text-sm text-[#6B6862] hover:text-[#6B6862]"
         >
           Discard
         </button>

@@ -54,12 +54,12 @@ export function SafetySettingsCard({ initial }: { initial: SafetySettings }) {
     settings.defaultApproval;
 
   return (
-    <section ref={wrapperRef} className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
+    <section ref={wrapperRef} className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
       <div className="mb-4 flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-300/10 text-sm">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#E6F4EA] text-sm">
           🛡️
         </span>
-        <h2 className="text-sm font-semibold text-slate-100">Safety &amp; Approvals</h2>
+        <h2 className="text-sm font-semibold text-[#1C1B19]">Safety &amp; Approvals</h2>
       </div>
 
       <div className="space-y-3">
@@ -78,8 +78,8 @@ export function SafetySettingsCard({ initial }: { initial: SafetySettings }) {
                 onClick={() => save({ defaultApproval: opt.value })}
                 className={`rounded-md px-3 py-1.5 text-left text-xs transition-colors ${
                   settings.defaultApproval === opt.value
-                    ? "bg-teal-400/15 text-teal-200"
-                    : "text-slate-300 hover:bg-white/5"
+                    ? "bg-[#E6F4EA] text-[#2F7D4F]"
+                    : "text-[#6B6862] hover:bg-[#F2F1EE]"
                 }`}
               >
                 {opt.label}
@@ -107,8 +107,8 @@ export function SafetySettingsCard({ initial }: { initial: SafetySettings }) {
               if (val > 0 && val <= 10000) save({ spendCap: val });
             }}
           >
-            <div className="flex items-center rounded-md border border-white/10 bg-white/5 px-2">
-              <span className="text-xs text-slate-400">$</span>
+            <div className="flex items-center rounded-md border border-[#E7E5E0] bg-[#F2F1EE] px-2">
+              <span className="text-xs text-[#6B6862]">$</span>
               <input
                 autoFocus
                 type="number"
@@ -116,12 +116,12 @@ export function SafetySettingsCard({ initial }: { initial: SafetySettings }) {
                 max={10000}
                 value={draft.spendCap}
                 onChange={(e) => setDraft((d) => ({ ...d, spendCap: e.target.value }))}
-                className="w-20 bg-transparent py-1.5 pl-1 text-xs text-slate-100 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="w-20 bg-transparent py-1.5 pl-1 text-xs text-[#1C1B19] outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
             </div>
             <button
               type="submit"
-              className="rounded-md bg-teal-500/20 px-2.5 py-1.5 text-xs font-medium text-teal-200 transition-colors hover:bg-teal-500/30"
+              className="rounded-md bg-[#E6F4EA] px-2.5 py-1.5 text-xs font-medium text-[#2F7D4F] transition-colors hover:bg-[#E6F4EA]"
             >
               Save
             </button>
@@ -155,18 +155,18 @@ export function SafetySettingsCard({ initial }: { initial: SafetySettings }) {
               type="time"
               value={draft.quietStart}
               onChange={(e) => setDraft((d) => ({ ...d, quietStart: e.target.value }))}
-              className="rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-slate-100 outline-none [color-scheme:dark]"
+              className="rounded-md border border-[#E7E5E0] bg-[#F2F1EE] px-2 py-1.5 text-xs text-[#1C1B19] outline-none [color-scheme:dark]"
             />
-            <span className="text-xs text-slate-500">–</span>
+            <span className="text-xs text-[#6B6862]">–</span>
             <input
               type="time"
               value={draft.quietEnd}
               onChange={(e) => setDraft((d) => ({ ...d, quietEnd: e.target.value }))}
-              className="rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-slate-100 outline-none [color-scheme:dark]"
+              className="rounded-md border border-[#E7E5E0] bg-[#F2F1EE] px-2 py-1.5 text-xs text-[#1C1B19] outline-none [color-scheme:dark]"
             />
             <button
               type="submit"
-              className="rounded-md bg-teal-500/20 px-2.5 py-1.5 text-xs font-medium text-teal-200 transition-colors hover:bg-teal-500/30"
+              className="rounded-md bg-[#E6F4EA] px-2.5 py-1.5 text-xs font-medium text-[#2F7D4F] transition-colors hover:bg-[#E6F4EA]"
             >
               Save
             </button>
@@ -194,17 +194,17 @@ function Row({
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <span className="text-sm text-slate-400">{label}</span>
+      <span className="text-sm text-[#6B6862]">{label}</span>
       {editing ? (
         <div className="relative">{children}</div>
       ) : (
         <button
           onClick={onEdit}
           disabled={saving}
-          className="group rounded-md border border-white/8 bg-white/4 px-2.5 py-1 text-xs text-slate-200 transition-colors hover:border-teal-400/30 hover:bg-teal-400/5 hover:text-teal-200"
+          className="group rounded-md border border-[#E7E5E0] bg-[#F2F1EE] px-2.5 py-1 text-xs text-[#1C1B19] transition-colors hover:border-[#E7E5E0] hover:bg-[#E6F4EA] hover:text-[#2F7D4F]"
         >
           {display}
-          <span className="ml-1.5 text-[10px] text-slate-600 opacity-0 transition-opacity group-hover:opacity-100">
+          <span className="ml-1.5 text-[10px] text-[#9A968F] opacity-0 transition-opacity group-hover:opacity-100">
             edit
           </span>
         </button>

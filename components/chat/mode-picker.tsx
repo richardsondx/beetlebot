@@ -35,22 +35,22 @@ export function ModePicker({
             setOpen(false);
           }}
           className={`flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
-            active.id === m.id ? "bg-white/8" : "hover:bg-white/5"
+            active.id === m.id ? "bg-[#F2F1EE]" : "hover:bg-[#F2F1EE]"
           }`}
         >
           <span className="mt-0.5 text-base leading-none">{m.icon}</span>
           <div className="min-w-0">
             <p
               className={`text-sm font-medium ${
-                active.id === m.id ? "text-slate-100" : "text-slate-300"
+                active.id === m.id ? "text-[#1C1B19]" : "text-[#6B6862]"
               }`}
             >
               {m.label}
               {active.id === m.id && (
-                <span className="ml-1.5 text-xs font-normal text-slate-500">active</span>
+                <span className="ml-1.5 text-xs font-normal text-[#6B6862]">active</span>
               )}
             </p>
-            <p className="mt-0.5 text-xs text-slate-500">{m.description}</p>
+            <p className="mt-0.5 text-xs text-[#6B6862]">{m.description}</p>
           </div>
         </button>
       ))}
@@ -66,7 +66,7 @@ export function ModePicker({
         className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[13px] font-medium transition-all ${
           open
             ? active.activeColor
-            : "border-white/10 bg-white/4 text-slate-400 hover:border-white/20 hover:text-slate-200"
+            : "border-[#E7E5E0] bg-[#F2F1EE] text-[#6B6862] hover:border-[#E7E5E0] hover:text-[#1C1B19]"
         }`}
       >
         <span>{active.icon}</span>
@@ -85,18 +85,18 @@ export function ModePicker({
       {open && (
         <>
           {/* Desktop popover */}
-          <div className="absolute bottom-full left-0 z-30 mb-2 hidden w-64 overflow-hidden rounded-xl border border-white/12 bg-[#0d1826] shadow-2xl shadow-black/50 sm:block">
-            <div className="border-b border-white/8 px-3 py-2.5">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <div className="absolute bottom-full left-0 z-30 mb-2 hidden w-64 overflow-hidden rounded-xl border border-[#E7E5E0] bg-white shadow-2xl shadow-black/10 sm:block">
+            <div className="border-b border-[#E7E5E0] px-3 py-2.5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
                 Planning mode
               </p>
             </div>
             {list}
           </div>
           {/* Phone bottom sheet */}
-          <div className="fixed inset-x-0 bottom-0 z-40 max-h-[70vh] overflow-y-auto rounded-t-2xl border border-white/12 bg-[#0d1826] shadow-2xl shadow-black/60 sm:hidden">
-            <div className="border-b border-white/8 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <div className="fixed inset-x-0 bottom-0 z-40 max-h-[70vh] overflow-y-auto rounded-t-2xl border border-[#E7E5E0] bg-white shadow-2xl shadow-black/10 sm:hidden">
+            <div className="border-b border-[#E7E5E0] px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
                 Planning mode
               </p>
             </div>

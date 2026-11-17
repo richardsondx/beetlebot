@@ -1,15 +1,12 @@
 import { IntegrationCard } from "@/components/integrations/integration-card";
 import { OauthResultBanner } from "@/components/integrations/oauth-result-banner";
 import { SafetySettingsCard } from "@/components/safety-settings";
+import { ProfileCard } from "@/components/settings/profile-card";
 import { listIntegrationConnections } from "@/lib/repositories/integrations";
 import { getSafetySettings } from "@/lib/repositories/settings";
 import { Suspense } from "react";
 
-const advancedItems = [
-  { label: "Builder console", value: "Enabled" },
-  { label: "Tool call traces", value: "Enabled" },
-  { label: "Environment", value: "Local development" },
-];
+const showDebug = process.env.BEETLEBOT_DEBUG !== "false";
 
 export default async function SettingsPage() {
   const [integrations, safetySettings] = await Promise.all([
@@ -21,51 +18,47 @@ export default async function SettingsPage() {
   const whatsAppVerifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim();
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-5xl space-y-8 px-6 py-6">
+    <div className="h-full overflow-y-auto bg-white">
+      <div className="mx-auto max-w-[640px] space-y-6 px-4 py-8 md:px-8">
         <header>
-          <div className="mb-1 flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-300/10 text-lg">
-              ⚙️
-            </span>
-            <h1 className="text-2xl font-semibold">Settings</h1>
-          </div>
-          <p className="text-sm text-slate-400">Manage approvals, connections, and advanced options.</p>
+          <h1 className="text-2xl font-semibold leading-8 text-[#1C1B19]">Settings</h1>
+          <p className="mt-1 text-[13px] leading-[18px] text-[#6B6862]">
+            Manage approvals, connections, and advanced options.
+          </p>
         </header>
 
-        {/* Preferences */}
-        <div className="grid gap-4 sm:grid-cols-2">
+        <ProfileCard />
+
+        <section className="space-y-4">
+          <h2 className="text-[13px] font-semibold uppercase leading-[18px] tracking-[0.04em] text-[#6B6862]">
+            Planning
+          </h2>
           <SafetySettingsCard initial={safetySettings} />
+        </section>
 
-          <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-            <div className="mb-4 flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-300/10 text-sm">
-                🔧
-              </span>
-              <h2 className="text-sm font-semibold text-slate-100">Advanced</h2>
-            </div>
-            <div className="space-y-3">
-              {advancedItems.map((item) => (
-                <div key={item.label} className="flex items-center justify-between gap-4">
-                  <span className="text-sm text-slate-400">{item.label}</span>
-                  <span className="rounded-md border border-amber-300/15 bg-amber-300/8 px-2.5 py-1 text-xs text-amber-200">
-                    {item.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <p className="mt-4 text-xs text-slate-600">
-              Disable via <code className="font-mono">BEETLEBOT_DEBUG=false</code>
-            </p>
-          </section>
-        </div>
+        <section className="rounded-2xl border border-[#E7E5E0] bg-white p-4">
+          <h2 className="text-sm font-semibold text-[#1C1B19]">Model</h2>
+          <div className="mt-3 flex items-center justify-between gap-4">
+            <span className="text-sm text-[#6B6862]">Model</span>
+            <span className="text-sm font-medium text-[#1C1B19]">Muse Spark (meta/muse-spark-1.3)</span>
+          </div>
+        </section>
 
-        {/* Integrations */}
+        <section className="rounded-2xl border border-[#E7E5E0] bg-white p-4">
+          <h2 className="text-sm font-semibold text-[#1C1B19]">Developer</h2>
+          <p className="mt-2 text-sm text-[#6B6862]">
+            {showDebug
+              ? "Debug tools are visible. Set BEETLEBOT_DEBUG=false to hide them."
+              : "Debug tools are hidden (BEETLEBOT_DEBUG=false)."}
+          </p>
+          <p className="mt-2 text-sm text-[#6B6862]">Builder console: Enabled · Tool call traces: Enabled · Environment: Local development</p>
+        </section>
+
         <section className="space-y-4">
           <div>
-            <h2 className="text-lg font-semibold">Integrations</h2>
-            <p className="mt-0.5 text-sm text-slate-400">
-              Connect services so beetlebot can message, schedule, and plan from chat.
+            <h2 className="text-lg font-semibold text-[#1C1B19]">Integrations</h2>
+            <p className="mt-0.5 text-sm text-[#6B6862]">
+              Connect services so Beetlebot can message, schedule, and plan from chat.
             </p>
           </div>
 
@@ -73,7 +66,7 @@ export default async function SettingsPage() {
             <OauthResultBanner />
           </Suspense>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             {integrations.map((integration) => (
               <IntegrationCard
                 key={integration.provider}

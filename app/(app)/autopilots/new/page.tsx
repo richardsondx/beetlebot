@@ -32,33 +32,33 @@ const approvalOptions = [
     value: "ask_first",
     label: "Ask first",
     description: "Beetlebot proposes, you confirm.",
-    cls: "border-teal-300/25 bg-teal-300/8",
-    active: "border-teal-300/50 bg-teal-300/15 ring-1 ring-teal-300/30",
-    text: "text-teal-200",
+    cls: "border-[#E7E5E0] bg-[#E6F4EA]",
+    active: "border-[#E7E5E0] bg-[#E6F4EA] ring-1 ring-teal-300/30",
+    text: "text-[#2F7D4F]",
   },
   {
     value: "auto_hold",
     label: "Auto hold",
     description: "Soft-hold time, no confirmation.",
-    cls: "border-sky-300/25 bg-sky-300/8",
-    active: "border-sky-300/50 bg-sky-300/15 ring-1 ring-sky-300/30",
-    text: "text-sky-200",
+    cls: "border-[#E7E5E0] bg-[#E5EFFB]",
+    active: "border-[#E7E5E0] bg-[#E5EFFB] ring-1 ring-sky-300/30",
+    text: "text-[#2F5FA8]",
   },
   {
     value: "auto_execute",
     label: "Auto execute",
     description: "Book and act without asking.",
-    cls: "border-violet-300/25 bg-violet-300/8",
-    active: "border-violet-300/50 bg-violet-300/15 ring-1 ring-violet-300/30",
-    text: "text-violet-200",
+    cls: "border-[#E7E5E0] bg-[#EFEAFB]",
+    active: "border-[#E7E5E0] bg-[#EFEAFB] ring-1 ring-violet-300/30",
+    text: "text-[#6146A8]",
   },
 ] as const;
 
 const inputCls =
-  "w-full rounded-lg border border-white/10 bg-[#060b12] px-3 py-2.5 text-sm text-slate-100 placeholder-slate-600 outline-none transition-colors focus:border-amber-300/40 focus:ring-1 focus:ring-amber-300/20";
+  "w-full rounded-lg border border-[#E7E5E0] bg-white px-3 py-2.5 text-sm text-[#1C1B19] placeholder-slate-600 outline-none transition-colors focus:border-[#E7E5E0] focus:ring-1 focus:ring-[#E7E5E0]";
 
 const labelCls = "flex flex-col gap-1.5 text-sm";
-const labelTextCls = "text-slate-400";
+const labelTextCls = "text-[#6B6862]";
 
 export default function NewAutopilotPage() {
   const [form, setForm] = useState<FormState>(initialState);
@@ -106,24 +106,24 @@ export default function NewAutopilotPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-2xl space-y-6 px-6 py-6">
-        <Link href="/autopilots" className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300">
+        <Link href="/autopilots" className="inline-flex items-center gap-1 text-xs text-[#6B6862] hover:text-[#6B6862]">
           ← Autopilots
         </Link>
 
         <header>
           <div className="mb-1 flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-300/10 text-lg">⚡</span>
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FBF1E1] text-lg">⚡</span>
             <h1 className="text-2xl font-semibold">New Autopilot</h1>
           </div>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-[#6B6862]">
             Set an objective, define when it triggers, and tell Beetlebot what to do.
           </p>
         </header>
 
         <form onSubmit={onSubmit} className="space-y-5">
           {/* Identity */}
-          <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <section className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
               Identity
             </h2>
             <label className={labelCls}>
@@ -138,7 +138,7 @@ export default function NewAutopilotPage() {
             </label>
             <label className={`${labelCls} mt-4`}>
               <span className={labelTextCls}>Objective</span>
-              <span className="text-xs text-slate-600">The big picture — what is this autopilot working toward?</span>
+              <span className="text-xs text-[#9A968F]">The big picture — what is this autopilot working toward?</span>
               <textarea
                 required
                 value={form.goal}
@@ -151,11 +151,11 @@ export default function NewAutopilotPage() {
           </section>
 
           {/* Mode */}
-          <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <section className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
               Mode
             </h2>
-            <p className="mb-3 text-xs text-slate-500">
+            <p className="mb-3 text-xs text-[#6B6862]">
               Which planning context does this autopilot operate in?
             </p>
             <div className="flex flex-wrap gap-2">
@@ -169,7 +169,7 @@ export default function NewAutopilotPage() {
                     className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-all ${
                       selected
                         ? mode.activeColor + " border-current"
-                        : "border-white/10 bg-white/3 text-slate-400 hover:border-white/20 hover:text-slate-300"
+                        : "border-[#E7E5E0] bg-[#F2F1EE] text-[#6B6862] hover:border-[#E7E5E0] hover:text-[#6B6862]"
                     }`}
                   >
                     <span>{mode.icon}</span>
@@ -179,20 +179,20 @@ export default function NewAutopilotPage() {
               })}
             </div>
             {!form.mode && (
-              <p className="mt-2 text-xs text-slate-600">Select a mode</p>
+              <p className="mt-2 text-xs text-[#9A968F]">Select a mode</p>
             )}
           </section>
 
           {/* Trigger: When → Then */}
-          <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-            <h2 className="mb-5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <section className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+            <h2 className="mb-5 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
               Trigger
             </h2>
 
             {/* ── WHEN ── */}
             <div className="mb-2 flex items-center gap-2">
-              <span className="rounded bg-slate-700/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">When</span>
-              <span className="text-xs text-slate-600">What causes this autopilot to run?</span>
+              <span className="rounded bg-slate-700/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#6B6862]">When</span>
+              <span className="text-xs text-[#9A968F]">What causes this autopilot to run?</span>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               {([
@@ -206,14 +206,14 @@ export default function NewAutopilotPage() {
                   onClick={() => set("triggerType", opt.value)}
                   className={`rounded-xl border p-3 text-left transition-all ${
                     form.triggerType === opt.value
-                      ? "border-amber-300/50 bg-amber-300/10 ring-1 ring-amber-300/25"
-                      : "border-white/10 bg-white/3 hover:border-white/20"
+                      ? "border-[#E7E5E0] bg-[#FBF1E1] ring-1 ring-[#E7E5E0]"
+                      : "border-[#E7E5E0] bg-[#F2F1EE] hover:border-[#E7E5E0]"
                   }`}
                 >
-                  <p className={`text-sm font-medium ${form.triggerType === opt.value ? "text-amber-200" : "text-slate-300"}`}>
+                  <p className={`text-sm font-medium ${form.triggerType === opt.value ? "text-[#8A5710]" : "text-[#6B6862]"}`}>
                     <span className="mr-1.5">{opt.icon}</span>{opt.label}
                   </p>
-                  <p className="mt-0.5 text-xs text-slate-500">{opt.description}</p>
+                  <p className="mt-0.5 text-xs text-[#6B6862]">{opt.description}</p>
                 </button>
               ))}
             </div>
@@ -232,12 +232,12 @@ export default function NewAutopilotPage() {
             </label>
 
             {/* ── divider ── */}
-            <div className="my-5 border-t border-white/5" />
+            <div className="my-5 border-t border-[#E7E5E0]" />
 
             {/* ── THEN ── */}
             <div className="mb-2 flex items-center gap-2">
-              <span className="rounded bg-slate-700/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">Then</span>
-              <span className="text-xs text-slate-600">Tell Beetlebot what to do — like giving instructions to a smart assistant.</span>
+              <span className="rounded bg-slate-700/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#6B6862]">Then</span>
+              <span className="text-xs text-[#9A968F]">Tell Beetlebot what to do — like giving instructions to a smart assistant.</span>
             </div>
             <label className={labelCls}>
               <textarea
@@ -252,8 +252,8 @@ export default function NewAutopilotPage() {
           </section>
 
           {/* Approval */}
-          <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <section className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
               Approval mode
             </h2>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -267,21 +267,21 @@ export default function NewAutopilotPage() {
                   }`}
                 >
                   <p className={`text-sm font-medium ${opt.text}`}>{opt.label}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">{opt.description}</p>
+                  <p className="mt-0.5 text-xs text-[#6B6862]">{opt.description}</p>
                 </button>
               ))}
             </div>
           </section>
 
           {/* Budget */}
-          <section className="rounded-2xl border border-white/10 bg-[#0d1422] p-5">
-            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <section className="rounded-2xl border border-[#E7E5E0] bg-white p-5">
+            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-[#6B6862]">
               Budget cap
             </h2>
             <label className={labelCls}>
               <span className={labelTextCls}>Max spend per action (USD)</span>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#6B6862]">$</span>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -299,7 +299,7 @@ export default function NewAutopilotPage() {
           </section>
 
           {error && (
-            <div className="flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+            <div className="flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-[#C23B32]">
               <span>⚠</span>
               <span>{error}</span>
             </div>
@@ -309,13 +309,13 @@ export default function NewAutopilotPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-lg border border-amber-300/25 bg-amber-300/15 px-5 py-2.5 text-sm font-medium text-amber-100 transition-colors hover:bg-amber-300/25 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-[#E7E5E0] bg-[#FBF1E1] px-5 py-2.5 text-sm font-medium text-[#8A5710] transition-colors hover:bg-[#A96B12]/25 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? "Creating…" : "Create autopilot"}
             </button>
             <Link
               href="/autopilots"
-              className="text-sm text-slate-500 hover:text-slate-300"
+              className="text-sm text-[#6B6862] hover:text-[#6B6862]"
             >
               Cancel
             </Link>

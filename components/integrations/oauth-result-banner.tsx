@@ -17,8 +17,8 @@ export function OauthResultBanner() {
     <div
       className={`rounded-xl border px-3 py-2 text-sm ${
         success
-          ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-100"
-          : "border-rose-300/30 bg-rose-300/10 text-rose-100"
+          ? "border-[#E7E5E0] bg-[#E6F4EA] text-[#2F7D4F]"
+          : "border-[#E7E5E0] bg-[#FBE8EC] text-[#C23B32]"
       }`}
     >
       {message ?? (success ? "Google Calendar connected." : "Google Calendar connection failed.")}

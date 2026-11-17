@@ -10,7 +10,7 @@ const labelMap = {
 
 export function ApprovalChip({ state }: ApprovalChipProps) {
   return (
-    <span className="rounded-full border border-teal-300/30 bg-teal-400/10 px-2 py-1 text-xs font-medium text-teal-100">
+    <span className="rounded-full border border-[#E7E5E0] bg-[#E6F4EA] px-2 py-1 text-xs font-medium text-[#2F7D4F]">
       {labelMap[state]}
     </span>
   );

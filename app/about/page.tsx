@@ -85,7 +85,7 @@ export default function LandingPage() {
           </div>
           <Link
             href="/chat"
-            className="rounded-full bg-[#C8811A] px-5 py-2 text-sm font-semibold text-white transition-all hover:bg-[#A96B12] hover:shadow-lg hover:shadow-[#1C1B19]/5"
+            className="rounded-full bg-[#C8811A] px-5 py-2 text-sm font-semibold text-[#1C1B19] transition-all hover:bg-[#A96B12] hover:shadow-lg hover:shadow-[#1C1B19]/5"
           >
             Start planning
           </Link>
@@ -110,7 +110,7 @@ export default function LandingPage() {
           </div>
 
           {/* Headline */}
-          <h1 className="text-5xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-6xl lg:text-7xl">
+          <h1 className="text-5xl font-extrabold leading-[1.1] tracking-tight text-[#1C1B19] sm:text-6xl lg:text-7xl">
             Your free time
             <br />
             <span className="text-[#8A5710]">
@@ -130,7 +130,7 @@ export default function LandingPage() {
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <Link
               href="/chat"
-              className="group flex items-center gap-2 rounded-full bg-[#C8811A] px-7 py-3.5 text-base font-semibold text-white transition-all hover:bg-[#A96B12] hover:shadow-xl hover:shadow-[#1C1B19]/5"
+              className="group flex items-center gap-2 rounded-full bg-[#C8811A] px-7 py-3.5 text-base font-semibold text-[#1C1B19] transition-all hover:bg-[#A96B12] hover:shadow-xl hover:shadow-[#1C1B19]/5"
             >
               Start planning
               <svg
@@ -147,7 +147,7 @@ export default function LandingPage() {
               href="https://discord.gg/TWuKqaZxuc"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-full border border-[#E7E5E0] bg-[#F2F1EE] px-7 py-3.5 text-base font-medium text-[#6B6862] transition-all hover:border-[#E7E5E0] hover:bg-[#F2F1EE] hover:text-white"
+              className="flex items-center gap-2 rounded-full border border-[#E7E5E0] bg-[#F2F1EE] px-7 py-3.5 text-base font-medium text-[#6B6862] transition-all hover:border-[#E7E5E0] hover:bg-[#F2F1EE] hover:text-[#1C1B19]"
             >
               Join the Colony
               <svg className="h-4 w-4 opacity-60" viewBox="0 0 24 24" fill="currentColor">
@@ -169,7 +169,7 @@ export default function LandingPage() {
       <section className="relative border-t border-[#E7E5E0] py-28 px-6">
         <div className="mx-auto max-w-6xl">
           <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            <h2 className="text-3xl font-bold tracking-tight text-[#1C1B19] sm:text-4xl">
               Not another chatbot.
             </h2>
             <p className="mt-4 text-lg text-[#6B6862]">
@@ -214,7 +214,7 @@ export default function LandingPage() {
       <section id="how-it-works" className="relative border-t border-[#E7E5E0] py-28 px-6">
         <div className="mx-auto max-w-6xl">
           <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            <h2 className="text-3xl font-bold tracking-tight text-[#1C1B19] sm:text-4xl">
               Set it. Forget it. Live it.
             </h2>
             <p className="mt-4 text-lg text-[#6B6862]">
@@ -234,7 +234,7 @@ export default function LandingPage() {
                 <p className="text-xs font-semibold uppercase tracking-widest text-[#8A5710]">
                   {feature.title}
                 </p>
-                <h3 className="mt-2 text-xl font-bold text-white">
+                <h3 className="mt-2 text-xl font-bold text-[#1C1B19]">
                   {feature.headline}
                 </h3>
                 <p className="mt-3 text-sm leading-relaxed text-[#6B6862]">
@@ -252,7 +252,7 @@ export default function LandingPage() {
 
         <div className="relative mx-auto max-w-6xl">
           <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            <h2 className="text-3xl font-bold tracking-tight text-[#1C1B19] sm:text-4xl">
               Built in the open. Shaped by the colony.
             </h2>
             <p className="mt-4 text-lg text-[#6B6862]">
@@ -267,7 +267,7 @@ export default function LandingPage() {
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#EFEAFB] text-2xl ring-1 ring-violet-300/20">
                 📦
               </div>
-              <h3 className="text-lg font-bold text-white">Build Packs</h3>
+              <h3 className="text-lg font-bold text-[#1C1B19]">Build Packs</h3>
               <p className="mt-2 text-sm text-[#6B6862]">
                 Create planning skills for your city. Share local knowledge
                 globally. Every city deserves a local expert.
@@ -277,7 +277,7 @@ export default function LandingPage() {
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E5EFFB] text-2xl ring-1 ring-sky-300/20">
                 🗺️
               </div>
-              <h3 className="text-lg font-bold text-white">Shape the roadmap</h3>
+              <h3 className="text-lg font-bold text-[#1C1B19]">Shape the roadmap</h3>
               <p className="mt-2 text-sm text-[#6B6862]">
                 The best features come from real people with real weekends. Open
                 issues, open PRs, open conversations.
@@ -287,7 +287,7 @@ export default function LandingPage() {
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E6F4EA] text-2xl ring-1 ring-emerald-300/20">
                 🔓
               </div>
-              <h3 className="text-lg font-bold text-white">Fork it. Own it.</h3>
+              <h3 className="text-lg font-bold text-[#1C1B19]">Fork it. Own it.</h3>
               <p className="mt-2 text-sm text-[#6B6862]">
                 Open source means your agent, your rules. Self-host it, extend
                 it, make it yours. No vendor lock-in. Ever.
@@ -300,7 +300,7 @@ export default function LandingPage() {
       {/* ─── Quickstart ───────────────────────────────────────────────── */}
       <section className="relative border-t border-[#E7E5E0] py-28 px-6">
         <div className="mx-auto max-w-3xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+          <h2 className="text-3xl font-bold tracking-tight text-[#1C1B19] sm:text-4xl">
             Three commands. That&apos;s it.
           </h2>
           <p className="mt-4 text-lg text-[#6B6862]">
@@ -342,7 +342,7 @@ export default function LandingPage() {
               href="https://discord.gg/TWuKqaZxuc"
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex items-center gap-2.5 rounded-xl border border-[#E7E5E0] bg-[#F2F1EE] px-5 py-3 text-sm text-[#6B6862] transition-all hover:border-[#E7E5E0] hover:text-white"
+              className="group flex items-center gap-2.5 rounded-xl border border-[#E7E5E0] bg-[#F2F1EE] px-5 py-3 text-sm text-[#6B6862] transition-all hover:border-[#E7E5E0] hover:text-[#1C1B19]"
             >
               <svg className="h-5 w-5 text-[#5865F2]" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z" />
@@ -351,7 +351,7 @@ export default function LandingPage() {
             </a>
             <a
               href="/docs"
-              className="group flex items-center gap-2.5 rounded-xl border border-[#E7E5E0] bg-[#F2F1EE] px-5 py-3 text-sm text-[#6B6862] transition-all hover:border-[#E7E5E0] hover:text-white"
+              className="group flex items-center gap-2.5 rounded-xl border border-[#E7E5E0] bg-[#F2F1EE] px-5 py-3 text-sm text-[#6B6862] transition-all hover:border-[#E7E5E0] hover:text-[#1C1B19]"
             >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
@@ -362,7 +362,7 @@ export default function LandingPage() {
               href="https://github.com/richardsondx/beetlebot"
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex items-center gap-2.5 rounded-xl border border-[#E7E5E0] bg-[#F2F1EE] px-5 py-3 text-sm text-[#6B6862] transition-all hover:border-[#E7E5E0] hover:text-white"
+              className="group flex items-center gap-2.5 rounded-xl border border-[#E7E5E0] bg-[#F2F1EE] px-5 py-3 text-sm text-[#6B6862] transition-all hover:border-[#E7E5E0] hover:text-[#1C1B19]"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z" />
@@ -376,7 +376,7 @@ export default function LandingPage() {
       {/* ─── Final CTA ────────────────────────────────────────────────── */}
       <section className="border-t border-[#E7E5E0] py-24 px-6">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+          <h2 className="text-3xl font-bold tracking-tight text-[#1C1B19] sm:text-4xl">
             Your weekend is in{" "}
             <span className="text-[#8A5710]">
               {getDaysUntilWeekend()} days
@@ -389,7 +389,7 @@ export default function LandingPage() {
           <div className="mt-10">
             <Link
               href="/chat"
-              className="inline-flex items-center gap-2 rounded-full bg-[#C8811A] px-8 py-4 text-base font-semibold text-white transition-all hover:bg-[#A96B12] hover:shadow-xl hover:shadow-[#1C1B19]/5"
+              className="inline-flex items-center gap-2 rounded-full bg-[#C8811A] px-8 py-4 text-base font-semibold text-[#1C1B19] transition-all hover:bg-[#A96B12] hover:shadow-xl hover:shadow-[#1C1B19]/5"
             >
               Plan something
               <svg className="h-4 w-4" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={2}>

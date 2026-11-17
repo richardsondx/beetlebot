@@ -28,10 +28,10 @@ type ApiResponse = IntegrationConnection & {
 type ApiEnvelope<T> = { data?: T; error?: string };
 
 const STATUS_STYLES: Record<string, string> = {
-  connected: "bg-emerald-300/20 text-emerald-100",
-  disconnected: "bg-slate-400/20 text-slate-100",
-  pending: "bg-amber-300/20 text-amber-100",
-  error: "bg-rose-300/20 text-rose-100",
+  connected: "bg-[#E6F4EA] text-[#2F7D4F]",
+  disconnected: "bg-slate-400/20 text-[#1C1B19]",
+  pending: "bg-[#FBF1E1] text-[#8A5710]",
+  error: "bg-[#FBE8EC] text-[#C23B32]",
 };
 
 function normalizeBaseUrl(value?: string) {
@@ -119,7 +119,7 @@ function CopyableField({
 
   return (
     <div>
-      <label className="mb-1 block text-xs font-medium text-slate-400">
+      <label className="mb-1 block text-xs font-medium text-[#6B6862]">
         {label}
       </label>
       <div className="flex items-center gap-2">
@@ -127,12 +127,12 @@ function CopyableField({
           <input
             readOnly
             value={displayValue}
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 pr-10 font-mono text-xs text-slate-200 focus:border-teal-400/50 focus:outline-none focus:ring-1 focus:ring-teal-400/30"
+            className="w-full rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] px-3 py-2 pr-10 font-mono text-xs text-[#1C1B19] focus:border-[#E7E5E0] focus:outline-none focus:ring-1 focus:ring-[#E7E5E0]"
           />
           <button
             type="button"
             onClick={() => setRevealed((prev) => !prev)}
-            className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-200"
+            className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[#6B6862] transition-colors hover:bg-[#F2F1EE] hover:text-[#1C1B19]"
             aria-label={revealed ? "Hide URL" : "Show URL"}
             title={revealed ? "Hide URL" : "Show URL"}
           >
@@ -150,7 +150,7 @@ function CopyableField({
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
           }}
-          className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300 transition-colors hover:bg-white/10"
+          className="shrink-0 rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] px-3 py-2 text-xs text-[#6B6862] transition-colors hover:bg-[#F2F1EE]"
         >
           {copied ? "Copied!" : "Copy"}
         </button>
@@ -176,9 +176,9 @@ function Field({
 }) {
   return (
     <div>
-      <label htmlFor={name} className="mb-1 block text-xs font-medium text-slate-400">
+      <label htmlFor={name} className="mb-1 block text-xs font-medium text-[#6B6862]">
         {label}
-        {!required && <span className="ml-1 text-slate-600">(optional)</span>}
+        {!required && <span className="ml-1 text-[#9A968F]">(optional)</span>}
       </label>
       <input
         id={name}
@@ -187,7 +187,7 @@ function Field({
         placeholder={placeholder}
         required={required}
         defaultValue={defaultValue}
-        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-teal-400/50 focus:outline-none focus:ring-1 focus:ring-teal-400/30"
+        className="w-full rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] px-3 py-2 text-sm text-[#1C1B19] placeholder:text-[#9A968F] focus:border-[#E7E5E0] focus:outline-none focus:ring-1 focus:ring-[#E7E5E0]"
       />
     </div>
   );
@@ -204,10 +204,10 @@ function SetupSteps({
 }) {
   return (
     <div className="space-y-3">
-      <ol className="space-y-1.5 text-xs text-slate-400">
+      <ol className="space-y-1.5 text-xs text-[#6B6862]">
         {steps.map((step, i) => (
           <li key={i} className="flex gap-2">
-            <span className="shrink-0 font-mono text-teal-400/70">
+            <span className="shrink-0 font-mono text-[#2F7D4F]/70">
               {i + 1}.
             </span>
             <span>{step}</span>
@@ -219,7 +219,7 @@ function SetupSteps({
           href={link}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition-colors hover:bg-white/10"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] px-3 py-1.5 text-xs text-[#1C1B19] transition-colors hover:bg-[#F2F1EE]"
         >
           {linkLabel ?? "Open"} <span aria-hidden>↗</span>
         </a>
@@ -258,14 +258,14 @@ function GoogleCalendarSetup({
   if (hasStoredCreds) {
     return (
       <div className="space-y-3">
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-[#6B6862]">
           Google credentials are configured. Click below to authorize access.
         </p>
         <button
           type="button"
           onClick={() => onSubmit({})}
           disabled={loading}
-          className="w-full rounded-lg bg-teal-500/20 px-4 py-2.5 text-sm font-medium text-teal-100 transition-colors hover:bg-teal-500/30 disabled:opacity-50"
+          className="w-full rounded-lg bg-[#E6F4EA] px-4 py-2.5 text-sm font-medium text-[#2F7D4F] transition-colors hover:bg-[#E6F4EA] disabled:opacity-50"
         >
           {loading ? "Connecting…" : "Connect with Google"}
         </button>
@@ -320,17 +320,17 @@ function GoogleCalendarSetup({
         />
       </div>
 
-      <p className="text-xs text-slate-600">
+      <p className="text-xs text-[#9A968F]">
         Leave blank if{" "}
-        <code className="font-mono text-slate-500">GOOGLE_CLIENT_ID</code> and{" "}
-        <code className="font-mono text-slate-500">GOOGLE_CLIENT_SECRET</code>{" "}
+        <code className="font-mono text-[#6B6862]">GOOGLE_CLIENT_ID</code> and{" "}
+        <code className="font-mono text-[#6B6862]">GOOGLE_CLIENT_SECRET</code>{" "}
         are set in your environment.
       </p>
 
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-lg bg-teal-500/20 px-4 py-2.5 text-sm font-medium text-teal-100 transition-colors hover:bg-teal-500/30 disabled:opacity-50"
+        className="w-full rounded-lg bg-[#E6F4EA] px-4 py-2.5 text-sm font-medium text-[#2F7D4F] transition-colors hover:bg-[#E6F4EA] disabled:opacity-50"
       >
         {loading ? "Connecting…" : "Save & Connect with Google"}
       </button>
@@ -384,7 +384,7 @@ function TelegramSetup({
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-lg bg-teal-500/20 px-4 py-2.5 text-sm font-medium text-teal-100 transition-colors hover:bg-teal-500/30 disabled:opacity-50"
+        className="w-full rounded-lg bg-[#E6F4EA] px-4 py-2.5 text-sm font-medium text-[#2F7D4F] transition-colors hover:bg-[#E6F4EA] disabled:opacity-50"
       >
         {loading ? "Connecting…" : "Connect Telegram"}
       </button>
@@ -439,7 +439,7 @@ function WhatsAppSetup({
           defaultRevealed={true}
         />
       ) : (
-        <p className="rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs text-amber-200">
+        <p className="rounded-lg border border-[#E7E5E0] bg-[#FBF1E1] px-3 py-2 text-xs text-[#8A5710]">
           Set <code className="font-mono">WHATSAPP_WEBHOOK_VERIFY_TOKEN</code> in your
           environment, then restart beetlebot before verifying the webhook in Meta.
         </p>
@@ -468,7 +468,7 @@ function WhatsAppSetup({
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-lg bg-teal-500/20 px-4 py-2.5 text-sm font-medium text-teal-100 transition-colors hover:bg-teal-500/30 disabled:opacity-50"
+        className="w-full rounded-lg bg-[#E6F4EA] px-4 py-2.5 text-sm font-medium text-[#2F7D4F] transition-colors hover:bg-[#E6F4EA] disabled:opacity-50"
       >
         {loading ? "Connecting…" : "Connect WhatsApp"}
       </button>
@@ -497,7 +497,7 @@ function WeatherSetup({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-[#6B6862]">
         Uses Open-Meteo for weather data — free, no API key required. Enter your
         default location for forecast-aware suggestions.
       </p>
@@ -513,7 +513,7 @@ function WeatherSetup({
         <div>
           <label
             htmlFor="units"
-            className="mb-1 block text-xs font-medium text-slate-400"
+            className="mb-1 block text-xs font-medium text-[#6B6862]"
           >
             Units
           </label>
@@ -521,7 +521,7 @@ function WeatherSetup({
             id="units"
             name="units"
             defaultValue={config?.units ?? "metric"}
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 focus:border-teal-400/50 focus:outline-none focus:ring-1 focus:ring-teal-400/30 [&>option]:bg-[#0d1422]"
+            className="w-full rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] px-3 py-2 text-sm text-[#1C1B19] focus:border-[#E7E5E0] focus:outline-none focus:ring-1 focus:ring-[#E7E5E0] [&>option]:bg-white"
           >
             <option value="metric">Metric (°C, km)</option>
             <option value="imperial">Imperial (°F, mi)</option>
@@ -532,7 +532,7 @@ function WeatherSetup({
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-lg bg-teal-500/20 px-4 py-2.5 text-sm font-medium text-teal-100 transition-colors hover:bg-teal-500/30 disabled:opacity-50"
+        className="w-full rounded-lg bg-[#E6F4EA] px-4 py-2.5 text-sm font-medium text-[#2F7D4F] transition-colors hover:bg-[#E6F4EA] disabled:opacity-50"
       >
         {loading ? "Saving…" : "Save Weather Settings"}
       </button>
@@ -581,7 +581,7 @@ function MapsSetup({
         <div>
           <label
             htmlFor="mapsProvider"
-            className="mb-1 block text-xs font-medium text-slate-400"
+            className="mb-1 block text-xs font-medium text-[#6B6862]"
           >
             Provider
           </label>
@@ -589,7 +589,7 @@ function MapsSetup({
             id="mapsProvider"
             name="mapsProvider"
             defaultValue={config?.mapsProvider ?? "approx"}
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 focus:border-teal-400/50 focus:outline-none focus:ring-1 focus:ring-teal-400/30 [&>option]:bg-[#0d1422]"
+            className="w-full rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] px-3 py-2 text-sm text-[#1C1B19] focus:border-[#E7E5E0] focus:outline-none focus:ring-1 focus:ring-[#E7E5E0] [&>option]:bg-white"
           >
             <option value="approx">Approx (no API key)</option>
             <option value="openrouteservice">OpenRouteService (API key)</option>
@@ -615,7 +615,7 @@ function MapsSetup({
         <div>
           <label
             htmlFor="units"
-            className="mb-1 block text-xs font-medium text-slate-400"
+            className="mb-1 block text-xs font-medium text-[#6B6862]"
           >
             Units
           </label>
@@ -623,7 +623,7 @@ function MapsSetup({
             id="units"
             name="units"
             defaultValue={config?.units ?? "metric"}
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 focus:border-teal-400/50 focus:outline-none focus:ring-1 focus:ring-teal-400/30 [&>option]:bg-[#0d1422]"
+            className="w-full rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] px-3 py-2 text-sm text-[#1C1B19] focus:border-[#E7E5E0] focus:outline-none focus:ring-1 focus:ring-[#E7E5E0] [&>option]:bg-white"
           >
             <option value="metric">Metric (km)</option>
             <option value="imperial">Imperial (mi)</option>
@@ -634,7 +634,7 @@ function MapsSetup({
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-lg bg-teal-500/20 px-4 py-2.5 text-sm font-medium text-teal-100 transition-colors hover:bg-teal-500/30 disabled:opacity-50"
+        className="w-full rounded-lg bg-[#E6F4EA] px-4 py-2.5 text-sm font-medium text-[#2F7D4F] transition-colors hover:bg-[#E6F4EA] disabled:opacity-50"
       >
         {loading ? "Saving…" : "Save Maps Settings"}
       </button>
@@ -662,7 +662,7 @@ function OpenTableSetup({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-[#6B6862]">
         Uses OpenTable for restaurant search and availability. Provide a default
         city to scope restaurant lookups.
       </p>
@@ -688,7 +688,7 @@ function OpenTableSetup({
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-lg bg-teal-500/20 px-4 py-2.5 text-sm font-medium text-teal-100 transition-colors hover:bg-teal-500/30 disabled:opacity-50"
+        className="w-full rounded-lg bg-[#E6F4EA] px-4 py-2.5 text-sm font-medium text-[#2F7D4F] transition-colors hover:bg-[#E6F4EA] disabled:opacity-50"
       >
         {loading ? "Saving…" : "Save OpenTable Settings"}
       </button>
@@ -740,7 +740,7 @@ function ScopeToggles({
 
   return (
     <div className="space-y-1.5">
-      <p className="text-xs font-medium text-slate-500">Permissions</p>
+      <p className="text-xs font-medium text-[#6B6862]">Permissions</p>
       <div className="flex flex-wrap gap-1.5">
         {availableScopes.map((scope) => {
           const active = grantedScopes.includes(scope);
@@ -752,8 +752,8 @@ function ScopeToggles({
               onClick={() => void toggleScope(scope)}
               className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
                 active
-                  ? "border border-teal-400/30 bg-teal-400/15 text-teal-200"
-                  : "border border-white/10 bg-white/5 text-slate-500 hover:text-slate-300"
+                  ? "border border-[#E7E5E0] bg-[#E6F4EA] text-[#2F7D4F]"
+                  : "border border-[#E7E5E0] bg-[#F2F1EE] text-[#6B6862] hover:text-[#6B6862]"
               }`}
             >
               {SCOPE_LABELS[scope]}
@@ -896,14 +896,14 @@ export function IntegrationCard({
   }
 
   return (
-    <article className="flex flex-col rounded-xl border border-white/10 bg-[#0d1422] p-5">
+    <article className="flex flex-col rounded-xl border border-[#E7E5E0] bg-white p-5">
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-base font-semibold">
             {state.displayName ?? state.provider}
           </h3>
-          <p className="mt-0.5 text-sm text-slate-400">{state.description}</p>
+          <p className="mt-0.5 text-sm text-[#6B6862]">{state.description}</p>
         </div>
         <span
           className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -931,14 +931,14 @@ export function IntegrationCard({
               defaultRevealed={true}
             />
           )}
-          <div className="space-y-1 rounded-lg border border-white/5 bg-white/[0.02] p-3 text-xs text-slate-300">
+          <div className="space-y-1 rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] p-3 text-xs text-[#6B6862]">
             <p>
-              <span className="text-slate-500">Account:</span>{" "}
+              <span className="text-[#6B6862]">Account:</span>{" "}
               {state.externalAccountLabel ?? "Connected"}
             </p>
             {state.lastCheckedAt && (
               <p>
-                <span className="text-slate-500">Last checked:</span>{" "}
+                <span className="text-[#6B6862]">Last checked:</span>{" "}
                 {formatIsoLocalTimestamp(state.lastCheckedAt)}
               </p>
             )}
@@ -958,14 +958,14 @@ export function IntegrationCard({
               type="button"
               onClick={() => void handleTest()}
               disabled={loading}
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition-colors hover:bg-white/10 disabled:opacity-50"
+              className="rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] px-3 py-1.5 text-xs text-[#1C1B19] transition-colors hover:bg-[#F2F1EE] disabled:opacity-50"
             >
               {loading ? "Testing…" : "Test"}
             </button>
             <button
               type="button"
               onClick={() => setShowSetup(true)}
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition-colors hover:bg-white/10"
+              className="rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] px-3 py-1.5 text-xs text-[#1C1B19] transition-colors hover:bg-[#F2F1EE]"
             >
               Reconnect
             </button>
@@ -973,7 +973,7 @@ export function IntegrationCard({
               type="button"
               onClick={() => void handleDisconnect()}
               disabled={loading}
-              className="rounded-lg border border-rose-300/20 bg-rose-300/10 px-3 py-1.5 text-xs text-rose-200 transition-colors hover:bg-rose-300/20 disabled:opacity-50"
+              className="rounded-lg border border-[#E7E5E0] bg-[#FBE8EC] px-3 py-1.5 text-xs text-[#C23B32] transition-colors hover:bg-[#FBE8EC] disabled:opacity-50"
             >
               Disconnect
             </button>
@@ -983,12 +983,12 @@ export function IntegrationCard({
 
       {/* Setup form */}
       {(!hasSession || showSetup) && (
-        <div className="mt-4 border-t border-white/5 pt-4">
+        <div className="mt-4 border-t border-[#E7E5E0] pt-4">
           {hasSession && (
             <button
               type="button"
               onClick={() => setShowSetup(false)}
-              className="mb-3 text-xs text-slate-500 transition-colors hover:text-slate-300"
+              className="mb-3 text-xs text-[#6B6862] transition-colors hover:text-[#6B6862]"
             >
               ← Back to connection info
             </button>
@@ -999,7 +999,7 @@ export function IntegrationCard({
 
       {/* Errors */}
       {(error || (!isConnected && state.lastError)) && (
-        <div className="mt-3 rounded-lg border border-rose-300/20 bg-rose-300/5 px-3 py-2 text-xs text-rose-300">
+        <div className="mt-3 rounded-lg border border-[#E7E5E0] bg-[#FBE8EC] px-3 py-2 text-xs text-[#C23B32]">
           {error || state.lastError}
         </div>
       )}

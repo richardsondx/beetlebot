@@ -128,19 +128,19 @@ export default async function SharePage({ params }: Params) {
 
   return (
     <main className="mx-auto flex min-h-[70vh] w-full max-w-xl flex-col justify-center px-6 py-14">
-      <h1 className="text-balance text-2xl font-semibold text-slate-100">
+      <h1 className="text-balance text-2xl font-semibold text-[#1C1B19]">
         {resolved.card.title}
       </h1>
       {resolved.card.subtitle && (
-        <p className="mt-2 text-sm text-slate-400">{resolved.card.subtitle}</p>
+        <p className="mt-2 text-sm text-[#6B6862]">{resolved.card.subtitle}</p>
       )}
 
-      <div className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4">
-        <p className="text-xs text-slate-500">
+      <div className="mt-6 rounded-xl border border-[#E7E5E0] bg-[#F2F1EE] p-4">
+        <p className="text-xs text-[#6B6862]">
           Redirecting you to the organizer…
         </p>
         <a
-          className="mt-2 inline-flex text-sm font-medium text-teal-200 hover:text-teal-100"
+          className="mt-2 inline-flex text-sm font-medium text-[#2F7D4F] hover:text-teal-100"
           href={resolved.targetUrl}
           rel="noopener noreferrer"
           target="_blank"

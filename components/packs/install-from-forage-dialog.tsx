@@ -63,7 +63,7 @@ export function InstallFromForageDialog() {
       <button
         type="button"
         onClick={openPanel}
-        className="shrink-0 rounded-lg border border-[#E7E5E0] bg-[#E5EFFB] px-4 py-2 text-sm text-sky-100 transition-colors hover:bg-[#E5EFFB]"
+        className="shrink-0 rounded-lg border border-[#E7E5E0] bg-[#E5EFFB] px-4 py-2 text-sm text-[#2F5FA8] transition-colors hover:bg-[#E5EFFB]"
       >
         + From BeetlePack
       </button>
@@ -91,12 +91,12 @@ export function InstallFromForageDialog() {
           value={packRef}
           onChange={(e) => setPackRef(e.target.value)}
           disabled={loading}
-          className="min-w-0 flex-1 rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] px-3 py-2 text-sm text-white placeholder-[#9A968F] outline-none focus:border-[#E7E5E0] disabled:opacity-60"
+          className="min-w-0 flex-1 rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] px-3 py-2 text-sm text-[#1C1B19] placeholder-[#9A968F] outline-none focus:border-[#E7E5E0] disabled:opacity-60"
         />
         <button
           type="submit"
           disabled={loading || !packRef.trim()}
-          className="shrink-0 rounded-lg bg-[#E5EFFB] px-3 py-2 text-sm text-sky-100 transition-colors hover:bg-[#E5EFFB] disabled:opacity-50"
+          className="shrink-0 rounded-lg bg-[#E5EFFB] px-3 py-2 text-sm text-[#2F5FA8] transition-colors hover:bg-[#E5EFFB] disabled:opacity-50"
         >
           {loading ? "Installing…" : "Install"}
         </button>

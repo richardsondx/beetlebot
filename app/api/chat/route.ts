@@ -41,7 +41,30 @@ import {
   applyUpgradedCardsToBlocks,
   enrichLlmReply,
 } from "@/lib/chat/visual-enricher";
-import type { RichBlock } from "@/lib/chat/rich-message";
+import type {
+  FlightCompareBlock,
+  FollowUp,
+  RichBlock,
+} from "@/lib/chat/rich-message";
+import { extractFollowUps, mergeFollowUps } from "@/lib/chat/follow-ups";
+import {
+  createChatEventStream,
+  mapChatError,
+  newRequestId,
+  noopEmit,
+  splitTextDeltas,
+  type ChatEventEmitter,
+} from "@/lib/chat/stream";
+import { parseTripQuery, shortDateLabel } from "@/lib/travel/trip-parse";
+import {
+  effectiveTripQuery,
+  hasDuffelToken,
+  searchFlights,
+  toFlightCompareBlock,
+  type FlightSearchResult,
+} from "@/lib/tools/duffel-flights";
+import { buildHotelSetBlock, refreshHotelPrice } from "@/lib/travel/hotel-prices";
+import { buildPlanObject, FLIGHT_SEARCH, formatFlightRange } from "@/lib/travel/compare";
 import { getChatToolByName, getScopedOpenRouterTools } from "@/lib/tools/registry";
 import type { ChatToolDefinition } from "@/lib/tools/types";
 import { runResearchLoop } from "@/lib/chat/research-loop";
@@ -229,6 +252,8 @@ function buildCompanionPrompt(input: {
     "- When someone says hi or starts casual, match their energy. Be warm and meet them where they are — don't jump straight into planning mode.",
     "- In a new thread, prioritize rapport first: one short natural opener before suggestions.",
     "- If the user asks who you are, introduce yourself as beetlebot in one short sentence.",
+    "- When the user asks about a trip with a destination and dates, give results in the first reply. Do not open with a question about vibe. Vibe is a follow-up chip, not a blocker.",
+    "- End your reply with a <followups> JSON list of at most 2 short follow-up messages the user might send next, for example [\"Show hotels in Brooklyn\", \"Only nonstop flights\"]. The route strips this tag before the user sees it, so it never appears in your visible text.",
     `- ${preferredNameHint}`,
     input.homeArea
       ? `Known home area: ${input.homeArea}. Use this for proximity-sensitive recommendations.`
@@ -2307,13 +2332,184 @@ async function createUniquePackSlug(base: string) {
   return `${root}-${Date.now()}`;
 }
 
-export async function POST(request: Request) {
+type ChatPayload = {
+  reply: string;
+  blocks?: RichBlock[];
+  followUps?: FollowUp[];
+  confidence: number;
+  model: string;
+  requestedModel: string;
+  provider: string;
+  responseId: string | null;
+  messageId: string;
+  threadId: string;
+  packsUsed?: string[];
+  /** When set, the client replaces the block of this type instead of appending. */
+  replaceBlockType?: string;
+};
+
+/**
+ * Handle a card tap action (select flight, select hotel, check hotel price).
+ * Short-circuits the model flow: the reply is templated, no model call.
+ */
+async function handleChatAction(input: {
+  action: { type: string; offerId?: string; searchId?: string; hotelId?: string };
+  message: string;
+  thread: { id: string };
+  emit: ChatEventEmitter;
+  requestId: string;
+}): Promise<ChatPayload> {
+  const { action, message, thread, emit } = input;
+  await addConversationMessage({ threadId: thread.id, role: "user", content: message });
+
+  let reply = "";
+  let blocks: RichBlock[] | undefined;
+  let followUps: FollowUp[] = [];
+  let replaceBlockType: string | undefined;
+
+  if (action.type === "select_flight") {
+    const flight = FLIGHT_SEARCH.options.find((o) => o.pointer === action.offerId);
+    if (!flight) {
+      reply = "I couldn't find that flight anymore. Ask me to search again and I'll pull fresh prices.";
+    } else {
+      const plan = buildPlanObject(flight);
+      const out = formatFlightRange(flight.slices[0].departAt, flight.slices[0].arriveAt);
+      reply =
+        `Picked ${flight.airline}, ${flight.currency} ${flight.totalAmount.toFixed(2)}, ${out}, ` +
+        `${flight.stops === 0 ? "nonstop" : `${flight.stops} stop`}. ` +
+        `It is in your plan now: ${plan.title}. Here are hotels for the same nights.`;
+      blocks = [
+        buildHotelSetBlock({
+          checkIn: FLIGHT_SEARCH.departureDate,
+          checkOut: FLIGHT_SEARCH.returnDate,
+          adults: FLIGHT_SEARCH.adults,
+        }),
+      ];
+      followUps = mergeFollowUps({ model: [], blocks });
+    }
+  } else if (action.type === "select_hotel") {
+    const hotel = buildHotelSetBlock({
+      checkIn: FLIGHT_SEARCH.departureDate,
+      checkOut: FLIGHT_SEARCH.returnDate,
+      adults: FLIGHT_SEARCH.adults,
+    }).hotels.find((h) => h.id === action.hotelId);
+    reply = hotel
+      ? `Added ${hotel.name}. Want dinner near there Friday night?`
+      : "Added that hotel. Want dinner near there Friday night?";
+    followUps = [
+      { label: "Find dinner near the hotel Friday", message: "Find dinner near the hotel Friday" },
+      { label: "Check the weather", message: "Check the weather in New York for Dec 11 to 14" },
+      { label: "Add this to my calendar", message: "Add this trip to my calendar" },
+    ];
+  } else if (action.type === "check_hotel_price") {
+    const stay = {
+      checkIn: FLIGHT_SEARCH.departureDate,
+      checkOut: FLIGHT_SEARCH.returnDate,
+      adults: FLIGHT_SEARCH.adults,
+    };
+    const refreshed = action.hotelId ? await refreshHotelPrice(action.hotelId, stay) : null;
+    const hotelBlock = buildHotelSetBlock(stay);
+    blocks = [hotelBlock];
+    replaceBlockType = "hotel_set";
+    const hotel = hotelBlock.hotels.find((h) => h.id === action.hotelId);
+    reply =
+      refreshed && hotel?.price
+        ? `Checked ${hotel.name}: ${hotel.price.total !== null ? `$${hotel.price.total} total` : "price found"}.`
+        : "No live price yet for that hotel. Try again in a bit, or check the rate on the hotel site.";
+  } else {
+    reply = "Got it.";
+  }
+
+  const assistantMessage = await addConversationMessage({
+    threadId: thread.id,
+    role: "assistant",
+    content: reply,
+    blocksJson: blocks ? JSON.stringify(blocks) : undefined,
+  });
+  for (const chunk of splitTextDeltas(reply)) {
+    emit({ event: "text_delta", data: { text: chunk } });
+  }
+  (blocks ?? []).forEach((block, i) =>
+    emit({ event: "block", data: { id: `action-block-${i}`, block } }),
+  );
+  if (followUps.length > 0) {
+    emit({ event: "follow_ups", data: { items: followUps } });
+  }
+  return {
+    reply,
+    blocks,
+    followUps: followUps.length > 0 ? followUps : undefined,
+    confidence: 0.86,
+    model: getCurrentModel(),
+    requestedModel: getCurrentModel(),
+    provider: "openrouter",
+    responseId: null,
+    messageId: assistantMessage.id,
+    threadId: thread.id,
+    replaceBlockType,
+  };
+}
+
+async function runChatFlow(
+  request: Request,
+  emit: ChatEventEmitter = noopEmit,
+): Promise<ChatPayload> {
+  const requestId = newRequestId();
   try {
     const body = chatSchema.parse(await request.json());
 
     const existingThread = body.threadId ? await getConversationThread(body.threadId) : null;
     const thread = existingThread ?? (await createConversationThread(body.message.slice(0, 100)));
     const isNewThread = !existingThread;
+
+    // Card taps short-circuit the model flow.
+    if (body.action) {
+      return handleChatAction({
+        action: body.action,
+        message: body.message,
+        thread,
+        emit,
+        requestId,
+      });
+    }
+
+    // Trip fast-parse: start the flight search in parallel with the reply.
+    const tripQuery = parseTripQuery(body.message);
+    const effectiveQuery = tripQuery ? effectiveTripQuery(tripQuery) : null;
+    const tripFlightContext = effectiveQuery
+      ? hasDuffelToken()
+        ? `Live flight results for ${effectiveQuery.origin} to ${effectiveQuery.destination}, ${effectiveQuery.depart} to ${effectiveQuery.return}, ${effectiveQuery.adults} adult${effectiveQuery.adults > 1 ? "s" : ""} are attached to this reply as cards. Lead with a one-line summary of the options. Do not state flight prices in your text; the cards show them. Do not open with a question about vibe.`
+        : `Flight results for ${effectiveQuery.origin} to ${effectiveQuery.destination}, ${effectiveQuery.depart} to ${effectiveQuery.return}, ${effectiveQuery.adults} adult${effectiveQuery.adults > 1 ? "s" : ""} are attached to this reply as cards: ${FLIGHT_SEARCH.options.map((o) => `${o.airline} ${o.currency} ${o.totalAmount.toFixed(2)}`).join(", ")}. These are sample prices from a saved Duffel search, not live. Lead with a one-line summary of the options. Do not state flight prices in your text; the cards show them. Do not open with a question about vibe.`
+      : null;
+    let flightSearch: Promise<FlightSearchResult | null> | null = null;
+    if (effectiveQuery) {
+      emit({
+        event: "status",
+        data: {
+          text: `Searching flights, ${effectiveQuery.origin} to ${effectiveQuery.destination}, ${shortDateLabel(effectiveQuery.depart)} to ${shortDateLabel(effectiveQuery.return)}, ${effectiveQuery.adults} adult${effectiveQuery.adults > 1 ? "s" : ""}.`,
+        },
+      });
+      emit({ event: "block_pending", data: { id: "flight-compare", type: "flight_compare" } });
+      flightSearch = searchFlights(effectiveQuery)
+        .then((result) => {
+          emit({
+            event: "status",
+            data: { text: `Found ${result.offersTotal.toLocaleString()} offers, picking 3` },
+          });
+          return result;
+        })
+        .catch(() => null);
+    } else {
+      emit({ event: "status", data: { text: "Reading your request" } });
+    }
+
+    // The user message is saved before the reply builds, so it survives a
+    // model failure and the error card can say "Your message is saved."
+    await addConversationMessage({
+      threadId: thread.id,
+      role: "user",
+      content: body.message,
+    });
     const recentConversation = await getConversationMessages(thread.id, CONVERSATION_HISTORY_LIMIT);
     const conversationHistory: OpenRouterMessage[] = recentConversation
       .filter((item) => item.role === "user" || item.role === "assistant" || item.role === "system")
@@ -2786,6 +2982,9 @@ export async function POST(request: Request) {
         ...conversationHistory,
         { role: "user", content: body.message },
       ];
+      if (tripFlightContext) {
+        modelMessages.push({ role: "system", content: tripFlightContext });
+      }
       const openRouterTools = (await getScopedOpenRouterTools()).filter((tool) => {
         if (tool.function.name !== "google_calendar_events") return true;
         return calendarIntent || calendarWriteIntent || isActionCmd || shouldProactiveCalendarCheck;
@@ -3191,6 +3390,7 @@ export async function POST(request: Request) {
       responseId = guardedReply.responseId;
       replyText = guardedReply.text;
     };
+    emit({ event: "status", data: { text: "Writing reply" } });
     if (replyText) {
       // Pre-resolved clarification response from intent-linking stage.
     } else if (shouldUseSafeNoIntentMode) {
@@ -3411,6 +3611,11 @@ export async function POST(request: Request) {
         "I couldn’t complete a live tool lookup right now, but I can still help with a best-effort suggestion.";
     }
 
+    // Strip the <followups> tag before enrichment; it never reaches the user.
+    const followUpParse = extractFollowUps(replyText);
+    replyText = followUpParse.text;
+    const modelFollowUps = followUpParse.items;
+
     let resolveAssistantId: (id: string) => void = () => {};
     const assistantMessageIdReady = new Promise<string>((resolve) => {
       resolveAssistantId = resolve;
@@ -3442,38 +3647,57 @@ export async function POST(request: Request) {
     const blocks: RichBlock[] | undefined = enriched.blocks?.length
       ? enriched.blocks
       : undefined;
+    let finalBlocks = blocks;
     currentBlocks = blocks;
 
-    await addConversationMessage({
-      threadId: thread.id,
-      role: "user",
-      content: body.message,
-    });
+    // Attach the flight compare block, so it is saved with the message.
+    let flightBlock: FlightCompareBlock | undefined;
+    if (flightSearch) {
+      const flightResult = await flightSearch;
+      if (flightResult) {
+        flightBlock = toFlightCompareBlock(flightResult);
+        finalBlocks = [...(finalBlocks ?? []), flightBlock];
+        currentBlocks = finalBlocks;
+      }
+    }
+    const followUps = mergeFollowUps({ model: modelFollowUps, blocks: finalBlocks });
+
     const assistantMessage = await addConversationMessage({
       threadId: thread.id,
       role: "assistant",
       content: enriched.text,
-      blocksJson: blocks ? JSON.stringify(blocks) : undefined,
+      blocksJson: finalBlocks ? JSON.stringify(finalBlocks) : undefined,
     });
     resolveAssistantId(assistantMessage.id);
+
+    // Stream the finished reply as events, in display order: text, block, chips.
+    for (const chunk of splitTextDeltas(enriched.text)) {
+      emit({ event: "text_delta", data: { text: chunk } });
+    }
+    if (flightBlock) {
+      emit({ event: "block", data: { id: "flight-compare", block: flightBlock } });
+    }
+    if (followUps.length > 0) {
+      emit({ event: "follow_ups", data: { items: followUps } });
+    }
 
     const confidence = taste.count > 0 ? 0.86 : 0.78;
 
     // Count block types for observability
-    const blockTypeCounts = (blocks ?? []).reduce<Record<string, number>>((acc, b) => {
+    const blockTypeCounts = (finalBlocks ?? []).reduce<Record<string, number>>((acc, b) => {
       acc[b.type] = (acc[b.type] ?? 0) + 1;
       return acc;
     }, {});
     const blockSummary = Object.entries(blockTypeCounts)
       .map(([t, n]) => `${t}=${n}`)
       .join(" ");
-    const traceMessage = `chat_plan_response confidence=${confidence.toFixed(2)} model=${responseModel} mode=${effectiveMode} requested_mode=${requestedMode} state=${orchestrationState} blocks=${blocks?.length ?? 0}${blockSummary ? ` [${blockSummary}]` : ""}`;
+    const traceMessage = `chat_plan_response confidence=${confidence.toFixed(2)} model=${responseModel} mode=${effectiveMode} requested_mode=${requestedMode} state=${orchestrationState} blocks=${finalBlocks?.length ?? 0}${blockSummary ? ` [${blockSummary}]` : ""}`;
 
     await db.auditEvent.create({
       data: {
         actor: "api:chat",
         action: "chat_intent_parsed",
-        details: `mode=${effectiveMode} requested_mode=${requestedMode} blocks=${blocks?.length ?? 0} message=${body.message.slice(0, 120)}`,
+        details: `mode=${effectiveMode} requested_mode=${requestedMode} blocks=${finalBlocks?.length ?? 0} message=${body.message.slice(0, 120)}`,
       },
     });
     await db.debugTrace.create({
@@ -3498,9 +3722,10 @@ export async function POST(request: Request) {
       });
     }
 
-    return ok({
+    return {
       reply: enriched.text,
-      blocks,
+      blocks: finalBlocks,
+      followUps: followUps.length > 0 ? followUps : undefined,
       confidence,
       model: responseModel,
       requestedModel,
@@ -3509,14 +3734,77 @@ export async function POST(request: Request) {
       messageId: assistantMessage.id,
       threadId: thread.id,
       packsUsed: shouldInjectPackContext ? installedPacks.map((p) => p.name) : undefined,
-    });
+    };
   } catch (error) {
-    return fromError(error);
+    throw error;
   }
 }
 
-export async function GET() {
+/** POST dispatcher: JSON by default, SSE when the client asks for a stream. */
+export async function POST(request: Request) {
+  const wantsStream = (request.headers.get("accept") ?? "").includes("text/event-stream");
+  if (!wantsStream) {
+    try {
+      return ok(await runChatFlow(request));
+    } catch (error) {
+      return fromError(error);
+    }
+  }
+  const { stream, emit, close } = createChatEventStream();
+  void runChatFlow(request, emit)
+    .then((payload) => {
+      emit({
+        event: "done",
+        data: {
+          threadId: payload.threadId,
+          messageId: payload.messageId,
+          packsUsed: payload.packsUsed,
+        },
+      });
+      close();
+    })
+    .catch((error: unknown) => {
+      const info = mapChatError(error);
+      emit({
+        event: "error",
+        data: {
+          code: info.code,
+          message: info.message,
+          retryable: info.retryable,
+          requestId: newRequestId(),
+          fix: info.fix,
+        },
+      });
+      close();
+    });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
+}
+
+export async function GET(request: Request) {
   try {
+    const url = new URL(request.url);
+    const threadId = url.searchParams.get("threadId");
+    if (threadId) {
+      const thread = await getConversationThread(threadId);
+      if (!thread) return fail("thread not found", 404);
+      const messages = await getConversationMessages(threadId, 50);
+      return ok({
+        threadId,
+        messages: messages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          text: m.content,
+          blocks: parseMessageBlocks(m.blocksJson),
+          createdAt: m.createdAt.toISOString(),
+        })),
+      });
+    }
     const threads = await getRecentConversationThreads(8);
     return ok({
       provider: "openrouter",

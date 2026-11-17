@@ -1,3 +1,5 @@
+import type { FlightCard } from "@/lib/chat/rich-message";
+
 // Travel compare core for unit U3.
 // Flights are live Duffel results. The snapshot below is copied verbatim from
 // the unedited evidence file duffel-yyz-nyc-20261211.json in the run folder.
@@ -317,4 +319,134 @@ export function formatFlightRange(departAt: string, arriveAt: string): string {
     return `${day}, ${departTime} – ${arriveTime}`;
   }
   return `${day}, ${departTime} – ${FLIGHT_DAY_FORMAT.format(arrive)}, ${arriveTime}`;
+}
+
+// ── In-chat flight cards (shared mapper, snapshot and live) ──────────────────
+
+/** Airline homepages used for the "Book on <airline>" link. No booking inside Beetlebot. */
+export const AIRLINE_HOME_PAGES: Record<string, string> = {
+  "Delta Air Lines": "https://www.delta.com/",
+  "Porter Airlines": "https://www.flyporter.com/",
+  "Air Canada": "https://www.aircanada.com/",
+};
+
+/** "3h51m" to minutes, for fastest-card ranking. Unknown shapes sort last. */
+export function durationToMinutes(duration: string): number {
+  const match = duration.match(/(?:(\d+)h)?(?:(\d+)m)?/);
+  if (!match || (match[1] === undefined && match[2] === undefined)) return Number.MAX_SAFE_INTEGER;
+  return Number(match[1] ?? 0) * 60 + Number(match[2] ?? 0);
+}
+
+/** Map one snapshot FlightOption to an in-chat FlightCard. No tags yet. */
+export function flightOptionToCard(option: FlightOption): FlightCard {
+  const outbound = option.slices[0];
+  const inbound = option.slices[option.slices.length - 1];
+  return {
+    id: option.pointer,
+    offerId: option.pointer,
+    airline: option.airline,
+    outbound: {
+      from: outbound.from,
+      to: outbound.to,
+      departAt: outbound.departAt,
+      arriveAt: outbound.arriveAt,
+      duration: outbound.duration,
+      stops: outbound.stops,
+      flightNumbers: outbound.flightNumbers,
+    },
+    return: {
+      from: inbound.from,
+      to: inbound.to,
+      departAt: inbound.departAt,
+      arriveAt: inbound.arriveAt,
+      duration: inbound.duration,
+      stops: inbound.stops,
+      flightNumbers: inbound.flightNumbers,
+    },
+    stops: option.stops,
+    duration: option.duration,
+    totalAmount: option.totalAmount,
+    currency: option.currency,
+    changeable: option.changeable,
+    refundable: option.refundable,
+    carryOnBags: option.carryOnBags,
+    tags: [],
+    bookUrl: AIRLINE_HOME_PAGES[option.airline],
+  };
+}
+
+/**
+ * Pick the three cards to show: lowest total, fastest, fewest stops.
+ * At most one tag per card. A card that wins two slots keeps the first tag
+ * and the other slot is filled with the next cheapest untagged card.
+ */
+export function pickThreeCards(cards: FlightCard[]): FlightCard[] {
+  if (cards.length <= 3) {
+    const ranked = [...cards].sort((a, b) => a.totalAmount - b.totalAmount);
+    return assignTags(ranked);
+  }
+  const sorted = [...cards].sort((a, b) => a.totalAmount - b.totalAmount);
+  const picked: FlightCard[] = [];
+  const take = (card: FlightCard | undefined) => {
+    if (card && !picked.includes(card)) picked.push(card);
+  };
+  take(sorted[0]);
+  take([...cards].sort((a, b) => durationToMinutes(a.duration) - durationToMinutes(b.duration))[0]);
+  take([...cards].sort((a, b) => a.stops - b.stops || a.totalAmount - b.totalAmount)[0]);
+  for (const card of sorted) {
+    if (picked.length >= 3) break;
+    take(card);
+  }
+  return assignTags(picked);
+}
+
+function assignTags(picked: FlightCard[]): FlightCard[] {
+  const byPrice = [...picked].sort((a, b) => a.totalAmount - b.totalAmount);
+  const bySpeed = [...picked].sort(
+    (a, b) => durationToMinutes(a.duration) - durationToMinutes(b.duration),
+  );
+  const byStops = [...picked].sort(
+    (a, b) => a.stops - b.stops || a.totalAmount - b.totalAmount,
+  );
+  const tagged = new Set<FlightCard>();
+  const tags = new Map<FlightCard, string>();
+  const claim = (candidates: FlightCard[], tag: string) => {
+    for (const candidate of candidates) {
+      if (!tagged.has(candidate)) {
+        tagged.add(candidate);
+        tags.set(candidate, tag);
+        return;
+      }
+    }
+  };
+  claim(byPrice, "Lowest price");
+  claim(bySpeed, "Fastest");
+  claim(byStops, "Fewest stops");
+  return picked.map((card) => ({
+    ...card,
+    tags: tags.has(card) ? [tags.get(card) as string] : [],
+  }));
+}
+
+/** Map the snapshot options to tagged in-chat cards. */
+export function flightOptionsToCards(options: FlightOption[]): FlightCard[] {
+  return pickThreeCards(options.map(flightOptionToCard));
+}
+
+/** Deep link to the compare page for one search. */
+export function buildFlightCompareUrl(query: {
+  originCode: string;
+  destinationCode: string;
+  depart: string;
+  return: string;
+  adults: number;
+}): string {
+  const params = new URLSearchParams({
+    from: query.originCode,
+    to: query.destinationCode,
+    depart: query.depart,
+    return: query.return,
+    adults: String(query.adults),
+  });
+  return `/travel/compare?${params.toString()}`;
 }

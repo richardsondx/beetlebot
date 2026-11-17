@@ -15,11 +15,19 @@ export const createAutopilotSchema = z.object({
 
 export const updateAutopilotSchema = createAutopilotSchema.partial();
 
+export const chatActionSchema = z.object({
+  type: z.enum(["select_flight", "select_hotel", "check_hotel_price"]),
+  offerId: z.string().max(200).optional(),
+  searchId: z.string().max(200).optional(),
+  hotelId: z.string().max(200).optional(),
+});
+
 export const chatSchema = z.object({
   message: z.string().min(1),
   threadId: z.string().min(8).optional(),
   mode: z.string().min(1).optional(),
   timezone: z.string().min(1).optional(),
+  action: chatActionSchema.optional(),
 });
 
 export const installPackSchema = z.object({

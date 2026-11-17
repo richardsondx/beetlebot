@@ -4,6 +4,7 @@
  */
 
 import type { ImageCard, RichBlock } from "./rich-message";
+import { isFlightCompareBlock, isHotelSetBlock } from "./rich-message";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -107,6 +108,18 @@ export function sanitiseBlocks(raw: unknown[]): RichBlock[] {
             items,
           });
         }
+        break;
+      }
+
+      case "flight_compare": {
+        const block = isFlightCompareBlock(b);
+        if (block) safe.push(block);
+        break;
+      }
+
+      case "hotel_set": {
+        const block = isHotelSetBlock(b);
+        if (block) safe.push(block);
         break;
       }
     }

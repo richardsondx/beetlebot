@@ -1,8 +1,25 @@
 import { formatFlightRange, getComparePayload } from "@/lib/travel/compare";
 
-export default function TravelComparePage() {
+export default async function TravelComparePage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const payload = getComparePayload();
   const flights = payload.flights;
+  const params = (await searchParams) ?? {};
+  const first = (v: string | string[] | undefined) =>
+    Array.isArray(v) ? v[0] : v;
+  const reqFrom = first(params.from);
+  const reqTo = first(params.to);
+  const reqDepart = first(params.depart);
+  const reqReturn = first(params.return);
+  const reqAdults = first(params.adults);
+  const matchesSnapshot =
+    (!reqFrom || reqFrom === flights.origin) &&
+    (!reqTo || reqTo === flights.destination) &&
+    (!reqDepart || reqDepart === flights.departureDate) &&
+    (!reqReturn || reqReturn === flights.returnDate);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -12,6 +29,15 @@ export default function TravelComparePage() {
           <p className="text-sm text-slate-400">
             Toronto YYZ to New York NYC, Fri Dec 11 to Mon Dec 14 2026, 1 adult, economy.
           </p>
+          {reqFrom || reqTo || reqDepart || reqReturn ? (
+            <p className="text-sm text-slate-400">
+              Requested: {reqFrom ?? flights.origin} to {reqTo ?? flights.destination},{" "}
+              {reqDepart ?? flights.departureDate} to {reqReturn ?? flights.returnDate},{" "}
+              {reqAdults ?? flights.adults} adult{reqAdults === "1" ? "" : "s"}.
+              {!matchesSnapshot &&
+                " Showing the saved Dec 11 to 14 search below; it is the only saved search."}
+            </p>
+          ) : null}
           <p className="text-sm text-slate-400">
             Flights searched live on {flights.source} at {flights.searchedAt}.{" "}
             {flights.offersTotal} offers found, {flights.offersShown} shown in the full

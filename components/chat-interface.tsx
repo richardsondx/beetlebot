@@ -89,19 +89,27 @@ function ImageCardView({
   card,
   index,
   category,
+  compare,
   onSelect,
 }: {
   card: ImageCard;
   index?: number;
   category?: string;
+  compare?: boolean;
   onSelect?: (card: ImageCard) => void;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const hasRealImage = card.imageUrl && !card.imageUrl.includes("placehold.co") && !imgFailed;
 
   return (
     <div className="group overflow-hidden rounded-2xl border border-[#E7E5E0] bg-white transition-all duration-200 hover:border-[#E7E5E0] hover:shadow-xl hover:shadow-black/10">
-      <div className="relative aspect-[5/3] w-full overflow-hidden bg-[#F2F1EE]">
+      <button
+        type="button"
+        onClick={() => hasRealImage && setExpanded((v) => !v)}
+        aria-label={hasRealImage ? `See ${card.title} photo larger` : card.title}
+        className="relative block aspect-[5/3] w-full overflow-hidden bg-[#F2F1EE] text-left"
+      >
         {index !== undefined && (
           <div className="absolute left-2.5 top-2.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs font-bold text-white backdrop-blur-md ring-1 ring-[#E7E5E0]">
             {index}
@@ -135,11 +143,32 @@ function ImageCardView({
         {hasRealImage && (
           <div className="absolute inset-x-0 bottom-0 h-1/2 bg-transparent" />
         )}
-      </div>
+      </button>
+      {expanded && hasRealImage && (
+        <div className="border-b border-[#E7E5E0]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={card.imageUrl}
+            alt={card.alt ?? card.title}
+            className="h-auto w-full object-cover"
+            loading="lazy"
+          />
+        </div>
+      )}
       <div className="p-3.5">
         <p className="text-sm font-semibold text-[#1C1B19] leading-snug">{card.title}</p>
         {card.subtitle && (
           <p className="mt-1 text-xs text-[#6B6862] leading-relaxed">{card.subtitle}</p>
+        )}
+        {card.compareRows && card.compareRows.length > 0 && (
+          <dl className="mt-3 flex flex-col gap-1.5">
+            {card.compareRows.map((row) => (
+              <div key={row.label} className="flex items-baseline justify-between gap-3 text-[13px]">
+                <dt className="shrink-0 text-[#6B6862]">{row.label}</dt>
+                <dd className="text-right font-semibold text-[#1C1B19]">{row.value}</dd>
+              </div>
+            ))}
+          </dl>
         )}
         {card.meta && Object.keys(card.meta).length > 0 && (
           <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -153,14 +182,23 @@ function ImageCardView({
             ))}
           </div>
         )}
-        <div className="mt-3 flex items-center gap-2">
-          {onSelect && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {onSelect && !compare && (
             <button
               type="button"
               onClick={() => onSelect(card)}
               className="rounded-lg bg-[#C8811A]/15 px-4 py-1.5 text-xs font-semibold text-[#8A5710] transition-all hover:bg-[#C8811A]/25 active:scale-[0.97]"
             >
               Choose this
+            </button>
+          )}
+          {compare && onSelect && (
+            <button
+              type="button"
+              onClick={() => onSelect(card)}
+              className="w-full rounded-full bg-[#C8811A] px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-[#A96E15] active:scale-[0.98]"
+            >
+              Pick {card.title}
             </button>
           )}
           {card.actionUrl && (
@@ -231,6 +269,57 @@ function OptionSetView({
   optionSet: OptionSet;
   onSelect?: (card: ImageCard) => void;
 }) {
+  const isCompare = optionSet.variant === "compare";
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeDot, setActiveDot] = useState(0);
+  const onCompareScroll = () => {
+    const el = scrollRef.current;
+    if (!el || optionSet.items.length === 0) return;
+    const idx = Math.round(el.scrollLeft / (el.scrollWidth / optionSet.items.length));
+    setActiveDot(Math.max(0, Math.min(optionSet.items.length - 1, idx)));
+  };
+  if (isCompare) {
+    return (
+      <div className="mt-3">
+        {optionSet.prompt && (
+          <p className="mb-3 text-xs font-medium text-[#6B6862]">{optionSet.prompt}</p>
+        )}
+        <div
+          ref={scrollRef}
+          onScroll={onCompareScroll}
+          className="flex gap-3 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0"
+          style={{ scrollSnapType: "x mandatory" }}
+        >
+          {optionSet.items.map(({ index, card }) => (
+            <div
+              key={`${index}-${card.title}`}
+              className="w-[86%] shrink-0 sm:w-auto"
+              style={{ scrollSnapAlign: "start" }}
+            >
+              <ImageCardView
+                card={card}
+                index={index}
+                category={card.category}
+                compare
+                onSelect={onSelect}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 flex justify-center gap-1.5 sm:hidden" aria-label="Compare pages">
+          {optionSet.items.map((item, i) => (
+            <span
+              key={item.index}
+              className={`h-1.5 w-1.5 rounded-full ${i === activeDot ? "bg-[#C8811A]" : "bg-[#D8D5CF]"}`}
+            />
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-[#6B6862]">
+          Sample prices, not live. Beetlebot does not book. Reply 1, 2, or 3 to pick.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="mt-3">
       {optionSet.prompt && (
@@ -246,7 +335,13 @@ function OptionSetView({
         }`}
       >
         {optionSet.items.map(({ index, card }) => (
-          <ImageCardView key={`${index}-${card.title}`} card={card} index={index} onSelect={onSelect} />
+          <ImageCardView
+            key={`${index}-${card.title}`}
+            card={card}
+            index={index}
+            category={card.category}
+            onSelect={onSelect}
+          />
         ))}
       </div>
     </div>

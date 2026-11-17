@@ -105,6 +105,7 @@ export function sanitiseBlocks(raw: unknown[]): RichBlock[] {
               typeof b.prompt === "string"
                 ? b.prompt.slice(0, 500)
                 : undefined,
+            variant: b.variant === "compare" ? "compare" : undefined,
             items,
           });
         }
@@ -152,6 +153,20 @@ function sanitiseCard(b: Record<string, unknown>): ImageCard | null {
           }, {})
       : undefined;
 
+  const compareRows = Array.isArray(b.compareRows)
+    ? (b.compareRows as unknown[])
+        .slice(0, 6)
+        .map((r) => {
+          const row = r as Record<string, unknown>;
+          if (typeof row?.label !== "string" || typeof row?.value !== "string") return null;
+          return {
+            label: row.label.slice(0, 50),
+            value: row.value.slice(0, 120),
+          };
+        })
+        .filter((r): r is { label: string; value: string } => r !== null)
+    : undefined;
+
   return {
     type: "image_card",
     title: b.title.slice(0, 200),
@@ -159,6 +174,9 @@ function sanitiseCard(b: Record<string, unknown>): ImageCard | null {
       typeof b.subtitle === "string" ? b.subtitle.slice(0, 400) : undefined,
     imageUrl,
     alt: typeof b.alt === "string" ? b.alt.slice(0, 200) : undefined,
+    category:
+      typeof b.category === "string" ? b.category.slice(0, 50) : undefined,
+    compareRows: compareRows?.length ? compareRows : undefined,
     meta: rawMeta,
     actionUrl,
     sourceName:

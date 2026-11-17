@@ -28,6 +28,31 @@ function HotelCardView({
           : "border-[#E7E5E0] hover:border-[#E7E5E0]"
       }`}
     >
+      {hotel.photoUrl ? (
+        <div className="relative aspect-[5/3] w-full overflow-hidden bg-[#F2F1EE]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={hotel.photoUrl}
+            alt={`${hotel.name} photo`}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+          {hotel.photoSourceName && (
+            <span className="absolute bottom-1.5 right-2 text-[10px] text-white drop-shadow">
+              Photo: {hotel.photoSourceName}
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className="flex aspect-[5/3] w-full flex-col items-center justify-center gap-2 bg-[#F2F1EE]">
+          <span className="text-3xl" aria-hidden="true">
+            🏨
+          </span>
+          <span className="max-w-[80%] text-center text-xs text-[#6B6862]">
+            {hotel.photoFallback ?? "No hotel photo found"}
+          </span>
+        </div>
+      )}
       <button
         type="button"
         onClick={onSelect}
@@ -57,6 +82,11 @@ function HotelCardView({
                 ? `${price.derived ? "about " : ""}${formatMoney(price.nightly, price.currency)} a night`
                 : `${formatMoney(price.total ?? 0, price.currency)} total`}
             </p>
+            {hotel.source === "Sample" && (
+              <p className="mt-1 text-[11px] font-semibold text-[#8A5710]">
+                Sample price, not live
+              </p>
+            )}
             <p className="text-[11px] text-[#6B6862]">
               {price.nightly !== null && price.total !== null
                 ? price.derived

@@ -9,12 +9,18 @@ import { formatFlightRange } from "@/lib/travel/compare";
 
 // ── Block types ────────────────────────────────────────────────────────────
 
+export type CompareRow = { label: string; value: string };
+
 export type ImageCard = {
   type: "image_card";
   title: string;
   subtitle?: string;
   imageUrl: string;
   alt?: string;
+  /** Badge shown on the photo corner, for example "Beach". */
+  category?: string;
+  /** Fixed label/value rows under the title, used by the compare variant. */
+  compareRows?: CompareRow[];
   /** Structured metadata chips: price, rating, neighborhood, distance, etc. */
   meta?: Record<string, string>;
   /** Deep-link to booking/detail page */
@@ -37,6 +43,8 @@ export type ImageGallery = {
 export type OptionSet = {
   type: "option_set";
   prompt?: string;
+  /** "compare" renders aligned rows, 3 across on desktop, swipe on phone. */
+  variant?: "default" | "compare";
   items: Array<{
     index: number;
     card: ImageCard;
@@ -122,6 +130,12 @@ export type HotelCard = {
   sourceUrl: string;
   checkedAt: string | null;
   feeNote?: string;
+  /** Real hotel photo URL, when a photo source returned one. */
+  photoUrl?: string;
+  /** Who supplied the hotel photo, for example "Wikipedia". */
+  photoSourceName?: string;
+  /** Named reason shown when no hotel photo exists, for example "No hotel photo found". */
+  photoFallback?: string;
 };
 
 export type HotelSetBlock = {
@@ -176,9 +190,17 @@ export function toPlainText(msg: AssistantMessage): string {
         break;
       case "option_set":
         if (block.prompt) parts.push(block.prompt);
-        block.items.forEach(({ index, card }) =>
-          parts.push(`[${index}] ${cardToText(card)}`),
-        );
+        block.items.forEach(({ index, card }) => {
+          if (block.variant === "compare" && card.compareRows?.length) {
+            const row = (label: string) =>
+              card.compareRows?.find((r) => r.label === label)?.value;
+            parts.push(
+              `${index}. ${card.title}, ${card.subtitle ?? row("Country") ?? ""} — ${row("Hotel") ?? "No hotel in seed data"} — ${row("Per night") ?? "Price not available"} — ${card.actionUrl ?? card.imageUrl}`,
+            );
+          } else {
+            parts.push(`[${index}] ${cardToText(card)}`);
+          }
+        });
         break;
       case "flight_compare": {
         block.offers.forEach((offer, i) => {
@@ -196,6 +218,11 @@ export function toPlainText(msg: AssistantMessage): string {
           const price = hotelPriceText(hotel);
           parts.push(
             `${i + 1}. ${hotel.name}, ${hotel.area}, ${hotel.stars ? `${hotel.stars} star` : "stars not listed"}, ${price} (${hotel.source}, ${hotel.price?.adults ?? block.stay.adults} adults) ${hotel.sourceUrl}`,
+          );
+          parts.push(
+            hotel.photoUrl
+              ? `(photo: ${hotel.photoSourceName ?? "hotel photo"} ${hotel.photoUrl})`
+              : `(no hotel photo: ${hotel.photoFallback ?? "No hotel photo found"})`,
           );
         });
         parts.push("Reply 1, 2, or 3 to pick.");
@@ -357,6 +384,14 @@ export function isHotelSetBlock(raw: unknown): HotelSetBlock | null {
       sourceUrl: typeof h.sourceUrl === "string" ? h.sourceUrl.slice(0, 2048) : "",
       checkedAt: typeof h.checkedAt === "string" ? h.checkedAt.slice(0, 40) : null,
       feeNote: typeof h.feeNote === "string" ? h.feeNote.slice(0, 200) : undefined,
+      photoUrl:
+        typeof h.photoUrl === "string" && h.photoUrl.startsWith("https://")
+          ? h.photoUrl.slice(0, 2048)
+          : undefined,
+      photoSourceName:
+        typeof h.photoSourceName === "string" ? h.photoSourceName.slice(0, 100) : undefined,
+      photoFallback:
+        typeof h.photoFallback === "string" ? h.photoFallback.slice(0, 200) : undefined,
     });
   }
   if (hotels.length === 0) return null;
@@ -376,6 +411,11 @@ export function isHotelSetBlock(raw: unknown): HotelSetBlock | null {
 export function cardToText(card: ImageCard): string {
   const lines: string[] = [card.title];
   if (card.subtitle) lines.push(card.subtitle);
+  if (card.compareRows?.length) {
+    lines.push(
+      card.compareRows.map((r) => `${r.label}: ${r.value}`).join(" · "),
+    );
+  }
   if (card.meta) {
     const chips = Object.entries(card.meta)
       .map(([k, v]) => `${k}: ${v}`)

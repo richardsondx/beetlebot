@@ -13,6 +13,10 @@
 import type { AssistantMessage, ImageCard, RichBlock } from "./rich-message";
 import { sanitiseBlocks } from "./safety";
 import {
+  applyBeachCompareRows,
+  isBeachCompareTitles,
+} from "@/lib/travel/beach-compare";
+import {
   type BousierEntityInput,
   resolveImageBatch,
 } from "@/lib/media/bousier";
@@ -24,6 +28,7 @@ export type RawOption = {
   subtitle?: string;
   category?: string; // e.g. "hotel", "restaurant", "park"
   meta?: Record<string, string>;
+  compareRows?: Array<{ label: string; value: string }>;
   actionUrl?: string;
   sourceName?: string;
 };
@@ -68,7 +73,11 @@ export async function enrichLlmReply(
   }
 
   // Enrich each option with an image URL
-  const cards = await enrichOptionsWithBousier(payload.options);
+  const enriched = await enrichOptionsWithBousier(payload.options);
+  const isBeachCompare = isBeachCompareTitles(
+    enriched.map((card) => card.title),
+  );
+  const cards = isBeachCompare ? applyBeachCompareRows(enriched) : enriched;
 
   const blocks: RichBlock[] =
     cards.length === 1
@@ -76,7 +85,10 @@ export async function enrichLlmReply(
       : [
           {
             type: "option_set",
-            prompt: "Here are your options — tap one to explore further:",
+            prompt: isBeachCompare
+              ? "Which beach?"
+              : "Here are your options — tap one to explore further:",
+            variant: isBeachCompare ? "compare" : undefined,
             items: cards.map((card, i) => ({ index: i + 1, card })),
           },
         ];
@@ -209,6 +221,8 @@ async function enrichOptionsWithBousier(options: RawOption[]): Promise<ImageCard
       subtitle: opt.subtitle,
       imageUrl,
       alt: opt.title,
+      category: opt.category,
+      compareRows: opt.compareRows,
       meta: Object.keys(meta).length > 0 ? meta : undefined,
       actionUrl: opt.actionUrl,
       sourceName,

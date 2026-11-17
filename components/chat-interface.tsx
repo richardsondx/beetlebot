@@ -17,6 +17,9 @@ import { ruleFollowUps } from "@/lib/chat/follow-ups";
 import { streamChatResponse } from "@/hooks/use-chat-stream";
 import { CHAT_MODES, DEFAULT_CHAT_MODE, type ModeDefinition } from "@/lib/constants";
 import { Composer } from "@/components/chat/composer";
+import { Greeting } from "@/components/chat/greeting";
+import { AssistantMessage, ThinkingDots, UserBubble } from "@/components/chat/message-bubble";
+import { Logo } from "@/components/ui/logo";
 import { FollowUpChips } from "@/components/chat/follow-up-chips";
 import { StatusLine } from "@/components/chat/status-line";
 import { BlockSkeleton } from "@/components/chat/block-skeleton";
@@ -25,43 +28,13 @@ import { HotelSetView } from "@/components/chat/blocks/hotel-set";
 
 type ChatMode = ModeDefinition;
 
-// ── Quick actions ───────────────────────────────────────────────────────────
+// ── Suggestion chips (§4.1): a click fills and sends ─────────────────────────
 
-type QuickAction = {
-  title: string;
-  subtitle: string;
-  icon: string;
-  /** Fill the composer with this text instead of sending the title. */
-  prompt?: string;
-};
-
-const quickActions: QuickAction[] = [
-  {
-    title: "Plan my Friday",
-    subtitle: "Find a fun evening plan under your current budget.",
-    icon: "🎉",
-  },
-  {
-    title: "Empty weekend detector",
-    subtitle: "If Saturday is open by noon, auto-propose a full day.",
-    icon: "📅",
-  },
-  {
-    title: "Date night autopilot",
-    subtitle: "Weekly soft hold + two curated options with fallback.",
-    icon: "💫",
-  },
-  {
-    title: "Rainy day replan",
-    subtitle: "Swap outdoor activities with indoor alternatives.",
-    icon: "🌧️",
-  },
-  {
-    title: "Weekend trip",
-    subtitle: "Compare live flights and hotels for a city break.",
-    icon: "✈️",
-    prompt: "Weekend in New York from Toronto, Fri to Mon, 1 adult",
-  },
+const SUGGESTION_CHIPS = [
+  "Plan a rainy Saturday in Toronto",
+  "Find a weekend escape under $400",
+  "Compare flights to Montreal",
+  "Book-free spa day ideas",
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -106,28 +79,8 @@ type ChatMessage = {
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
-const CATEGORY_ICONS: Record<string, string> = {
-  restaurant: "🍽️",
-  hotel: "🏨",
-  park: "🌳",
-  activity: "🎯",
-  destination: "📍",
-  experience: "✨",
-  bar: "🍸",
-  cafe: "☕",
-  museum: "🏛️",
-  event: "🎪",
-  spa: "🧖",
-  shopping: "🛍️",
-};
-
-function categoryIcon(category?: string): string {
-  if (!category) return "📍";
-  const key = category.toLowerCase();
-  for (const [k, v] of Object.entries(CATEGORY_ICONS)) {
-    if (key.includes(k)) return v;
-  }
-  return "📍";
+function categoryIcon(): string {
+  return "";
 }
 
 // ── Image card ──────────────────────────────────────────────────────────────
@@ -147,17 +100,17 @@ function ImageCardView({
   const hasRealImage = card.imageUrl && !card.imageUrl.includes("placehold.co") && !imgFailed;
 
   return (
-    <div className="group overflow-hidden rounded-2xl border border-white/8 bg-[#0d1422] transition-all duration-200 hover:border-amber-300/20 hover:shadow-xl hover:shadow-black/50">
-      <div className="relative aspect-[5/3] w-full overflow-hidden bg-gradient-to-br from-[#0a111e] to-[#111d30]">
+    <div className="group overflow-hidden rounded-2xl border border-[#E7E5E0] bg-white transition-all duration-200 hover:border-[#E7E5E0] hover:shadow-xl hover:shadow-black/10">
+      <div className="relative aspect-[5/3] w-full overflow-hidden bg-[#F2F1EE]">
         {index !== undefined && (
-          <div className="absolute left-2.5 top-2.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs font-bold text-white backdrop-blur-md ring-1 ring-white/10">
+          <div className="absolute left-2.5 top-2.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs font-bold text-white backdrop-blur-md ring-1 ring-[#E7E5E0]">
             {index}
           </div>
         )}
         {category && (
-          <div className="absolute right-2.5 top-2.5 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 backdrop-blur-md ring-1 ring-white/10">
+          <div className="absolute right-2.5 top-2.5 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 backdrop-blur-md ring-1 ring-[#E7E5E0]">
             <span className="text-xs">{categoryIcon(category)}</span>
-            <span className="text-[10px] capitalize text-slate-300">{category}</span>
+            <span className="text-[10px] capitalize text-[#6B6862]">{category}</span>
           </div>
         )}
         {hasRealImage ? (
@@ -171,29 +124,29 @@ function ImageCardView({
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-3">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 text-3xl ring-1 ring-white/8">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F2F1EE] text-3xl ring-1 ring-[#E7E5E0]">
               {categoryIcon(category)}
             </div>
-            <span className="max-w-[80%] text-center text-xs text-slate-500 leading-snug">
+            <span className="max-w-[80%] text-center text-xs text-[#6B6862] leading-snug">
               {card.title}
             </span>
           </div>
         )}
         {hasRealImage && (
-          <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#0d1422]/90 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-1/2 bg-transparent" />
         )}
       </div>
       <div className="p-3.5">
-        <p className="text-sm font-semibold text-slate-100 leading-snug">{card.title}</p>
+        <p className="text-sm font-semibold text-[#1C1B19] leading-snug">{card.title}</p>
         {card.subtitle && (
-          <p className="mt-1 text-xs text-slate-400 leading-relaxed">{card.subtitle}</p>
+          <p className="mt-1 text-xs text-[#6B6862] leading-relaxed">{card.subtitle}</p>
         )}
         {card.meta && Object.keys(card.meta).length > 0 && (
           <div className="mt-2.5 flex flex-wrap gap-1.5">
             {Object.entries(card.meta).map(([, value]) => (
               <span
                 key={value}
-                className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[11px] font-medium text-slate-300"
+                className="rounded-full border border-[#E7E5E0] bg-[#F2F1EE] px-2.5 py-0.5 text-[11px] font-medium text-[#6B6862]"
               >
                 {value}
               </span>
@@ -205,7 +158,7 @@ function ImageCardView({
             <button
               type="button"
               onClick={() => onSelect(card)}
-              className="rounded-lg bg-amber-400/15 px-4 py-1.5 text-xs font-semibold text-amber-300 transition-all hover:bg-amber-400/25 active:scale-[0.97]"
+              className="rounded-lg bg-[#C8811A]/15 px-4 py-1.5 text-xs font-semibold text-[#8A5710] transition-all hover:bg-[#C8811A]/25 active:scale-[0.97]"
             >
               Choose this
             </button>
@@ -215,7 +168,7 @@ function ImageCardView({
               href={card.actionUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/4 px-3 py-1.5 text-xs text-slate-400 transition-colors hover:border-white/20 hover:text-slate-200"
+              className="flex items-center gap-1.5 rounded-lg border border-[#E7E5E0] bg-[#F2F1EE] px-3 py-1.5 text-xs text-[#6B6862] transition-colors hover:border-[#E7E5E0] hover:text-[#1C1B19]"
             >
               View
               <svg className="h-3 w-3" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={1.5}>
@@ -225,7 +178,7 @@ function ImageCardView({
           )}
         </div>
         {card.sourceName && (
-          <p className="mt-2.5 truncate text-[10px] text-slate-600">via {card.sourceName}</p>
+          <p className="mt-2.5 truncate text-[10px] text-[#9A968F]">via {card.sourceName}</p>
         )}
       </div>
     </div>
@@ -254,7 +207,7 @@ function GalleryView({
         ))}
       </div>
       {gallery.items.length > 2 && (
-        <div className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-[#131c2e] to-transparent" />
+        <div className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-transparent" />
       )}
     </div>
   );
@@ -281,7 +234,7 @@ function OptionSetView({
   return (
     <div className="mt-3">
       {optionSet.prompt && (
-        <p className="mb-3 text-xs font-medium text-slate-500">{optionSet.prompt}</p>
+        <p className="mb-3 text-xs font-medium text-[#6B6862]">{optionSet.prompt}</p>
       )}
       <div
         className={`grid gap-3 ${
@@ -344,11 +297,11 @@ function InlineSuggestionsView({
   return (
     <div>
       {preamble && (
-        <p className="whitespace-pre-wrap break-words text-slate-100">{preamble}</p>
+        <p className="whitespace-pre-wrap break-words text-[#1C1B19]">{preamble}</p>
       )}
-      <p className="whitespace-pre-wrap break-words text-slate-100 mt-0">{parsed.text}</p>
+      <p className="whitespace-pre-wrap break-words text-[#1C1B19] mt-0">{parsed.text}</p>
       <div className="mt-3">
-        <p className="mb-3 text-xs font-medium text-slate-500">Here are your options — tap one to explore further:</p>
+        <p className="mb-3 text-xs font-medium text-[#6B6862]">Here are your options — tap one to explore further:</p>
         <div className={`grid gap-3 ${parsed.options.length === 1 ? "grid-cols-1" : parsed.options.length === 2 ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2"}`}>
           {parsed.options.map((opt, i) => {
             const card: ImageCard = {
@@ -403,7 +356,7 @@ function RichBlockRenderer({
   switch (block.type) {
     case "text_block":
       return (
-        <p className="mt-2 break-words text-sm leading-relaxed text-slate-300">{block.text}</p>
+        <p className="mt-2 break-words text-sm leading-relaxed text-[#6B6862]">{block.text}</p>
       );
     case "image_card":
       return (
@@ -455,14 +408,14 @@ function JsonInspector({ message }: { message: ChatMessage }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         title="Inspect raw JSON"
-        className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-mono text-slate-600 opacity-0 transition-all hover:bg-white/5 hover:text-slate-400 group-hover/bubble:opacity-100"
+        className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-mono text-[#9A968F] opacity-0 transition-all hover:bg-[#F2F1EE] hover:text-[#6B6862] group-hover/bubble:opacity-100"
       >
         <span>{open ? "▾" : "▸"}</span>
         <span>{"{}"}</span>
       </button>
       {open && (
-        <div className="mt-1.5 overflow-x-auto rounded-xl border border-white/8 bg-[#070c14] p-3">
-          <pre className="whitespace-pre-wrap break-all font-mono text-[10px] leading-relaxed text-slate-400">
+        <div className="mt-1.5 overflow-x-auto rounded-xl border border-[#E7E5E0] bg-white p-3">
+          <pre className="whitespace-pre-wrap break-all font-mono text-[10px] leading-relaxed text-[#6B6862]">
             {json}
           </pre>
         </div>
@@ -500,7 +453,7 @@ function AssistantMessageBody({
     return (
       <>
         {message.text && (
-          <p className="whitespace-pre-wrap break-words text-slate-100">{message.text}</p>
+          <p className="whitespace-pre-wrap break-words text-[#1C1B19]">{message.text}</p>
         )}
         {message.blocks!.map((block, bi) => (
           <RichBlockRenderer
@@ -527,7 +480,7 @@ function AssistantMessageBody({
     return <InlineSuggestionsView parsed={parsed} preamble={preamble} onSelect={onSelectCard} />;
   }
 
-  return <p className="whitespace-pre-wrap break-words text-slate-100">{message.text}</p>;
+  return <p className="whitespace-pre-wrap break-words text-[#1C1B19]">{message.text}</p>;
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -919,11 +872,6 @@ export function ChatInterface() {
     void submitMessage("Weekend in New York from Toronto, Fri to Mon, 1 adult");
   }
 
-  function handleModeChange(mode: ChatMode) {
-    setActiveMode(mode);
-    if (mode.id !== "auto") setModeNote(`Mode: ${mode.label}`);
-  }
-
   const lastAssistantIndex = (() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === "assistant") return i;
@@ -936,42 +884,36 @@ export function ChatInterface() {
       {/* Message area */}
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-6">
         {!hasMessages ? (
-          <div className="flex h-full flex-col items-center justify-center gap-8">
-            <div className="text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-400/15 text-4xl shadow-lg shadow-amber-400/10">
-                🪲
-              </div>
-              <h2 className="text-2xl font-semibold text-white">How can I help you today?</h2>
-              <p className="mt-2 text-sm text-slate-400">
-                Plans for your free time, from Friday night to weekend trips.
-              </p>
+          <div className="mx-auto flex h-full w-full max-w-3xl flex-col items-center justify-center px-4">
+            <Greeting />
+            <div className="mt-12 w-full">
+              <Composer
+                value={input}
+                onChange={setInput}
+                onSend={() => void submitMessage(input)}
+                onStop={stopStreaming}
+                streaming={streaming}
+                sentCount={sentCount}
+                inputRef={inputRef}
+              />
             </div>
-            <div className="grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
-              {quickActions.map((action) => (
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2" role="group" aria-label="Suggestions">
+              {SUGGESTION_CHIPS.map((chip) => (
                 <button
-                  key={action.title}
+                  key={chip}
                   type="button"
-                  onClick={() => {
-                    if (action.prompt) {
-                      setInput(action.prompt);
-                      setTimeout(() => inputRef.current?.focus(), 50);
-                    } else {
-                      void submitMessage(action.title);
-                    }
-                  }}
-                  className="group rounded-xl border border-white/8 bg-[#0d1422] p-4 text-left transition-all hover:border-amber-300/30 hover:bg-[#111d30]"
+                  onClick={() => void submitMessage(chip)}
+                  className="rounded-full bg-[#F2F1EE] px-3.5 py-2 text-sm font-medium text-[#1C1B19] transition-colors hover:bg-[#E7E5E0]"
                 >
-                  <div className="mb-2 text-2xl">{action.icon}</div>
-                  <p className="text-sm font-medium text-white">{action.title}</p>
-                  <p className="mt-0.5 text-xs text-slate-400">{action.subtitle}</p>
+                  {chip}
                 </button>
               ))}
             </div>
           </div>
         ) : (
-          <div className="mx-auto flex max-w-3xl flex-col gap-6">
+          <div className="mx-auto flex max-w-[720px] flex-col gap-6">
             {modeNote && (
-              <p className="text-center text-xs text-slate-500">{modeNote}</p>
+              <p className="text-center text-xs text-[#6B6862]">{modeNote}</p>
             )}
             {messages.map((message, idx) => (
               <div
@@ -981,8 +923,8 @@ export function ChatInterface() {
                 }`}
               >
                 {message.role === "assistant" && (
-                  <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-400/20 text-base">
-                    🪲
+                  <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FBF1E1] text-[#C8811A]">
+                    <Logo size={24} />
                   </div>
                 )}
                 <div
@@ -991,19 +933,18 @@ export function ChatInterface() {
                   }`}
                 >
                   {message.role === "user" ? (
-                    <div className="rounded-2xl rounded-br-sm bg-amber-400/20 px-4 py-3 text-sm leading-relaxed text-amber-50">
+                    <UserBubble>
                       {message.mode && message.mode !== "auto" && (
-                        <p className="mb-1.5 text-xs text-amber-300/60">
-                          {CHAT_MODES.find((m) => m.id === message.mode)?.icon}{" "}
+                        <p className="mb-1.5 text-xs text-[#6B6862]">
                           {CHAT_MODES.find((m) => m.id === message.mode)?.label}
                         </p>
                       )}
                       <p className="whitespace-pre-wrap break-words">{message.text}</p>
-                    </div>
+                    </UserBubble>
                   ) : (
-                    <div className="group/bubble overflow-hidden rounded-2xl rounded-bl-sm bg-[#131c2e] px-4 py-3 text-sm leading-relaxed">
+                    <div className="group/bubble text-[15px] leading-[22px] text-[#1C1B19]">
                       {message.packsUsed && message.packsUsed.length > 0 && (
-                        <p className="mb-2 text-[11px] font-medium text-slate-500">
+                        <p className="mb-2 text-[11px] font-medium text-[#9A968F]">
                           Using{" "}
                           {message.packsUsed.map((s) => packSlugToFriendlyName(s)).join(", ")}{" "}
                           {message.packsUsed.length === 1 ? "pack" : "packs"}
@@ -1031,12 +972,12 @@ export function ChatInterface() {
                         onRefreshFlights={handleRefreshFlights}
                       />
                       {message.stopped && (
-                        <p className="mt-2 text-xs text-slate-500">
+                        <p className="mt-2 text-xs text-[#6B6862]">
                           Stopped.{" "}
                           <button
                             type="button"
                             onClick={retryLast}
-                            className="text-amber-300 underline-offset-2 hover:underline"
+                            className="text-[#8A5710] underline-offset-2 hover:underline"
                           >
                             Retry
                           </button>
@@ -1063,49 +1004,28 @@ export function ChatInterface() {
             ))}
             {streaming && status && (
               <div className="flex items-start gap-3">
-                <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-400/20 text-base">
-                  🪲
+                <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FBF1E1] text-[#C8811A]">
+                  <Logo size={24} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <StatusLine text={status} />
+                  <ThinkingDots />
                   {pendingBlock && <BlockSkeleton type={pendingBlock} />}
                 </div>
               </div>
             )}
             {error && (
-              <div className="rounded-xl border border-white/8 border-l-4 border-l-amber-400 bg-[#131c2e] px-4 py-3 text-sm text-slate-300">
-                <p className="flex items-start gap-2">
-                  <span>⚠️</span>
-                  <span>{error.message}</span>
-                </p>
-                {error.fix && (
-                  <p className="mt-1 pl-6 text-xs text-slate-500">{error.fix}</p>
-                )}
-                <div className="mt-3 flex items-center gap-2 pl-6">
-                  {error.retryable && (
-                    <button
-                      type="button"
-                      onClick={retryLast}
-                      className="rounded-lg bg-amber-400/15 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-400/25"
-                    >
-                      Retry
-                    </button>
-                  )}
+              <div className="flex items-center gap-3 text-sm text-[#C23B32]" role="alert">
+                <span>Something went wrong. Try again.</span>
+                {error.retryable && (
                   <button
                     type="button"
-                    onClick={() => {
-                      void navigator.clipboard?.writeText(
-                        `${error.code} · req ${error.requestId}`,
-                      );
-                    }}
-                    className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:border-white/20 hover:text-slate-200"
+                    onClick={retryLast}
+                    className="font-semibold text-[#8A5710] underline-offset-2 hover:underline"
                   >
-                    Copy details
+                    Retry
                   </button>
-                  <span className="text-[11px] text-slate-600">
-                    {error.code} · req {error.requestId}
-                  </span>
-                </div>
+                )}
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -1118,24 +1038,24 @@ export function ChatInterface() {
           <button
             type="button"
             onClick={() => scrollToBottom()}
-            className="rounded-full border border-white/10 bg-[#0d1422] px-3 py-1.5 text-xs text-slate-300 shadow-lg hover:border-amber-300/30"
+            className="rounded-full border border-[#E7E5E0] bg-white px-3 py-1.5 text-xs text-[#6B6862] shadow-md hover:border-[#D6D3CC]"
           >
             Jump to latest ↓
           </button>
         </div>
       )}
 
-      <Composer
-        value={input}
-        onChange={setInput}
-        onSend={() => void submitMessage(input)}
-        onStop={stopStreaming}
-        streaming={streaming}
-        mode={activeMode}
-        onModeChange={handleModeChange}
-        sentCount={sentCount}
-        inputRef={inputRef}
-      />
+      {hasMessages && (
+        <Composer
+          value={input}
+          onChange={setInput}
+          onSend={() => void submitMessage(input)}
+          onStop={stopStreaming}
+          streaming={streaming}
+          sentCount={sentCount}
+          inputRef={inputRef}
+        />
+      )}
     </div>
   );
 }

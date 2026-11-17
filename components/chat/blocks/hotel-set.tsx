@@ -22,10 +22,10 @@ function HotelCardView({
   const mismatch = price !== null && price.adults !== stayAdults;
   return (
     <div
-      className={`overflow-hidden rounded-2xl border bg-[#0d1422] transition-all ${
+      className={`overflow-hidden rounded-2xl border bg-white transition-all ${
         selected
-          ? "border-amber-300 shadow-lg shadow-amber-400/10"
-          : "border-white/8 hover:border-amber-300/20"
+          ? "border-amber-300 shadow-lg shadow-[#1C1B19]/5"
+          : "border-[#E7E5E0] hover:border-[#E7E5E0]"
       }`}
     >
       <button
@@ -36,28 +36,28 @@ function HotelCardView({
       >
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-sm font-semibold text-slate-100">{hotel.name}</p>
-            <p className="mt-0.5 text-xs text-slate-500">{hotel.area}</p>
+            <p className="text-sm font-semibold text-[#1C1B19]">{hotel.name}</p>
+            <p className="mt-0.5 text-xs text-[#6B6862]">{hotel.area}</p>
           </div>
           {selected && (
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400 text-xs font-bold text-[#060b12]">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#C8811A] text-xs font-bold text-white">
               ✓
             </span>
           )}
         </div>
 
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-[#6B6862]">
           {hotel.stars ? `${hotel.stars} star` : "Stars not listed"}
         </p>
 
         {price ? (
           <>
-            <p className="mt-3 text-xl font-bold text-slate-100">
+            <p className="mt-3 text-xl font-bold text-[#1C1B19]">
               {price.nightly !== null
                 ? `${price.derived ? "about " : ""}${formatMoney(price.nightly, price.currency)} a night`
                 : `${formatMoney(price.total ?? 0, price.currency)} total`}
             </p>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-[#6B6862]">
               {price.nightly !== null && price.total !== null
                 ? price.derived
                   ? `from ${formatMoney(price.total, price.currency)} total, ${price.nights} nights`
@@ -66,27 +66,27 @@ function HotelCardView({
             </p>
           </>
         ) : (
-          <p className="mt-3 text-sm font-semibold text-slate-300">No live price yet</p>
+          <p className="mt-3 text-sm font-semibold text-[#6B6862]">No live price yet</p>
         )}
 
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-[#6B6862]">
           Price for {price?.adults ?? stayAdults} adults
         </p>
         {mismatch && (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-[#6B6862]">
             Searched for {price?.adults} adults. Your price may differ.
           </p>
         )}
-        {hotel.feeNote && <p className="mt-1 text-[11px] text-slate-600">{hotel.feeNote}</p>}
+        {hotel.feeNote && <p className="mt-1 text-[11px] text-[#9A968F]">{hotel.feeNote}</p>}
       </button>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-white/6 px-4 py-2.5 text-xs">
+      <div className="flex flex-wrap items-center gap-2 border-t border-[#E7E5E0] px-4 py-2.5 text-xs">
         {price ? (
           <a
             href={hotel.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-amber-300 underline-offset-2 hover:underline"
+            className="text-[#8A5710] underline-offset-2 hover:underline"
           >
             View on {hotel.source}
           </a>
@@ -95,12 +95,12 @@ function HotelCardView({
             type="button"
             onClick={onCheckPrice}
             disabled={checking}
-            className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 hover:border-white/20 disabled:opacity-40"
+            className="rounded-lg border border-[#E7E5E0] px-3 py-1.5 text-[#6B6862] hover:border-[#E7E5E0] disabled:opacity-40"
           >
             {checking ? "Checking…" : "Check price"}
           </button>
         )}
-        <span className="text-slate-600">
+        <span className="text-[#9A968F]">
           {hotel.checkedAt
             ? `Checked ${new Date(hotel.checkedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
             : "Not checked yet"}
@@ -138,7 +138,7 @@ export function HotelSetView({
           />
         ))}
       </div>
-      <p className="mt-3 text-xs text-slate-500">
+      <p className="mt-3 text-xs text-[#6B6862]">
         Prices from {block.hotels[0]?.source ?? "Hello Axel"}. Prices move daily, confirm
         on the seller before booking. Beetlebot does not book.
       </p>

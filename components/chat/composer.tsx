@@ -1,18 +1,15 @@
 "use client";
 
 import { useEffect, useState, type RefObject } from "react";
-import type { ModeDefinition } from "@/lib/constants";
-import { ModePicker } from "./mode-picker";
+import { ArrowUpIcon, PlusIcon } from "@/components/ui/icons";
 
-/** One-row composer: mode pill, textarea, send or stop. */
+/** Rounded composer (§4.1): + Add, Muse Spark label, 32px accent send circle. */
 export function Composer({
   value,
   onChange,
   onSend,
   onStop,
   streaming,
-  mode,
-  onModeChange,
   sentCount,
   inputRef,
 }: {
@@ -21,13 +18,13 @@ export function Composer({
   onSend: () => void;
   onStop: () => void;
   streaming: boolean;
-  mode: ModeDefinition;
-  onModeChange: (mode: ModeDefinition) => void;
+  // Kept for call-site compatibility; the mode picker is not part of the §4.1 composer.
+  mode?: unknown;
+  onModeChange?: unknown;
   sentCount: number;
   inputRef: RefObject<HTMLTextAreaElement | null>;
 }) {
   const [isPhone, setIsPhone] = useState(false);
-  const [hintVisible, setHintVisible] = useState(false);
 
   useEffect(() => {
     const query = window.matchMedia("(max-width: 639px)");
@@ -37,46 +34,54 @@ export function Composer({
     return () => query.removeEventListener("change", update);
   }, []);
 
-  const showHint = hintVisible && sentCount < 3 && !isPhone;
-
   return (
-    <div className="border-t border-white/8 bg-[#060b12]/80 px-4 py-4 backdrop-blur-sm">
+    <div className="bg-white px-4 pb-4 pt-2 md:px-2 md:pb-6">
       <form
-        className="mx-auto flex max-w-3xl flex-col rounded-2xl border border-white/10 bg-[#0d1422] shadow-xl shadow-black/30 focus-within:border-amber-300/25"
+        className="mx-auto flex w-full max-w-3xl flex-col rounded-3xl border border-[#D6D3CC] bg-white shadow-md focus-within:border-[#C8811A]"
         onSubmit={(e) => {
           e.preventDefault();
           if (!streaming) onSend();
         }}
       >
-        <div className="flex items-end gap-2 px-3 pt-3 pb-2">
-          <ModePicker active={mode} onChange={onModeChange} />
-          <textarea
-            ref={inputRef}
-            value={value}
-            onChange={(e) => {
-              onChange(e.target.value);
-              e.target.style.height = "auto";
-              e.target.style.height = `${Math.min(e.target.scrollHeight, isPhone ? 120 : 160)}px`;
-            }}
-            onFocus={() => setHintVisible(true)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !isPhone) {
-                e.preventDefault();
-                if (!streaming) onSend();
-              }
-            }}
-            placeholder={isPhone ? "Ask Beetlebot" : "Ask about a trip, a dinner, or your weekend"}
-            rows={1}
-            aria-label="Message Beetlebot"
-            className="min-w-0 flex-1 resize-none bg-transparent text-base text-slate-100 placeholder-slate-500 outline-none"
-            style={{ maxHeight: isPhone ? "120px" : "160px" }}
-          />
+        <textarea
+          ref={inputRef}
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            e.target.style.height = "auto";
+            e.target.style.height = `${Math.min(e.target.scrollHeight, isPhone ? 120 : 192)}px`;
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && !isPhone) {
+              e.preventDefault();
+              if (!streaming) onSend();
+            }
+            if (e.key === "Escape") {
+              (e.target as HTMLTextAreaElement).blur();
+            }
+          }}
+          placeholder="Ask Beetlebot to plan something…"
+          rows={1}
+          aria-label="Message Beetlebot"
+          className="min-w-0 resize-none bg-transparent px-4 pb-1 pt-3 text-[15px] leading-[22px] text-[#1C1B19] placeholder-[#9A968F] outline-none"
+          style={{ maxHeight: isPhone ? "120px" : "192px" }}
+        />
+        <div className="flex items-center gap-1 px-3 pb-3 pt-1">
+          <button
+            type="button"
+            aria-label="Add"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#6B6862] transition-all hover:bg-[#F2F1EE] hover:text-[#1C1B19] active:scale-[0.97]"
+          >
+            <PlusIcon size={16} />
+          </button>
+          <span className="ml-1 text-xs font-medium text-[#9A968F]">Muse Spark</span>
+          <span className="flex-1" />
           {streaming ? (
             <button
               type="button"
               onClick={onStop}
               aria-label="Stop"
-              className="mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-slate-200 transition-all hover:bg-white/15"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F2F1EE] text-[#1C1B19] transition-all hover:bg-[#E7E5E0] active:scale-[0.97]"
             >
               <span className="block h-3 w-3 rounded-[2px] bg-current" />
             </button>
@@ -85,36 +90,16 @@ export function Composer({
               type="submit"
               disabled={!value.trim()}
               aria-label="Send"
-              className="mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-[#060b12] transition-all hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-slate-500"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#C8811A] text-white transition-all hover:bg-[#A96B12] active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-[#E7E5E0] disabled:text-[#9A968F]"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                className="h-4 w-4"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M8 14V2m0 0-4 4m4-4 4 4"
-                />
-              </svg>
+              <ArrowUpIcon size={18} strokeWidth={2.25} />
             </button>
           )}
         </div>
       </form>
-
-      {showHint ? (
-        <p className="mt-2 text-center text-xs text-slate-600">
-          Enter to send · Shift+Enter for new line
-        </p>
-      ) : (
-        <p className="mt-2 text-center text-xs text-slate-600">
-          Beetlebot plans, you book with the airline or hotel.
-        </p>
-      )}
+      <p className="mt-2 text-center text-xs text-[#9A968F]">
+        {sentCount < 3 ? "Enter to send · Shift+Enter for new line" : "Beetlebot plans, you book with the airline or hotel."}
+      </p>
     </div>
   );
 }

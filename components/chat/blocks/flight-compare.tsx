@@ -24,10 +24,10 @@ function FlightCardView({
   const [rulesOpen, setRulesOpen] = useState(false);
   return (
     <div
-      className={`overflow-hidden rounded-2xl border bg-[#0d1422] transition-all ${
+      className={`overflow-hidden rounded-2xl border bg-white transition-all ${
         selected
-          ? "border-amber-300 shadow-lg shadow-amber-400/10"
-          : "border-white/8 hover:border-amber-300/20"
+          ? "border-amber-300 shadow-lg shadow-[#1C1B19]/5"
+          : "border-[#E7E5E0] hover:border-[#E7E5E0]"
       }`}
     >
       <button
@@ -42,23 +42,23 @@ function FlightCardView({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={card.logoUrl} alt="" className="h-5 w-5 object-contain" />
             ) : null}
-            <p className="text-sm font-semibold text-slate-100">{card.airline}</p>
+            <p className="text-sm font-semibold text-[#1C1B19]">{card.airline}</p>
           </div>
           {selected && (
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400 text-xs font-bold text-[#060b12]">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#C8811A] text-xs font-bold text-white">
               ✓
             </span>
           )}
         </div>
 
-        <div className="mt-3 space-y-1.5 text-xs text-slate-400">
+        <div className="mt-3 space-y-1.5 text-xs text-[#6B6862]">
           <p>
-            <span className="text-slate-500">Out </span>
+            <span className="text-[#6B6862]">Out </span>
             {card.outbound.from} to {card.outbound.to} ·{" "}
             {formatFlightRange(card.outbound.departAt, card.outbound.arriveAt)}
           </p>
           <p>
-            <span className="text-slate-500">Back </span>
+            <span className="text-[#6B6862]">Back </span>
             {card.return.from} to {card.return.to} ·{" "}
             {formatFlightRange(card.return.departAt, card.return.arriveAt)}
           </p>
@@ -69,10 +69,10 @@ function FlightCardView({
           </p>
         </div>
 
-        <p className="mt-3 text-xl font-bold text-slate-100">
+        <p className="mt-3 text-xl font-bold text-[#1C1B19]">
           {formatMoney(card.totalAmount, card.currency)}
         </p>
-        <p className="text-[11px] text-slate-500">
+        <p className="text-[11px] text-[#6B6862]">
           incl. {card.taxAmount !== undefined ? formatMoney(card.taxAmount, card.currency) : "taxes"}
           , 1 adult
         </p>
@@ -81,7 +81,7 @@ function FlightCardView({
           {card.tags.map((tag) => (
             <span
               key={tag}
-              className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-medium text-amber-300"
+              className="rounded-full border border-[#E7E5E0] bg-[#F2F1EE] px-2 py-0.5 text-[11px] font-medium text-[#8A5710]"
             >
               {tag}
             </span>
@@ -89,16 +89,16 @@ function FlightCardView({
         </div>
       </button>
 
-      <div className="border-t border-white/6 px-4 py-2.5 text-xs">
+      <div className="border-t border-[#E7E5E0] px-4 py-2.5 text-xs">
         <button
           type="button"
           onClick={() => setRulesOpen((v) => !v)}
-          className="text-slate-400 underline-offset-2 hover:text-slate-200 hover:underline"
+          className="text-[#6B6862] underline-offset-2 hover:text-[#1C1B19] hover:underline"
         >
           Fare rules {rulesOpen ? "▾" : "▸"}
         </button>
         {rulesOpen && (
-          <div className="mt-2 space-y-1 text-slate-400">
+          <div className="mt-2 space-y-1 text-[#6B6862]">
             <p>
               Changes:{" "}
               {card.changeable
@@ -111,7 +111,7 @@ function FlightCardView({
               , no checked bag listed
             </p>
             {!card.changeable && !card.refundable && (
-              <p className="text-slate-500">
+              <p className="text-[#6B6862]">
                 Not provided. Check with the airline before booking.
               </p>
             )}
@@ -122,7 +122,7 @@ function FlightCardView({
             href={card.bookUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-2 inline-block rounded-lg bg-amber-400/15 px-3 py-1.5 font-semibold text-amber-300 hover:bg-amber-400/25"
+            className="mt-2 inline-block rounded-lg bg-[#C8811A]/15 px-3 py-1.5 font-semibold text-[#8A5710] hover:bg-[#C8811A]/25"
           >
             Book on {card.airline.replace(" Airlines", "").replace(" Air Lines", "")}
           </a>
@@ -131,7 +131,7 @@ function FlightCardView({
           <button
             type="button"
             onClick={onRefresh}
-            className="mt-2 block rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 hover:border-white/20"
+            className="mt-2 block rounded-lg border border-[#E7E5E0] px-3 py-1.5 text-[#6B6862] hover:border-[#E7E5E0]"
           >
             Price may have changed. Refresh prices
           </button>
@@ -166,7 +166,7 @@ export function FlightCompareView({
           />
         ))}
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#6B6862]">
         {isSample ? (
           <p>
             Sample prices from a saved Duffel search for {block.query.depart} to{" "}
@@ -177,14 +177,14 @@ export function FlightCompareView({
         )}
         <a
           href={block.compareUrl}
-          className="text-amber-300 underline-offset-2 hover:underline"
+          className="text-[#8A5710] underline-offset-2 hover:underline"
         >
           Compare all {block.offersTotal.toLocaleString()} offers
         </a>
         <p>Beetlebot does not book. You book with the airline.</p>
       </div>
       {block.failed && (
-        <p className="mt-2 text-xs text-slate-500">Flight prices didn&apos;t load.</p>
+        <p className="mt-2 text-xs text-[#6B6862]">Flight prices didn&apos;t load.</p>
       )}
     </div>
   );

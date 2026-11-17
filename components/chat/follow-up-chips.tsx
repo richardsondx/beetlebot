@@ -33,13 +33,13 @@ export function FollowUpChips({
               e.preventDefault();
               onEdit(chip);
             }}
-            className="h-9 shrink-0 rounded-full border border-white/15 bg-transparent px-3.5 text-sm text-slate-300 transition-colors hover:border-amber-300/40 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            className="h-9 shrink-0 rounded-full border border-[#E7E5E0] bg-transparent px-3.5 text-sm text-[#6B6862] transition-colors hover:border-[#E7E5E0] hover:text-[#1C1B19] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {chip.label}
           </button>
         ))}
       </div>
-      <div className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-[#131c2e] to-transparent sm:hidden" />
+      <div className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-transparent sm:hidden" />
     </div>
   );
 }

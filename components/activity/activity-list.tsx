@@ -59,10 +59,6 @@ function holdTitle(title: string): string {
   return title.replace(/^soft hold:\s*/i, "").trim();
 }
 
-function lowerFirst(text: string): string {
-  return text.charAt(0).toLowerCase() + text.slice(1);
-}
-
 function parseChatDetails(details: string | null): { message: string; blocks: number } | null {
   if (!details) return null;
   const m = details.match(/^mode=\S+ requested_mode=\S+ blocks=(\d+) message=([\s\S]*)$/);
@@ -83,15 +79,8 @@ function plainSentence(event: ActivityEvent): string {
     case "chat_intent_parsed": {
       const parsed = parseChatDetails(details);
       const message = parsed?.message ?? d;
-      const blocks = parsed?.blocks ?? 0;
-      const ask = message ? `You asked for ${lowerFirst(message)}` : "You sent a chat message";
-      const reply =
-        blocks === 0
-          ? "Beetlebot replied in chat."
-          : blocks === 1
-            ? "Beetlebot replied with a card."
-            : `Beetlebot replied with ${blocks} cards.`;
-      return `${ask}. ${reply}`;
+      if (!message) return "You sent a chat message.";
+      return /[.!?]$/.test(message) ? message : `${message}.`;
     }
     case "autopilot_run_created": {
       const reason = d.match(/reason=(\S+);/)?.[1];

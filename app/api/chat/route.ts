@@ -62,6 +62,7 @@ import {
   buildBeachMapStrip,
   buildBeachNearbyRow,
   isBeachCompareTitles,
+  mentionsBeachCompare,
   resolveBeachComparePhotos,
 } from "@/lib/travel/beach-compare";
 import {
@@ -2895,6 +2896,9 @@ async function runChatFlow(
       !isCapabilityHelpTurn &&
       !isLocationInfoQuery &&
       allowBestEffortSuggestions &&
+      // A compare ask names its options, so it never needs research.
+      // Research returns Toronto events for a beach trip ask.
+      !mentionsBeachCompare(body.message) &&
       (signals.boredomSignal || intent.isResearchRequest);
     const threadSuggestions = extractThreadSuggestionsForIntent(recentConversation);
     const shouldResolveThreadSuggestions =

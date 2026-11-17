@@ -312,6 +312,21 @@ export async function buildBeachHotelCards(): Promise<HotelCard[]> {
 }
 
 /**
+ * True when the message names at least two of the three beach
+ * destinations. A compare ask names its options, so it never needs
+ * a web research pass: research returns Toronto events for a beach
+ * trip ask, while the recommendation path returns the three options
+ * the compare overlays. The route uses this to skip research mode.
+ */
+export function mentionsBeachCompare(message: string): boolean {
+  const text = (message ?? "").toLowerCase();
+  const found = BEACH_DESTINATIONS.filter((d) =>
+    new RegExp(`\\b${d.title.toLowerCase()}\\b`).test(text),
+  );
+  return found.length >= 2;
+}
+
+/**
  * True when the three card titles Bali, Maldives, and Palawan are all
  * present, in any order. Titles are normalised first, so "Bali, Indonesia"
  * counts as Bali, and extra cards, such as a backup, do not break the match.

@@ -6,6 +6,7 @@ import {
   applyBeachCompareRows,
   buildBeachCompareOptionSet,
   isBeachCompareTitles,
+  mentionsBeachCompare,
 } from "../../lib/travel/beach-compare";
 import {
   isHotelSetBlock,
@@ -186,5 +187,23 @@ describe("beach compare title matching survives model wording", () => {
     expect(
       cards[0].compareRows?.find((r) => r.label === "Hotel")?.value,
     ).toBe("Alila Villas Uluwatu");
+  });
+});
+
+describe("beach compare ask detection", () => {
+  it("spots a compare ask naming two or more beaches", () => {
+    expect(
+      mentionsBeachCompare(
+        "Plan a 10 day beach trip from Toronto for 2 adults. I am choosing between Bali, the Maldives, and Palawan. Compare them side by side.",
+      ),
+    ).toBe(true);
+    expect(mentionsBeachCompare("Bali vs Maldives, which is better?")).toBe(
+      true,
+    );
+  });
+
+  it("does not fire on one beach or on no beach", () => {
+    expect(mentionsBeachCompare("Plan a beach trip to Bali")).toBe(false);
+    expect(mentionsBeachCompare("suggest a beach destination")).toBe(false);
   });
 });

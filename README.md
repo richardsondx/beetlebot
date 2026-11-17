@@ -36,6 +36,12 @@
 >
 > Hotel cards use Hello Axel prices. If a hotel price is for 2 adults and your trip is for 1, the card says so.
 
+<video src="docs/showcase/demo-480p.mp4" poster="docs/showcase/demo-poster.png" width="100%" controls></video>
+
+[![31-second demo of Beetlebot planning a New York weekend](docs/showcase/demo-poster.png)](docs/showcase/demo-480p.mp4)
+
+> A 31-second screen recording of the real app with real model replies (Muse Spark), Nov 17, 2026. Ask for a weekend in New York. Beetlebot shows flight cards side by side with prices, and you tap Delta. It then shows hotel cards, answers a dinner question from a chip, and you send the itinerary request. The recording ends there. It does not show the itinerary, a calendar hold, or an approval step. Flight prices come from a saved Duffel search and are labeled "Sample" on screen. Hotel prices are saved Hello Axel rates checked Nov 16, 2026. 480p.
+
 ---
 
 
@@ -44,6 +50,28 @@
 Other tools give you text. Beetlebot gives you your time back.
 
 > The first time you wake up to a fully planned weekend you didn't have to think about — that's the moment. This is what AI was supposed to feel like.
+
+## Plan my weekend
+
+Ask in chat: "Plan my weekend in New York, Friday Dec 11 to Monday Dec 14, 2 adults, 1 room."
+
+1. **Compare.** Beetlebot shows flight cards and hotel cards side by side with prices. Flights come from Duffel. Hotels use saved Hello Axel rates, with the source and date shown.
+2. **Pick.** Tap the flight and hotel you want. The cards stay in the thread so you can come back to them.
+3. **Itinerary.** Ask for a plan and it drafts the weekend day by day, around the flight and hotel you picked.
+4. **Calendar.** With Google Calendar connected, it can add a hold for the flight.
+5. **Approval.** It asks you before it changes anything, such as adding that hold.
+6. **Book.** You book the flight and hotel yourself, with the airline or hotel. Beetlebot plans. It does not book.
+
+The demo above covers steps 1 and 2 and ends as the itinerary request is sent. Steps 3 to 5 are not in the video yet. The calendar hold needs Google Calendar credentials, which the recording setup did not have.
+
+## Showcase
+
+| Packs | Autopilots | Travel compare |
+|---|---|---|
+| ![Packs page](docs/showcase/packs.png) | ![Autopilots page](docs/showcase/autopilots.png) | ![Travel compare page](docs/showcase/compare.png) |
+| Browse packs and install the ones you want. 6 available here, 1 installed. | Each autopilot has a goal, a trigger, an action, and an approval step. 2 active here. | Live Duffel flight prices side by side, plus saved Hello Axel hotel prices marked as not live. |
+
+Screenshots from the real app, Nov 17, 2026. Flight prices are from the Duffel search on Nov 16, 2026, and will differ now.
 
 ## Highlights
 
@@ -59,31 +87,14 @@ Other tools give you text. Beetlebot gives you your time back.
 ## How it works
 
 ```
-   Telegram / WhatsApp / Web Chat
-                │
-                ▼
-  ┌──────────────────────────────┐
-  │       Beetlebot Runtime      │
-  │     Next.js + TypeScript     │
-  │    http://localhost:3000     │
-  └──────────────┬───────────────┘
-                 │
-    ┌────────────┼────────────────┐
-    │            │                │
-    ▼            ▼                ▼
- Autopilot    Plan            Memory
-  Engine     Compiler          Layer
-    │            │                │
-    ├── Triggers ├── Packs        ├── Profile
-    ├── Scheduler├── Modes        ├── Taste
-    └── Runs     └── Soft-holds   ├── Logistics
-                                  └── History
-                 │
-    ┌────────────┼────────────────┐
-    │            │                │
-    ▼            ▼                ▼
- Calendar     Weather        Guardrails
- (Google)    (context)      (you control)
+Chat, Telegram, WhatsApp
+        │
+        ▼
+Beetlebot runtime (Next.js + TypeScript)
+  Autopilot engine · Plan compiler · Memory
+        │
+        ▼
+Calendar · Weather · Guardrails (you control)
 ```
 
 ## Quickstart
@@ -117,6 +128,8 @@ OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 OPENROUTER_API_KEY=sk-or-...
 ```
+
+Default model Muse Spark, meta/muse-spark-1.3, via OpenRouter.
 
 Only needed when you want public callbacks/webhooks (OAuth, WhatsApp, Telegram webhooks):
 
@@ -307,7 +320,7 @@ Full REST API for building on top of Beetlebot.
 | Language | TypeScript |
 | Styling | Tailwind CSS v4 |
 | Database | SQLite via Prisma |
-| AI | OpenAI / Anthropic (configurable) |
+| AI | Muse Spark via OpenRouter (meta/muse-spark-1.3), configurable |
 | Tests | Vitest |
 | CLI | Commander + tsx |
 | Validation | Zod |
@@ -380,6 +393,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 - **[GitHub Discussions](https://github.com/richardsondx/beetlebot/discussions)** — questions, show & tell
 
 AI/vibe-coded PRs welcome.
+
+## Why I built this
+
+> **DRAFT — Richardson to rewrite in his own words before this is published.**
+>
+> I built Beetlebot because I wanted an agent that acts on my free time instead of waiting to be asked. Odessia showed that one conversation could plan and book a whole trip, then it shut down when OpenAI acquired it. Beetlebot is the open version of that idea, proactive instead of reactive: it watches my calendar and the weather, plans around what I like, and hands me the booking. My data stays on my machine, and the code is open so anyone can run their own.
 
 ## Author
 

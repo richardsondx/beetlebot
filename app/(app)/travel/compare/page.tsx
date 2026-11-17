@@ -130,25 +130,29 @@ export default async function TravelComparePage({
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {payload.hotels.map((hotel) => (
               <article
-                key={hotel.placeId}
+                key={hotel.name}
                 className="rounded-2xl border border-white/10 bg-[#0d1422] p-5"
               >
                 <h3 className="text-base font-semibold">{hotel.name}</h3>
-                <p className="mt-1 text-sm text-slate-400">{hotel.address}</p>
                 <p className="mt-1 text-sm text-slate-400">
-                  {hotel.rating} stars from {hotel.reviewCount} reviews
+                  {hotel.stars} star · {hotel.area}
                 </p>
                 <p className="mt-2 text-sm font-medium text-amber-200">
-                  Price: check live rates
+                  {hotel.price
+                    ? `$${hotel.price.total.toLocaleString()} total for 3 nights, ${hotel.price.nightlyDerived ? "about " : ""}$${hotel.price.nightly} a night (${hotel.price.currency})`
+                    : "Price: check live rates"}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">{hotel.priceNote}</p>
+                {hotel.feeNote ? (
+                  <p className="mt-1 text-xs text-slate-500">{hotel.feeNote}</p>
+                ) : null}
                 <a
                   href={hotel.checkLiveRatesUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="mt-3 inline-block rounded-lg border border-amber-300/25 bg-amber-300/10 px-4 py-2 text-sm text-amber-200"
                 >
-                  Check live rates on the hotel site
+                  View on {hotel.source}
                 </a>
               </article>
             ))}

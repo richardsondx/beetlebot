@@ -1,10 +1,18 @@
 import type { FlightCard } from "@/lib/chat/rich-message";
+import {
+  AXEL_HOTEL_SEED,
+  HOTEL_SOURCE,
+  derivedNightly,
+  nightsBetween,
+} from "./hotel-prices";
 
 // Travel compare core for unit U3.
 // Flights are live Duffel results. The snapshot below is copied verbatim from
 // the unedited evidence file duffel-yyz-nyc-20261211.json in the run folder.
-// Hotels have no live price source in this region, so hotels are a structured
-// check-live-rates handoff with no prices. See u3-search-evidence-note.md.
+// Hotels are the saved Hello Axel check from Nov 16, 2026, in
+// lib/travel/hotel-prices.ts. Expedia and Agoda failed with
+// connector_country_not_allowed, so no live hotel source is wired in.
+// Prices are saved, not live, and the page says so.
 
 export type FlightSlice = {
   from: string;
@@ -172,55 +180,48 @@ export const FLIGHT_SEARCH: FlightSearchEvidence = {
 
 export type HotelHandoff = {
   name: string;
-  address: string;
-  rating: number;
-  reviewCount: number;
-  placeId: string;
-  website: string;
+  area: string;
+  stars: number;
+  price: {
+    total: number;
+    nightly: number;
+    currency: "USD";
+    nightlyDerived: boolean;
+  } | null;
+  source: string;
+  sourceUrl: string;
   checkLiveRatesUrl: string;
-  price: null;
   priceNote: string;
+  feeNote?: string;
 };
 
-// Live hotel identity and location from Places Search, Nov 16 2026.
-// No live rate source worked in this region: Expedia and Agoda both failed
-// with connector_country_not_allowed. Prices are null on purpose and hotel
-// prices stay a Queued gap. Never fill price from another source.
-export const HOTEL_HANDOFFS: HotelHandoff[] = [
-  {
-    name: "The Muse New York",
-    address: "130 W 46th St, New York, NY, US",
-    rating: 4.6,
-    reviewCount: 571,
-    placeId: "774477037069671",
-    website: "https://www.themusehotel.com/",
-    checkLiveRatesUrl: "https://www.themusehotel.com/",
-    price: null,
-    priceNote: "Live rate not available. Check the rate on the hotel site before booking.",
-  },
-  {
-    name: "Millennium Hotel Broadway Times Square",
-    address: "145 W 44th St, New York, NY, US",
-    rating: 4.3,
-    reviewCount: 986,
-    placeId: "2504767233028997",
-    website: "https://www.millenniumhotels.com/en/new-york/millennium-hotel-broadway-times-square/",
-    checkLiveRatesUrl: "https://www.millenniumhotels.com/en/new-york/millennium-hotel-broadway-times-square/",
-    price: null,
-    priceNote: "Live rate not available. Check the rate on the hotel site before booking.",
-  },
-  {
-    name: "Hyatt Centric Times Square New York",
-    address: "135 W 45th St, New York, NY, US",
-    rating: 4.7,
-    reviewCount: 886,
-    placeId: "1156288158285936",
-    website: "https://www.hyatt.com/hyatt-centric/en-US/nycts-hyatt-centric-times-square",
-    checkLiveRatesUrl: "https://www.hyatt.com/hyatt-centric/en-US/nycts-hyatt-centric-times-square",
-    price: null,
-    priceNote: "Live rate not available. Check the rate on the hotel site before booking.",
-  },
-];
+// Hotel prices from the saved Hello Axel check, Nov 16, 2026, for New York,
+// Dec 11 to 14, 2026, 3 nights, 2 adults, 1 room. Same seed the chat hotel
+// cards use. Prices are saved, not live. Never fill a price from another
+// source, and never present a saved price as live.
+const HOTEL_NIGHTS = nightsBetween("2026-12-11", "2026-12-14");
+
+export const HOTEL_HANDOFFS: HotelHandoff[] = AXEL_HOTEL_SEED.map((seed) => ({
+  name: seed.name,
+  area: seed.area,
+  stars: seed.stars,
+  price:
+    seed.total === null
+      ? null
+      : {
+          total: seed.total,
+          nightly:
+            seed.nightly ?? derivedNightly(seed.total, HOTEL_NIGHTS),
+          currency: "USD" as const,
+          nightlyDerived: seed.nightly === null,
+        },
+  source: HOTEL_SOURCE,
+  sourceUrl: seed.sourceUrl,
+  checkLiveRatesUrl: seed.sourceUrl,
+  priceNote:
+    "Saved Hello Axel price, checked Nov 16, 2026. Rates are for 2 adults, 1 room, Dec 11 to 14, 2026, 3 nights. Not a live price.",
+  feeNote: seed.feeNote,
+}));
 
 export const HOTEL_RATE_SOURCES_FAILED = [
   {
@@ -236,8 +237,9 @@ export const HOTEL_RATE_SOURCES_FAILED = [
 ];
 
 export const HOTEL_COMPARE_NOTE =
-  "Hotel prices are a Queued gap. No live hotel price source worked, so no hotel price is shown. " +
-  "Check live rates on the hotel site or on Google Hotels before booking.";
+  "Hotel prices are from a saved Hello Axel check on Nov 16, 2026, for Dec 11 to 14, 2026, " +
+  "3 nights, 2 adults, 1 room. These are not live prices. Prices move daily, confirm on the " +
+  "seller before booking.";
 
 export const HOTEL_RATE_CHECK_LINKS = {
   googleHotels: "https://www.google.com/travel/hotels",

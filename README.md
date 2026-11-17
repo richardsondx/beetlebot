@@ -1,16 +1,18 @@
 # 🪲 Beetlebot — Your Autonomous Life Agent
 
 <p align="center">
-  <img src="public/beetlebot-logo.png" alt="Beetlebot logo" width="720" />
+  <img src="docs/showcase/hero-banner.png" width="100%" alt="Green beetle on a dark background with an amber flight route arcing to a map pin" />
 </p>
 
+<p align="center">
+  <img src="public/beetlebot-logo.png" alt="Beetlebot" width="320" />
+</p>
 
+<h3 align="center">An open-source AI agent that plans your weekends and trips.</h3>
 
 <p align="center">
-  <br />
-  <strong>IT DOESN'T SUGGEST PLANS. IT HANDLES THEM.</strong>
-  <br />
-  <br />
+  Ask in chat and get flight and hotel cards with live prices, side by side.<br />
+  Pick the one you want, then book it directly with the airline or hotel.
 </p>
 
 <p align="center">
@@ -24,7 +26,18 @@
   <a href="#quickstart">Quickstart</a> · <a href="#how-it-works">How it works</a> · <a href="#cli">CLI</a> · <a href="docs/">Docs</a> · <a href="#the-colony">The Colony</a> · <a href="https://discord.gg/TWuKqaZxuc">Discord</a>
 </p>
 
+<p align="center">
+  <strong>Flight and hotel cards in chat, side by side. Tap one to select it.</strong><br />
+  <strong>Live flight prices from Duffel. Saved searches are labeled Sample.</strong><br />
+  <strong>City packs and autopilots for your free time, using your calendar, weather and memory.</strong>
+</p>
+
+> **Example search** (live Duffel results, run Nov 16, 2026): Toronto to New York, Dec 11 to 14, 2026, 1 adult, economy. 1,179 offers. Cheapest totals: Delta 377.68 CAD, Porter 398.68 CAD, Air Canada 398.68 CAD. Prices change, so your search will show current fares.
+>
+> Hotel cards use Hello Axel prices. If a hotel price is for 2 adults and your trip is for 1, the card says so.
+
 ---
+
 
 **Beetlebot** is an open-source AI agent that _autonomously_ plans your social life, weekend adventures, travel, and downtime. It reads your calendar, watches the weather, understands the season, knows your budget, learns your taste — and acts. Not a chatbot you talk _at_. A personal assistant that works _for_ you.
 

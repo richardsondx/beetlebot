@@ -1,4 +1,5 @@
 import { formatFlightRange } from "@/lib/travel/compare";
+import { PRICE_PENDING_LABEL } from "@/lib/travel/destination-suggestion";
 
 /**
  * Canonical rich-message types shared across web UI, CLI, and channel adapters.
@@ -27,6 +28,8 @@ export type ImageCard = {
   actionUrl?: string;
   /** Attribution label (e.g. "Google Hotels", "Unsplash / @photographer") */
   sourceName?: string;
+  /** True when no price exists yet; the UI shows "Price coming soon" where the price would go. */
+  pricePending?: boolean;
 };
 
 export type TextBlock = {
@@ -242,8 +245,9 @@ export function toPlainText(msg: AssistantMessage): string {
           if (block.variant === "compare" && card.compareRows?.length) {
             const row = (label: string) =>
               card.compareRows?.find((r) => r.label === label)?.value;
+            const price = row("Per night") ?? row("Price") ?? PRICE_PENDING_LABEL;
             parts.push(
-              `${index}. ${card.title}, ${card.subtitle ?? row("Country") ?? ""} — ${row("Hotel") ?? "No hotel in seed data"} — ${row("Per night") ?? "Price not available"} — ${card.actionUrl ?? card.imageUrl}`,
+              `${index}. ${card.title}, ${card.subtitle ?? row("Country") ?? ""} — ${row("Hotel") ?? "No hotel in seed data"} — ${price} — ${card.actionUrl ?? card.imageUrl}`,
             );
           } else {
             parts.push(`[${index}] ${cardToText(card)}`);
@@ -587,6 +591,7 @@ export function cardToText(card: ImageCard): string {
       .join(" · ");
     lines.push(chips);
   }
+  if (card.pricePending) lines.push(`Price: ${PRICE_PENDING_LABEL}`);
   if (card.actionUrl) lines.push(card.actionUrl);
   if (card.sourceName) lines.push(`via ${card.sourceName}`);
   return lines.join("\n");

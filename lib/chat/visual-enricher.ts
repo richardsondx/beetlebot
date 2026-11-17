@@ -2,9 +2,14 @@
  * Visual enrichment pipeline.
  *
  * Takes structured LLM output (text + raw option list) and attaches real
- * image URLs.  Uses Bousier's tiered resolver first (metadata + open datasets),
- * then falls back to placeholders when no trusted image is available within the
- * latency budget.
+ * image URLs. Uses Bousier's tiered resolver first (metadata + open datasets),
+ * then leaves the image empty so the UI shows the named fallback icon when
+ * no trusted image is available within the latency budget. Never a
+ * placehold.co image, never a generated image.
+ *
+ * A destination suggestion with no price at all is marked price-pending
+ * (see lib/travel/destination-suggestion.ts) so it still renders as a
+ * photo-first card with a plain "Price coming soon" state.
  *
  * The module is intentionally tolerant: any fetch failure results in a
  * graceful fallback rather than a thrown error.
@@ -16,6 +21,11 @@ import {
   applyBeachCompareRows,
   isBeachCompareTitles,
 } from "@/lib/travel/beach-compare";
+import {
+  applyPricePending,
+  correctDestinationCountry,
+  wikiUrlForDestination,
+} from "@/lib/travel/destination-suggestion";
 import {
   type BousierEntityInput,
   resolveImageBatch,
@@ -41,7 +51,7 @@ export type RawLlmPayload = {
 };
 
 type EnrichOptions = {
-  /** Run a non-blocking second pass for cards that had placeholders. */
+  /** Run a non-blocking second pass for cards that had no photo yet. */
   asyncUpgrade?: boolean;
   /** Optional callback when upgraded cards are found in background pass. */
   onAsyncUpgrade?: (cards: ImageCard[]) => Promise<void> | void;
@@ -77,7 +87,12 @@ export async function enrichLlmReply(
   const isBeachCompare = isBeachCompareTitles(
     enriched.map((card) => card.title),
   );
-  const cards = isBeachCompare ? applyBeachCompareRows(enriched) : enriched;
+  const compared = isBeachCompare ? applyBeachCompareRows(enriched) : enriched;
+  // Price-pending runs after the compare overlay, so a Sample price on a
+  // compare card is never also marked pending.
+  const cards = compared.map((card) =>
+    applyPricePending(correctDestinationCountry(card)),
+  );
 
   const blocks: RichBlock[] =
     cards.length === 1
@@ -194,7 +209,9 @@ async function enrichOptionsWithBousier(options: RawOption[]): Promise<ImageCard
   const inputs: BousierEntityInput[] = options.map((opt) => ({
     title: opt.title,
     category: opt.category,
-    actionUrl: opt.actionUrl,
+    // Known destinations get their Wikipedia page as the tier 1 source
+    // when the LLM gave no detail URL, so a real photo can still resolve.
+    actionUrl: opt.actionUrl ?? wikiUrlForDestination(opt.title),
     query: `${opt.category ?? ""} ${opt.title}`.trim(),
   }));
   const resolved = await resolveImageBatch(inputs, {
@@ -204,8 +221,9 @@ async function enrichOptionsWithBousier(options: RawOption[]): Promise<ImageCard
 
   return options.map((opt, idx) => {
     const result = resolved[idx];
-    const query = `${opt.category ?? ""} ${opt.title}`.trim();
-    const imageUrl = result?.selectedImageUrl ?? makePlaceholder(query);
+    // No trusted photo: empty URL, so the card shows the named fallback
+    // icon. Never a placehold.co image.
+    const imageUrl = result?.selectedImageUrl ?? "";
     const friendly = friendlySourceName(result?.selectedSourceName);
     const sourceName = friendly
       ? opt.sourceName
@@ -224,7 +242,7 @@ async function enrichOptionsWithBousier(options: RawOption[]): Promise<ImageCard
       category: opt.category,
       compareRows: opt.compareRows,
       meta: Object.keys(meta).length > 0 ? meta : undefined,
-      actionUrl: opt.actionUrl,
+      actionUrl: opt.actionUrl ?? wikiUrlForDestination(opt.title),
       sourceName,
     };
   });
@@ -237,8 +255,7 @@ async function runAsyncCardUpgrade(
 ) {
   const targets = options
     .map((opt, idx) => ({ opt, idx }))
-    .filter(({ idx }) => cards[idx]?.imageUrl.includes("placehold.co"))
-    .filter(({ opt }) => !!opt.actionUrl);
+    .filter(({ idx }) => !cards[idx]?.imageUrl);
 
   if (targets.length === 0) return;
 
@@ -246,7 +263,7 @@ async function runAsyncCardUpgrade(
     targets.map(({ opt }) => ({
       title: opt.title,
       category: opt.category,
-      actionUrl: opt.actionUrl,
+      actionUrl: opt.actionUrl ?? wikiUrlForDestination(opt.title),
       query: `${opt.category ?? ""} ${opt.title}`.trim(),
     })),
     { mode: "balanced", timeoutMs: Number(process.env.BOUSIER_ASYNC_TIMEOUT_MS ?? 3500) },
@@ -293,17 +310,4 @@ export function applyUpgradedCardsToBlocks(
     return block;
   });
   return mapped;
-}
-
-// ── Image fetch helpers ────────────────────────────────────────────────────
-
-/**
- * Generate a deterministic, nice-looking placeholder using placehold.co.
- * Returns a valid https URL that always resolves — zero external dependencies.
- */
-function makePlaceholder(query: string): string {
-  const label = encodeURIComponent(
-    query.slice(0, 30).replace(/[^a-zA-Z0-9 ]/g, " ").trim(),
-  );
-  return `https://placehold.co/600x360/0d1826/4a7fbd?text=${label}`;
 }

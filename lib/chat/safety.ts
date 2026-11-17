@@ -151,7 +151,10 @@ export function sanitiseBlocks(raw: unknown[]): RichBlock[] {
 function sanitiseCard(b: Record<string, unknown>): ImageCard | null {
   if (typeof b.title !== "string" || !b.title.trim()) return null;
 
-  const imageUrl = typeof b.imageUrl === "string" ? b.imageUrl : "";
+  const rawImageUrl = typeof b.imageUrl === "string" ? b.imageUrl : "";
+  // Drop placehold.co images to an empty URL (card renders the named
+  // fallback icon instead of a placeholder image).
+  const imageUrl = rawImageUrl.includes("placehold.co") ? "" : rawImageUrl;
   // Allow empty imageUrl (card renders with placeholder); block invalid URLs
   if (imageUrl && !isValidImageUrl(imageUrl)) return null;
 
@@ -198,5 +201,6 @@ function sanitiseCard(b: Record<string, unknown>): ImageCard | null {
     actionUrl,
     sourceName:
       typeof b.sourceName === "string" ? b.sourceName.slice(0, 100) : undefined,
+    pricePending: b.pricePending === true ? true : undefined,
   };
 }

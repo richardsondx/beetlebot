@@ -14,6 +14,11 @@ import type {
 } from "@/lib/chat/rich-message";
 import { formatMoney } from "@/lib/chat/rich-message";
 import { ruleFollowUps } from "@/lib/chat/follow-ups";
+import {
+  applyPricePending,
+  correctDestinationCountry,
+  PRICE_PENDING_LABEL,
+} from "@/lib/travel/destination-suggestion";
 import { streamChatResponse } from "@/hooks/use-chat-stream";
 import { CHAT_MODES, DEFAULT_CHAT_MODE, type ModeDefinition } from "@/lib/constants";
 import { Composer } from "@/components/chat/composer";
@@ -161,6 +166,12 @@ function ImageCardView({
         <p className="text-sm font-semibold text-[#1C1B19] leading-snug">{card.title}</p>
         {card.subtitle && (
           <p className="mt-1 text-xs text-[#6B6862] leading-relaxed">{card.subtitle}</p>
+        )}
+        {card.pricePending && (
+          <p className="mt-2 text-xs text-[#6B6862]">
+            <span className="font-medium text-[#1C1B19]">Price</span>
+            <span> · {PRICE_PENDING_LABEL}</span>
+          </p>
         )}
         {card.compareRows && card.compareRows.length > 0 && (
           <dl className="mt-3 flex flex-col gap-1.5">
@@ -401,16 +412,21 @@ function InlineSuggestionsView({
         <p className="mb-3 text-xs font-medium text-[#6B6862]">Here are your options — tap one to explore further:</p>
         <div className={`grid gap-3 ${parsed.options.length === 1 ? "grid-cols-1" : parsed.options.length === 2 ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2"}`}>
           {parsed.options.map((opt, i) => {
-            const card: ImageCard = {
-              type: "image_card",
-              title: opt.title,
-              subtitle: opt.subtitle,
-              imageUrl: `https://placehold.co/600x360/0d1826/4a7fbd?text=${encodeURIComponent(opt.title.slice(0, 24))}`,
-              alt: opt.title,
-              meta: opt.meta,
-              actionUrl: opt.actionUrl,
-              sourceName: opt.sourceName,
-            };
+            const card: ImageCard = applyPricePending(
+              correctDestinationCountry({
+                type: "image_card",
+                title: opt.title,
+                subtitle: opt.subtitle,
+                // No trusted photo here: empty URL, so the card shows the
+                // named fallback icon. Never a placehold.co image.
+                imageUrl: "",
+                alt: opt.title,
+                category: opt.category,
+                meta: opt.meta,
+                actionUrl: opt.actionUrl,
+                sourceName: opt.sourceName,
+              }),
+            );
             return (
               <ImageCardView
                 key={`inline-${i}-${opt.title}`}

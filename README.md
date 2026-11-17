@@ -76,6 +76,11 @@ The demo above covers steps 1 and 2 and ends as the itinerary request is sent. S
 | ![Activity grouped by day](docs/showcase/activity-light.png) | ![Chat on phone](docs/showcase/chat-phone-light.png) | ![Packs on phone](docs/showcase/packs-phone-light.png) |
 | Every agent action grouped by Today, Yesterday, and date. | Chat is the main screen, with the bottom tab bar on phone. | Installed and Popular packs, each with a visual icon. |
 
+| Autopilots | Settings | Compare options |
+|---|---|---|
+| ![Autopilots list](docs/showcase/autopilots-light.png) | ![Settings](docs/showcase/settings-light.png) | ![Compare options page](docs/showcase/compare-light.png) |
+| Recurring plans Beetlebot runs for you. 2 active here, each with an On switch. | Profile, approvals, spend cap, and the model in use: Muse Spark, meta/muse-spark-1.3. | The full compare page, flights and hotels side by side. Flights from the Duffel search on Nov 16, 2026; hotel prices from a saved Hello Axel check, not live. |
+
 Screenshots from the real app, Nov 17, 2026. Flight prices are from the Duffel search on Nov 16, 2026, and will differ now.
 
 ## Highlights

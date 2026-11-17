@@ -79,7 +79,7 @@ type ChatMessage = {
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
-function categoryIcon(): string {
+function categoryIcon(_category?: string): string {
   return "";
 }
 

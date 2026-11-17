@@ -47,8 +47,16 @@ function normalise(value: string | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
+/**
+ * Bare destination name: the part before the first comma, trimmed.
+ * The model writes "Bali, Indonesia", Wikipedia needs "Bali".
+ */
+export function normaliseDestinationTitle(title: string | undefined): string {
+  return (title ?? "").split(",")[0].trim();
+}
+
 function knownDestination(title: string | undefined): string | undefined {
-  const wanted = normalise(title);
+  const wanted = normalise(normaliseDestinationTitle(title));
   if (!wanted) return undefined;
   return Object.keys(DESTINATION_COUNTRY).find(
     (name) => name.toLowerCase() === wanted,
@@ -64,14 +72,24 @@ export function isDestinationSuggestion(card: {
   return knownDestination(card.title) !== undefined;
 }
 
+/**
+ * A value counts as a price only when it looks like money: a currency
+ * symbol or code with a number. A flight time such as "~4.5h from YYZ"
+ * under a "flight" key is travel time, not a price, and must not block
+ * the price-pending state.
+ */
+const MONEY_PATTERN = /[$€£]|USD|CAD|EUR|GBP/i;
+
 /** True when the card already carries a price in a meta chip or a compare row. */
 export function cardHasPrice(card: ImageCard): boolean {
   const metaHasPrice = Object.entries(card.meta ?? {}).some(
-    ([key, value]) => /price|nightly|flight|total/i.test(key) && value.trim() !== "",
+    ([key, value]) =>
+      /price|nightly|flight|total/i.test(key) && MONEY_PATTERN.test(value),
   );
   if (metaHasPrice) return true;
   return (card.compareRows ?? []).some(
-    (row) => PRICE_LABELS.has(normalise(row.label)) && row.value.trim() !== "",
+    (row) =>
+      PRICE_LABELS.has(normalise(row.label)) && MONEY_PATTERN.test(row.value),
   );
 }
 

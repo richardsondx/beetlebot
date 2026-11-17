@@ -31,6 +31,7 @@ import {
   type NearbyPlace,
   type NearbyPlaceInput,
 } from "@/lib/travel/nearby";
+import { normaliseDestinationTitle } from "@/lib/travel/destination-suggestion";
 
 export const BEACH_COMPARE_CAP = 3;
 export const BEACH_COMPARE_PROMPT = "Which beach?";
@@ -311,14 +312,18 @@ export async function buildBeachHotelCards(): Promise<HotelCard[]> {
 }
 
 /**
- * True when the three card titles are Bali, Maldives, and Palawan in
- * any order. The enricher uses this to spot a beach compare in the
- * normal model options flow, without a route change.
+ * True when the three card titles Bali, Maldives, and Palawan are all
+ * present, in any order. Titles are normalised first, so "Bali, Indonesia"
+ * counts as Bali, and extra cards, such as a backup, do not break the match.
+ * The enricher uses this to spot a beach compare in the normal model
+ * options flow, without a route change.
  */
 export function isBeachCompareTitles(titles: string[]): boolean {
   const wanted = new Set(BEACH_DESTINATIONS.map((d) => d.title.toLowerCase()));
-  const got = new Set(titles.map((t) => t.trim().toLowerCase()));
-  return wanted.size === got.size && [...wanted].every((t) => got.has(t));
+  const got = new Set(
+    titles.map((t) => normaliseDestinationTitle(t).toLowerCase()),
+  );
+  return [...wanted].every((t) => got.has(t));
 }
 
 /**
@@ -330,7 +335,9 @@ export function isBeachCompareTitles(titles: string[]): boolean {
 export function applyBeachCompareRows(cards: ImageCard[]): ImageCard[] {
   return cards.map((card) => {
     const dest = BEACH_DESTINATIONS.find(
-      (d) => d.title.toLowerCase() === card.title.trim().toLowerCase(),
+      (d) =>
+        d.title.toLowerCase() ===
+        normaliseDestinationTitle(card.title).toLowerCase(),
     );
     if (!dest) return card;
     const base = cardFor(dest, "");

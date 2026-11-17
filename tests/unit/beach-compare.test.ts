@@ -155,3 +155,36 @@ describe("hotel photoUrl", () => {
     }
   });
 });
+
+describe("beach compare title matching survives model wording", () => {
+  it("matches country-suffixed titles and ignores a backup card", () => {
+    expect(
+      isBeachCompareTitles([
+        "Bali, Indonesia",
+        "Maldives",
+        "Palawan, Philippines",
+        "BACKUP: Cancun / Turks & Caicos",
+      ]),
+    ).toBe(true);
+  });
+
+  it("still fails when one beach is missing", () => {
+    expect(isBeachCompareTitles(["Bali, Indonesia", "Maldives"])).toBe(false);
+  });
+
+  it("overlays compare rows on country-suffixed cards", () => {
+    const cards = applyBeachCompareRows([
+      {
+        type: "image_card",
+        title: "Bali, Indonesia",
+        subtitle: "Amazing for a 10+ day trip.",
+        imageUrl: "",
+      },
+    ]);
+    expect(cards[0].compareRows?.length).toBe(4);
+    expect(cards[0].subtitle).toBe("Indonesia");
+    expect(
+      cards[0].compareRows?.find((r) => r.label === "Hotel")?.value,
+    ).toBe("Alila Villas Uluwatu");
+  });
+});

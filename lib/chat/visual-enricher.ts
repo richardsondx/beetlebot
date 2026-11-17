@@ -24,6 +24,7 @@ import {
 import {
   applyPricePending,
   correctDestinationCountry,
+  normaliseDestinationTitle,
   wikiUrlForDestination,
 } from "@/lib/travel/destination-suggestion";
 import {
@@ -206,14 +207,19 @@ function friendlySourceName(raw: string | undefined): string | undefined {
 }
 
 async function enrichOptionsWithBousier(options: RawOption[]): Promise<ImageCard[]> {
-  const inputs: BousierEntityInput[] = options.map((opt) => ({
-    title: opt.title,
-    category: opt.category,
-    // Known destinations get their Wikipedia page as the tier 1 source
-    // when the LLM gave no detail URL, so a real photo can still resolve.
-    actionUrl: opt.actionUrl ?? wikiUrlForDestination(opt.title),
-    query: `${opt.category ?? ""} ${opt.title}`.trim(),
-  }));
+  const inputs: BousierEntityInput[] = options.map((opt) => {
+    // Resolve under the bare name: the model writes "Bali, Indonesia",
+    // Wikipedia needs "Bali". The displayed card title stays as written.
+    const resolveTitle = normaliseDestinationTitle(opt.title);
+    return {
+      title: resolveTitle,
+      category: opt.category,
+      // Known destinations get their Wikipedia page as the tier 1 source
+      // when the LLM gave no detail URL, so a real photo can still resolve.
+      actionUrl: opt.actionUrl ?? wikiUrlForDestination(opt.title),
+      query: `${opt.category ?? ""} ${resolveTitle}`.trim(),
+    };
+  });
   const resolved = await resolveImageBatch(inputs, {
     mode: "balanced",
     timeoutMs: Number(process.env.BOUSIER_TIMEOUT_MS ?? 1500),
@@ -283,12 +289,15 @@ async function runAsyncCardUpgrade(
   if (targets.length === 0) return;
 
   const upgraded = await resolveImageBatch(
-    targets.map(({ opt }) => ({
-      title: opt.title,
-      category: opt.category,
-      actionUrl: opt.actionUrl ?? wikiUrlForDestination(opt.title),
-      query: `${opt.category ?? ""} ${opt.title}`.trim(),
-    })),
+    targets.map(({ opt }) => {
+      const resolveTitle = normaliseDestinationTitle(opt.title);
+      return {
+        title: resolveTitle,
+        category: opt.category,
+        actionUrl: opt.actionUrl ?? wikiUrlForDestination(opt.title),
+        query: `${opt.category ?? ""} ${resolveTitle}`.trim(),
+      };
+    }),
     { mode: "balanced", timeoutMs: Number(process.env.BOUSIER_ASYNC_TIMEOUT_MS ?? 3500) },
   );
 

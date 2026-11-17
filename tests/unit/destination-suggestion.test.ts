@@ -200,3 +200,42 @@ describe("price-pending card through the pipeline", () => {
     expect(text).toContain("Price: Price coming soon");
   });
 });
+
+describe("price-pending and flight-time meta", () => {
+  it("knows the Wikipedia page for a country-suffixed title", () => {
+    expect(wikiUrlForDestination("Bali, Indonesia")).toBe(
+      "https://en.wikipedia.org/wiki/Bali",
+    );
+    expect(wikiUrlForDestination("Palawan, Philippines")).toBe(
+      "https://en.wikipedia.org/wiki/Palawan",
+    );
+  });
+
+  it("does not count a flight time as a price", () => {
+    expect(
+      cardHasPrice(destinationCard({ meta: { flight: "~4.5h from YYZ" } })),
+    ).toBe(false);
+    expect(
+      cardHasPrice(
+        destinationCard({ meta: { "flight time": "~22-26h each way" } }),
+      ),
+    ).toBe(false);
+  });
+
+  it("marks a destination with only a flight time as price-pending", () => {
+    const card = applyPricePending(
+      destinationCard({ meta: { flight: "~4.5h from YYZ" } }),
+    );
+    expect(card.pricePending).toBe(true);
+  });
+
+  it("still counts a money value as a price", () => {
+    expect(
+      cardHasPrice(
+        destinationCard({
+          compareRows: [{ label: "Flight", value: "CA$1,240 (Sample)" }],
+        }),
+      ),
+    ).toBe(true);
+  });
+});

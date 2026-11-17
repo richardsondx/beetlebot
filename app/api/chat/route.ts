@@ -3808,6 +3808,12 @@ async function runChatFlow(
     for (const chunk of splitTextDeltas(enriched.text)) {
       emit({ event: "text_delta", data: { text: chunk } });
     }
+    // Stream every enriched block, not just the flight compare. The browser
+    // renders from the stream, so a block that is only saved never shows live.
+    const nonFlightBlocks = (finalBlocks ?? []).filter((b) => b !== flightBlock);
+    nonFlightBlocks.forEach((block, i) => {
+      emit({ event: "block", data: { id: `block-${i}`, block } });
+    });
     if (flightBlock) {
       emit({ event: "block", data: { id: "flight-compare", block: flightBlock } });
     }

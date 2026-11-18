@@ -522,6 +522,8 @@ export type BeachAskIntentInput = {
   isExplicitSuggestionRequest: boolean;
   wantsBestEffortNow: boolean;
   intentExtractionOk: boolean;
+  /** Classifier's isLocationInfoQuery for this message, if known. */
+  isLocationInfoQuery?: boolean;
 };
 
 export type BeachAskIntent = {
@@ -529,6 +531,8 @@ export type BeachAskIntent = {
   explicitSuggestionRequest: boolean;
   allowBestEffortSuggestions: boolean;
   shouldUseSafeNoIntentMode: boolean;
+  /** Effective isLocationInfoQuery: a beach ask is never one. */
+  isLocationInfoQuery: boolean;
 };
 
 /**
@@ -542,6 +546,18 @@ export type BeachAskIntent = {
  * consistent here; the route reads them, and the dispatch at the
  * shouldUseSafeNoIntentMode branch and the enrichment gate below both
  * follow from them. A non-beach ask keeps the guard exactly as before.
+ *
+ * Fix cycle 2 adds a fourth flag, isLocationInfoQuery. The classifier
+ * reads "Tell me more about Palawan" as a factual place-info question
+ * ("details, info" about a place), so on a successful parse it returns
+ * isLocationInfoQuery true — and the B1 bypass above never engages,
+ * because it only repairs a failed parse. That flag then kills the
+ * preview twice: the dispatch sends the ask to info mode, and
+ * suppressVisualEnrichment skips enrichLlmReply entirely, so 0
+ * preview blocks are built even though the enricher would have built
+ * one full preview from the prose reply. A beach ask is a preview
+ * ask, never a place-info question, so the flag is cleared for beach
+ * asks here. A non-beach place-info question keeps it.
  */
 export function resolveBeachAskIntent(
   message: string,
@@ -558,6 +574,7 @@ export function resolveBeachAskIntent(
       intent.wantsBestEffortNow ||
       isBeachAsk,
     shouldUseSafeNoIntentMode: !intent.intentExtractionOk && !isBeachAsk,
+    isLocationInfoQuery: Boolean(intent.isLocationInfoQuery) && !isBeachAsk,
   };
 }
 
@@ -2871,14 +2888,21 @@ async function runChatFlow(
     const isSmallTalkTurn = intent.isSmallTalk;
     const isMetaConversationQuery = intent.isMetaConversationQuery;
     const isCapabilityQuery = intent.isCapabilityQuery;
-    const isLocationInfoQuery = intent.isLocationInfoQuery;
     // A beach compare or tell-me-about ask is an explicit suggestion
     // request even when intent extraction failed. resolveBeachAskIntent
-    // keeps the three flags consistent: the safe-no-intent guard below
-    // must not fire for these asks, and enrichment must run. Fix round
-    // 1 failed because shouldUseSafeNoIntentMode fired first and
-    // allowBestEffortSuggestions stayed false.
+    // keeps the flags consistent: the safe-no-intent guard below must
+    // not fire for these asks, and enrichment must run. Fix round 1
+    // failed because shouldUseSafeNoIntentMode fired first and
+    // allowBestEffortSuggestions stayed false. Fix cycle 2 found the
+    // same failure one flag over: the classifier reads "Tell me more
+    // about Palawan" as a factual place-info question, so
+    // isLocationInfoQuery came back true on a successful parse and
+    // killed the preview twice (info-mode dispatch, then the
+    // enrichment gate). The local isLocationInfoQuery below is the
+    // effective flag every consumer reads, so it comes from the
+    // beach-aware resolver, not straight from the classifier.
     const beachAsk = resolveBeachAskIntent(body.message, intent);
+    const isLocationInfoQuery = beachAsk.isLocationInfoQuery;
     const explicitSuggestionRequest = beachAsk.explicitSuggestionRequest;
     const allowBestEffortSuggestions = beachAsk.allowBestEffortSuggestions;
     const shouldUseSafeNoIntentMode = beachAsk.shouldUseSafeNoIntentMode;
@@ -3120,6 +3144,18 @@ async function runChatFlow(
         role: "system",
         content:
           "If this calendar action references prior suggestions in thread context, carry those exact venues into event description (names + practical details) instead of broad summaries.",
+      });
+    }
+    if (beachAsk.isBeachAsk) {
+      // The reply shows each place as its own showcase, so the opening
+      // text must not compare them: live drives showed a "Quick take"
+      // line summing up how the three differ plus a question asking
+      // the user to choose between them, above the showcases. The
+      // previews carry the detail; the lead-in only introduces them.
+      systemMessages.push({
+        role: "system",
+        content:
+          "BEACH SHOWCASE LEAD-IN: The reply shows each place as its own showcase. The opening text introduces the places without comparing them against each other: no 'vs', no ranking, no one-line summary of how they differ, and no question asking the user to choose between them or whether the trip is one kind or another. Each place stands on its own.",
       });
     }
 

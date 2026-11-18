@@ -20,6 +20,12 @@ const OK_PARSE: BeachAskIntentInput = {
   intentExtractionOk: true,
 };
 
+/** Successful parse where the classifier also flagged a place-info question. */
+const INFO_PARSE_OK: BeachAskIntentInput = {
+  ...OK_PARSE,
+  isLocationInfoQuery: true,
+};
+
 function buildContext(
   overrides: Partial<PromptPolicyContext> = {},
 ): PromptPolicyContext {
@@ -139,6 +145,56 @@ describe("beach asks survive a failed intent parse", () => {
   });
 });
 
+describe("beach asks are not location-info questions", () => {
+  it("'Tell me more about Palawan' clears isLocationInfoQuery on a successful parse", () => {
+    // Fix cycle 2 root cause, live in both drive runs: the classifier
+    // reads a tell-me-about ask as a factual place-info question, so
+    // isLocationInfoQuery came back true with intentExtractionOk true.
+    // The B1 bypass never engaged (it only repairs a failed parse),
+    // and the flag then killed the preview twice: the dispatch sent
+    // the ask to info mode, and suppressVisualEnrichment skipped
+    // enrichLlmReply entirely, so 0 preview blocks were built. The
+    // chip tap and a fresh typed ask send the same message text, so
+    // both paths hit this same flag.
+    for (const message of [
+      "Tell me more about Palawan",
+      "tell me more about palawan",
+      "Tell me about Palawan",
+    ]) {
+      const resolved = resolveBeachAskIntent(message, INFO_PARSE_OK);
+      expect(resolved.isBeachAsk).toBe(true);
+      expect(resolved.isLocationInfoQuery).toBe(false);
+      expect(resolved.allowBestEffortSuggestions).toBe(true);
+      expect(resolved.shouldUseSafeNoIntentMode).toBe(false);
+    }
+  });
+
+  it("a compare ask also clears isLocationInfoQuery", () => {
+    const resolved = resolveBeachAskIntent(
+      "Bali vs Maldives vs Palawan, which should I pick?",
+      INFO_PARSE_OK,
+    );
+    expect(resolved.isBeachAsk).toBe(true);
+    expect(resolved.isLocationInfoQuery).toBe(false);
+    expect(resolved.allowBestEffortSuggestions).toBe(true);
+  });
+
+  it("a non-beach place-info question keeps the flag", () => {
+    const resolved = resolveBeachAskIntent(
+      "What are the hours of the Art Gallery of Ontario?",
+      INFO_PARSE_OK,
+    );
+    expect(resolved.isBeachAsk).toBe(false);
+    expect(resolved.isLocationInfoQuery).toBe(true);
+    expect(resolved.allowBestEffortSuggestions).toBe(false);
+  });
+
+  it("a non-beach ask without the flag stays clear", () => {
+    const resolved = resolveBeachAskIntent("hello there", OK_PARSE);
+    expect(resolved.isLocationInfoQuery).toBe(false);
+  });
+});
+
 describe("bypass flags remove the clarification policy lines", () => {
   it("beach-ask flags drop the safe-fallback and no-recommendations lines", () => {
     const resolved = resolveBeachAskIntent(
@@ -173,5 +229,35 @@ describe("bypass flags remove the clarification policy lines", () => {
     expect(joined).toContain(
       "Do not provide concrete recommendation lists/options",
     );
+  });
+
+  it("a beach ask flagged as place-info drops the do-not-generate-cards line", () => {
+    // The policy prompt is the third place the info flag bites: with
+    // isLocationInfoQuery true it says "Do not generate option cards"
+    // and withholds the visual format instruction, so the model
+    // answers in prose. The route passes the beach-aware flag here,
+    // so a tell-me-about ask must read as a suggestion turn.
+    const resolved = resolveBeachAskIntent(
+      "Tell me more about Palawan",
+      INFO_PARSE_OK,
+    );
+    const sections = composePolicySections(
+      buildContext({
+        allowBestEffortSuggestions: resolved.allowBestEffortSuggestions,
+        explicitSuggestionRequest: resolved.explicitSuggestionRequest,
+        shouldUseSafeNoIntentMode: resolved.shouldUseSafeNoIntentMode,
+        isLocationInfoQuery: resolved.isLocationInfoQuery,
+      }),
+    );
+    const joined = sections.join("\n");
+    expect(joined).not.toContain("Do not generate option cards");
+    expect(joined).not.toContain("This is informational");
+  });
+
+  it("a genuine place-info question keeps the do-not-generate-cards line", () => {
+    const sections = composePolicySections(
+      buildContext({ isLocationInfoQuery: true }),
+    );
+    expect(sections.join("\n")).toContain("Do not generate option cards");
   });
 });

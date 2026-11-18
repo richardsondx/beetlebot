@@ -50,6 +50,49 @@ describe("beach previews from a prose reply", () => {
     expect(msg.blocks).toBeUndefined();
   });
 
+  it(
+    "builds one full single-place preview when the model answers a tell-me-about ask in prose",
+    { timeout: 30_000 },
+    async () => {
+      // Fix cycle 2: both live drive runs returned plain prose for
+      // "Tell me more about Palawan" with 0 preview blocks. The
+      // enricher itself handles this path (the route's info flag was
+      // the swallower, not the enricher), so pin it here: a prose
+      // reply to a tell-me-about ask becomes one full preview with
+      // all available sections. No pitch line is passed on the prose
+      // path, so "Why it fits your ask" hides, per the design.
+      const msg = await enrichLlmReply(
+        "Palawan is the long, skinny island province in the western Philippines — think limestone karsts, super clear lagoons, and white-sand islands. Much of the draw is by boat.",
+        { userMessage: "Tell me more about Palawan" },
+      );
+      expect(msg.blocks).toHaveLength(1);
+      const first = msg.blocks![0];
+      expect(first.type).toBe("destination_preview");
+      if (first.type !== "destination_preview") return;
+      expect(first.place).toBe("Palawan");
+      expect(first.countryLine).toBe("Palawan, an island in the Philippines");
+      expect(first.closingLine).toContain("When you're ready to go");
+      expect(first.sections.map((s) => s.kind)).toEqual([
+        "what_it_is_like",
+        "highlights",
+        "best_time",
+        "honest_take",
+        "stay",
+        "map",
+        "nearby",
+        "sample_day",
+        "practical_notes",
+      ]);
+      expect(first.sections.some((s) => s.collapsed)).toBe(false);
+      const practical = first.sections.find(
+        (s) => s.kind === "practical_notes",
+      )?.practical;
+      expect(practical?.flight).toContain("Sample");
+      expect(JSON.stringify(msg.blocks)).not.toMatch(/pick/i);
+      expect(JSON.stringify(msg.blocks)).not.toContain("option_set");
+    },
+  );
+
   it("does not inject previews when no user message is passed", async () => {
     const msg = await enrichLlmReply(PROSE_REPLY);
     expect(msg.blocks).toBeUndefined();

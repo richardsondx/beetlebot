@@ -14,6 +14,11 @@ import type {
 } from "@/lib/chat/rich-message";
 import { formatMoney } from "@/lib/chat/rich-message";
 import { ruleFollowUps } from "@/lib/chat/follow-ups";
+import {
+  applyPricePending,
+  correctDestinationCountry,
+  PRICE_PENDING_LABEL,
+} from "@/lib/travel/destination-suggestion";
 import { streamChatResponse } from "@/hooks/use-chat-stream";
 import { CHAT_MODES, DEFAULT_CHAT_MODE, type ModeDefinition } from "@/lib/constants";
 import { Composer } from "@/components/chat/composer";
@@ -25,10 +30,21 @@ import { StatusLine } from "@/components/chat/status-line";
 import { BlockSkeleton } from "@/components/chat/block-skeleton";
 import { FlightCompareView } from "@/components/chat/blocks/flight-compare";
 import { HotelSetView } from "@/components/chat/blocks/hotel-set";
+import { MapStripView } from "@/components/chat/blocks/map-strip";
+import { NearbyRowView } from "@/components/chat/blocks/nearby-row";
+import { ItineraryTimelineView } from "@/components/chat/blocks/itinerary-timeline";
+import { DestinationPreviewView } from "@/components/chat/blocks/destination-preview";
+import {
+  DestinationPreviewStackView,
+  groupDestinationPreviewBlocks,
+} from "@/components/chat/blocks/destination-preview-stack";
 
 type ChatMode = ModeDefinition;
 
 // ── Suggestion chips (§4.1): a click fills and sends ─────────────────────────
+
+/** Beach compare titles, kept in step with BEACH_COUNTRY in lib/travel/beach-compare.ts. */
+const BEACH_TITLES = new Set(["Bali", "Maldives", "Palawan"]);
 
 const SUGGESTION_CHIPS = [
   "Plan a rainy Saturday in Toronto",
@@ -89,19 +105,37 @@ function ImageCardView({
   card,
   index,
   category,
+  compare,
+  selected,
   onSelect,
 }: {
   card: ImageCard;
   index?: number;
   category?: string;
+  compare?: boolean;
+  selected?: boolean;
   onSelect?: (card: ImageCard) => void;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [activeImage, setActiveImage] = useState(card.imageUrl);
   const hasRealImage = card.imageUrl && !card.imageUrl.includes("placehold.co") && !imgFailed;
+  // Gallery: the hero plus up to 4 extra real photos, at most 5 total.
+  const galleryImages = hasRealImage
+    ? [
+        { imageUrl: card.imageUrl, sourceName: card.sourceName },
+        ...(card.gallery ?? []).filter((g) => g.imageUrl !== card.imageUrl),
+      ].slice(0, 5)
+    : [];
 
   return (
     <div className="group overflow-hidden rounded-2xl border border-[#E7E5E0] bg-white transition-all duration-200 hover:border-[#E7E5E0] hover:shadow-xl hover:shadow-black/10">
-      <div className="relative aspect-[5/3] w-full overflow-hidden bg-[#F2F1EE]">
+      <button
+        type="button"
+        onClick={() => hasRealImage && setExpanded((v) => !v)}
+        aria-label={hasRealImage ? `See ${card.title} photo larger` : card.title}
+        className="relative block aspect-[5/3] w-full overflow-hidden bg-[#F2F1EE] text-left"
+      >
         {index !== undefined && (
           <div className="absolute left-2.5 top-2.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs font-bold text-white backdrop-blur-md ring-1 ring-[#E7E5E0]">
             {index}
@@ -111,6 +145,11 @@ function ImageCardView({
           <div className="absolute right-2.5 top-2.5 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 backdrop-blur-md ring-1 ring-[#E7E5E0]">
             <span className="text-xs">{categoryIcon()}</span>
             <span className="text-[10px] capitalize text-[#6B6862]">{category}</span>
+          </div>
+        )}
+        {selected && (
+          <div className="absolute left-2.5 top-10 z-10 rounded-full bg-[#C8811A] px-2 py-0.5 text-[10px] font-bold text-white">
+            Selected
           </div>
         )}
         {hasRealImage ? (
@@ -135,11 +174,70 @@ function ImageCardView({
         {hasRealImage && (
           <div className="absolute inset-x-0 bottom-0 h-1/2 bg-transparent" />
         )}
-      </div>
+      </button>
+      {expanded && hasRealImage && (
+        <div className="border-b border-[#E7E5E0]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={activeImage}
+            alt={card.alt ?? card.title}
+            className="h-auto w-full object-cover"
+            loading="lazy"
+          />
+          {galleryImages.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto p-2">
+              {galleryImages.map((g, gi) => (
+                <button
+                  key={`${g.imageUrl}-${gi}`}
+                  type="button"
+                  onClick={() => setActiveImage(g.imageUrl)}
+                  aria-label={`Show photo ${gi + 1} of ${card.title}`}
+                  className={`h-14 w-20 shrink-0 overflow-hidden rounded-lg ring-2 ${
+                    activeImage === g.imageUrl ? "ring-[#C8811A]" : "ring-transparent"
+                  }`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={g.imageUrl}
+                    alt={`${card.title} photo ${gi + 1}`}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="px-3 pb-2 text-[11px] text-[#9A968F]">
+            {galleryImages.length > 1
+              ? `Photo ${Math.max(1, galleryImages.findIndex((g) => g.imageUrl === activeImage) + 1)} of ${galleryImages.length}`
+              : "Photo 1 of 1"}
+            {activeImage !== card.imageUrl ||
+            galleryImages.find((g) => g.imageUrl === activeImage)?.sourceName
+              ? ` · Photo: ${galleryImages.find((g) => g.imageUrl === activeImage)?.sourceName ?? card.sourceName ?? ""}`
+              : ""}
+          </p>
+        </div>
+      )}
       <div className="p-3.5">
         <p className="text-sm font-semibold text-[#1C1B19] leading-snug">{card.title}</p>
         {card.subtitle && (
           <p className="mt-1 text-xs text-[#6B6862] leading-relaxed">{card.subtitle}</p>
+        )}
+        {card.pricePending && (
+          <p className="mt-2 text-xs text-[#6B6862]">
+            <span className="font-medium text-[#1C1B19]">Price</span>
+            <span> · {PRICE_PENDING_LABEL}</span>
+          </p>
+        )}
+        {card.compareRows && card.compareRows.length > 0 && (
+          <dl className="mt-3 flex flex-col gap-1.5">
+            {card.compareRows.map((row) => (
+              <div key={row.label} className="flex items-baseline justify-between gap-3 text-[13px]">
+                <dt className="shrink-0 text-[#6B6862]">{row.label}</dt>
+                <dd className="text-right font-semibold text-[#1C1B19]">{row.value}</dd>
+              </div>
+            ))}
+          </dl>
         )}
         {card.meta && Object.keys(card.meta).length > 0 && (
           <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -153,8 +251,8 @@ function ImageCardView({
             ))}
           </div>
         )}
-        <div className="mt-3 flex items-center gap-2">
-          {onSelect && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {onSelect && !compare && (
             <button
               type="button"
               onClick={() => onSelect(card)}
@@ -162,6 +260,20 @@ function ImageCardView({
             >
               Choose this
             </button>
+          )}
+          {compare && onSelect && !selected && (
+            <button
+              type="button"
+              onClick={() => onSelect(card)}
+              className="w-full rounded-full bg-[#C8811A] px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-[#A96E15] active:scale-[0.98]"
+            >
+              Pick {card.title}
+            </button>
+          )}
+          {compare && selected && (
+            <span className="w-full rounded-full bg-[#C8811A]/15 px-4 py-2.5 text-center text-sm font-bold text-[#8A5710]">
+              Selected
+            </span>
           )}
           {card.actionUrl && (
             <a
@@ -231,6 +343,92 @@ function OptionSetView({
   optionSet: OptionSet;
   onSelect?: (card: ImageCard) => void;
 }) {
+  const isCompare = optionSet.variant === "compare";
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeDot, setActiveDot] = useState(0);
+  const [selectedTitle, setSelectedTitle] = useState<string | null>(null);
+  const handleCompareSelect = (card: ImageCard) => {
+    setSelectedTitle(card.title);
+    onSelect?.(card);
+  };
+  const onCompareScroll = () => {
+    const el = scrollRef.current;
+    if (!el || optionSet.items.length === 0) return;
+    const idx = Math.round(el.scrollLeft / (el.scrollWidth / optionSet.items.length));
+    setActiveDot(Math.max(0, Math.min(optionSet.items.length - 1, idx)));
+  };
+  if (isCompare) {
+    const picked = selectedTitle
+      ? optionSet.items.find((item) => item.card.title === selectedTitle)
+      : undefined;
+    if (picked) {
+      return (
+        <div className="mt-3">
+          {optionSet.prompt && (
+            <p className="mb-3 text-xs font-medium text-[#6B6862]">{optionSet.prompt}</p>
+          )}
+          <ImageCardView
+            card={picked.card}
+            index={picked.index}
+            category={picked.card.category}
+            compare
+            selected
+            onSelect={handleCompareSelect}
+          />
+          <p className="mt-3 text-xs text-[#6B6862]">
+            Picked {picked.card.title}.{" "}
+            <button
+              type="button"
+              onClick={() => setSelectedTitle(null)}
+              className="font-semibold text-[#8A5710] underline-offset-2 hover:underline"
+            >
+              Change
+            </button>
+          </p>
+        </div>
+      );
+    }
+    return (
+      <div className="mt-3">
+        {optionSet.prompt && (
+          <p className="mb-3 text-xs font-medium text-[#6B6862]">{optionSet.prompt}</p>
+        )}
+        <div
+          ref={scrollRef}
+          onScroll={onCompareScroll}
+          className="flex gap-3 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0"
+          style={{ scrollSnapType: "x mandatory" }}
+        >
+          {optionSet.items.map(({ index, card }) => (
+            <div
+              key={`${index}-${card.title}`}
+              className="w-[86%] shrink-0 sm:w-auto"
+              style={{ scrollSnapAlign: "start" }}
+            >
+              <ImageCardView
+                card={card}
+                index={index}
+                category={card.category}
+                compare
+                onSelect={handleCompareSelect}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 flex justify-center gap-1.5 sm:hidden" aria-label="Compare pages">
+          {optionSet.items.map((item, i) => (
+            <span
+              key={item.index}
+              className={`h-1.5 w-1.5 rounded-full ${i === activeDot ? "bg-[#C8811A]" : "bg-[#D8D5CF]"}`}
+            />
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-[#6B6862]">
+          Sample prices, not live. Beetlebot does not book. Reply 1, 2, or 3 to pick.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="mt-3">
       {optionSet.prompt && (
@@ -246,7 +444,13 @@ function OptionSetView({
         }`}
       >
         {optionSet.items.map(({ index, card }) => (
-          <ImageCardView key={`${index}-${card.title}`} card={card} index={index} onSelect={onSelect} />
+          <ImageCardView
+            key={`${index}-${card.title}`}
+            card={card}
+            index={index}
+            category={card.category}
+            onSelect={onSelect}
+          />
         ))}
       </div>
     </div>
@@ -304,16 +508,21 @@ function InlineSuggestionsView({
         <p className="mb-3 text-xs font-medium text-[#6B6862]">Here are your options — tap one to explore further:</p>
         <div className={`grid gap-3 ${parsed.options.length === 1 ? "grid-cols-1" : parsed.options.length === 2 ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2"}`}>
           {parsed.options.map((opt, i) => {
-            const card: ImageCard = {
-              type: "image_card",
-              title: opt.title,
-              subtitle: opt.subtitle,
-              imageUrl: `https://placehold.co/600x360/0d1826/4a7fbd?text=${encodeURIComponent(opt.title.slice(0, 24))}`,
-              alt: opt.title,
-              meta: opt.meta,
-              actionUrl: opt.actionUrl,
-              sourceName: opt.sourceName,
-            };
+            const card: ImageCard = applyPricePending(
+              correctDestinationCountry({
+                type: "image_card",
+                title: opt.title,
+                subtitle: opt.subtitle,
+                // No trusted photo here: empty URL, so the card shows the
+                // named fallback icon. Never a placehold.co image.
+                imageUrl: "",
+                alt: opt.title,
+                category: opt.category,
+                meta: opt.meta,
+                actionUrl: opt.actionUrl,
+                sourceName: opt.sourceName,
+              }),
+            );
             return (
               <ImageCardView
                 key={`inline-${i}-${opt.title}`}
@@ -387,6 +596,14 @@ function RichBlockRenderer({
           onCheckPrice={(hotel) => onCheckHotelPrice?.(hotel)}
         />
       );
+    case "map_strip":
+      return <MapStripView block={block} />;
+    case "nearby_row":
+      return <NearbyRowView block={block} />;
+    case "itinerary_timeline":
+      return <ItineraryTimelineView block={block} />;
+    case "destination_preview":
+      return <DestinationPreviewView block={block} />;
     default:
       return null;
   }
@@ -450,25 +667,36 @@ function AssistantMessageBody({
   const hasBlocks = message.blocks && message.blocks.length > 0;
 
   if (hasBlocks) {
+    // Runs of two or more destination previews render as one showcase
+    // stack (jump bar, swipe and dots on phone); everything else
+    // renders block by block as before.
+    const grouped = groupDestinationPreviewBlocks(message.blocks!);
     return (
       <>
         {message.text && (
           <p className="whitespace-pre-wrap break-words text-[#1C1B19]">{message.text}</p>
         )}
-        {message.blocks!.map((block, bi) => (
-          <RichBlockRenderer
-            key={`${block.type}-${bi}`}
-            block={block}
-            selectedFlight={selectedFlight}
-            selectedHotel={selectedHotel}
-            checkingHotelId={checkingHotelId}
-            onSelectCard={onSelectCard}
-            onSelectFlight={onSelectFlight}
-            onSelectHotel={onSelectHotel}
-            onCheckHotelPrice={onCheckHotelPrice}
-            onRefreshFlights={onRefreshFlights}
-          />
-        ))}
+        {grouped.map((entry, gi) =>
+          Array.isArray(entry) ? (
+            <DestinationPreviewStackView
+              key={`preview-stack-${gi}`}
+              blocks={entry}
+            />
+          ) : (
+            <RichBlockRenderer
+              key={`${entry.type}-${gi}`}
+              block={entry}
+              selectedFlight={selectedFlight}
+              selectedHotel={selectedHotel}
+              checkingHotelId={checkingHotelId}
+              onSelectCard={onSelectCard}
+              onSelectFlight={onSelectFlight}
+              onSelectHotel={onSelectHotel}
+              onCheckHotelPrice={onCheckHotelPrice}
+              onRefreshFlights={onRefreshFlights}
+            />
+          ),
+        )}
       </>
     );
   }
@@ -626,10 +854,37 @@ export function ChatInterface() {
   }
 
   function handleCardSelect(card: ImageCard) {
+    // A beach compare pick carries the choice into the trip plan.
+    // Local set, kept in step with BEACH_COUNTRY in
+    // lib/travel/beach-compare.ts: importing that module here would pull
+    // the server-only photo resolver (node:fs) into the client bundle.
+    if (BEACH_TITLES.has(card.title)) {
+      handleSelectDestination(card.title);
+      return;
+    }
     const msg = card.actionUrl
       ? `I'd like to go with "${card.title}". Here's the link: ${card.actionUrl}`
       : `I'd like to go with "${card.title}".`;
     void submitMessage(msg);
+  }
+
+  function handleSelectDestination(destination: string) {
+    void submitAction(
+      `Picked ${destination}.`,
+      { type: "select_destination", destination },
+      (payload) => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: newId(),
+            role: "assistant",
+            text: payload.reply,
+            blocks: payload.blocks,
+            followUps: payload.followUps,
+          },
+        ]);
+      },
+    );
   }
 
   async function submitAction(

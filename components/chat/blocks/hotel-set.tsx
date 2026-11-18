@@ -28,6 +28,31 @@ function HotelCardView({
           : "border-[#E7E5E0] hover:border-[#E7E5E0]"
       }`}
     >
+      {hotel.photoUrl ? (
+        <div className="relative aspect-[5/3] w-full overflow-hidden bg-[#F2F1EE]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={hotel.photoUrl}
+            alt={`${hotel.name} photo`}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+          {hotel.photoSourceName && (
+            <span className="absolute bottom-1.5 right-2 text-[10px] text-white drop-shadow">
+              Photo: {hotel.photoSourceName}
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className="flex aspect-[5/3] w-full flex-col items-center justify-center gap-2 bg-[#F2F1EE]">
+          <span className="text-3xl" aria-hidden="true">
+            🏨
+          </span>
+          <span className="max-w-[80%] text-center text-xs text-[#6B6862]">
+            {hotel.photoFallback ?? "No hotel photo found"}
+          </span>
+        </div>
+      )}
       <button
         type="button"
         onClick={onSelect}
@@ -57,6 +82,11 @@ function HotelCardView({
                 ? `${price.derived ? "about " : ""}${formatMoney(price.nightly, price.currency)} a night`
                 : `${formatMoney(price.total ?? 0, price.currency)} total`}
             </p>
+            {hotel.source === "Sample" && (
+              <p className="mt-1 text-[11px] font-semibold text-[#8A5710]">
+                Sample price, not live
+              </p>
+            )}
             <p className="text-[11px] text-[#6B6862]">
               {price.nightly !== null && price.total !== null
                 ? price.derived
@@ -142,6 +172,76 @@ export function HotelSetView({
         Prices from {block.hotels[0]?.source ?? "Hello Axel"}. Prices move daily, confirm
         on the seller before booking. Beetlebot does not book.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Story display mode for a destination preview ("Where you'd stay"):
+ * the hotel reads as part of the place's story, not as a pick. No
+ * select, no checkmark, no price: photo or named fallback, hotel name,
+ * area, one line on why it fits, and the "View on source" link when a
+ * source URL is given.
+ */
+export type HotelStory = {
+  name: string;
+  area: string;
+  whyItFits?: string;
+  photoUrl?: string;
+  photoSourceName?: string;
+  photoFallback?: string;
+  /** Link shown as "View on {sourceName}"; omitted when absent. */
+  sourceUrl?: string;
+  sourceName?: string;
+};
+
+export function HotelStoryView({ hotel }: { hotel: HotelStory }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-[#E7E5E0] bg-white">
+      {hotel.photoUrl ? (
+        <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#F2F1EE]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={hotel.photoUrl}
+            alt={`${hotel.name} photo`}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+          {hotel.photoSourceName && (
+            <span className="absolute bottom-1.5 right-2 text-[10px] text-white drop-shadow">
+              Photo: {hotel.photoSourceName}
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className="flex aspect-[16/9] w-full flex-col items-center justify-center gap-2 bg-[#F2F1EE] px-4">
+          <span className="text-2xl" aria-hidden="true">
+            🏨
+          </span>
+          <span className="max-w-[90%] text-center text-xs text-[#6B6862]">
+            {hotel.photoFallback ?? "No hotel photo found"}
+          </span>
+        </div>
+      )}
+      <div className="p-4">
+        <p className="text-sm font-semibold text-[#1C1B19]">{hotel.name}</p>
+        <p className="mt-0.5 text-xs text-[#6B6862]">{hotel.area}</p>
+        {hotel.whyItFits && (
+          <p className="mt-1 text-sm leading-relaxed text-[#6B6862]">
+            {hotel.whyItFits}
+          </p>
+        )}
+        {hotel.sourceUrl && (
+          <a
+            href={hotel.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-block text-xs text-[#8A5710] underline-offset-2 hover:underline"
+          >
+            View on {hotel.sourceName ?? "source"}
+          </a>
+        )}
+      </div>
     </div>
   );
 }

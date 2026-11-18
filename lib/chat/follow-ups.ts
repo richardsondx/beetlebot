@@ -21,6 +21,33 @@ const HOTEL_CHIPS: FollowUp[] = [
   { label: "Add this to my calendar", message: "Add this trip to my calendar" },
 ];
 
+/**
+ * Chips under a set of destination previews: one "Tell me more"
+ * per place, plus a packing question for the user's month. The
+ * February chip asks what to pack, never which place is best: a
+ * ranking question contradicts the showcase rule (no winner, no
+ * ranking, no choice language).
+ */
+function previewChips(blocks: RichBlock[]): FollowUp[] {
+  const previews = blocks.filter(
+    (b): b is Extract<RichBlock, { type: "destination_preview" }> =>
+      b.type === "destination_preview",
+  );
+  if (previews.length < 2) return [];
+  const chips: FollowUp[] = previews.map((p) => {
+    const name = p.place === "Maldives" ? "the Maldives" : p.place;
+    return {
+      label: `Tell me more about ${name}`,
+      message: `Tell me more about ${name}`,
+    };
+  });
+  chips.push({
+    label: "What should I pack for February?",
+    message: "What should I pack for February?",
+  });
+  return chips;
+}
+
 /** Rule chips from the blocks in the latest reply. */
 export function ruleFollowUps(blocks: RichBlock[] | undefined): FollowUp[] {
   if (!blocks?.length) return [];
@@ -29,6 +56,7 @@ export function ruleFollowUps(blocks: RichBlock[] | undefined): FollowUp[] {
     if (block.type === "flight_compare") out.push(...FLIGHT_CHIPS);
     if (block.type === "hotel_set") out.push(...HOTEL_CHIPS);
   }
+  out.push(...previewChips(blocks));
   return out;
 }
 

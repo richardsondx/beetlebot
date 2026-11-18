@@ -43,7 +43,12 @@ export type BousierResolvedImage = {
   imageLastCheckedAt: string;
 };
 
-const DEFAULT_TIMEOUT_MS = Number(process.env.BOUSIER_TIMEOUT_MS ?? 1500);
+// Default photo budget for the normal enrichment path. Measured Nov 17,
+// 2026: the full Wikipedia page takes 1.6s through this proxy, so the
+// old 1500ms budget timed out on every call and the live lookup went
+// 0/6. 3000ms clears that fetch with headroom while keeping reply
+// latency bounded; the compare path keeps its higher 5500ms budget.
+const DEFAULT_TIMEOUT_MS = Number(process.env.BOUSIER_TIMEOUT_MS ?? 3000);
 const DEFAULT_MODE = (process.env.BOUSIER_MODE ?? "balanced").toLowerCase();
 const TIER3_FLAG = process.env.BOUSIER_ENABLE_TIER3 === "true";
 const TIER4_FLAG = process.env.BOUSIER_ENABLE_TIER4 === "true";
@@ -132,6 +137,20 @@ function scoreCandidate(candidate: BousierCandidate): number {
   if (candidate.imageUrl.startsWith("https://")) score += 0.1;
   if (candidate.imageUrl.includes("wikimedia.org")) score += 0.1;
   if (candidate.imageUrl.includes("wikipedia.org")) score += 0.08;
+  // Rank real photos over site chrome. Article photos are .jpg, while
+  // flags, seals, maps, logos, and banners are .png/.svg or carry
+  // chrome names, and tiny thumbnails make poor card photos. The Bali
+  // page proves it: the locator map, the seal, and the Wikimedia
+  // banner all rank ahead of the first real photo (Bali_panorama.jpg)
+  // on position alone. Ranking-only, so a page with nothing but chrome
+  // still returns something instead of nothing.
+  const path = candidate.imageUrl.split("?")[0];
+  if (/\.(jpe?g)$/i.test(path)) score += 0.3;
+  const file = candidate.imageUrl.split("/").pop() ?? "";
+  if (/logo|banner|icon|seal|flag|googpub|wmf-|sprite|increase/i.test(file)) score -= 0.5;
+  if (candidate.imageUrl.includes("maps.wikimedia.org")) score -= 0.5;
+  const width = candidate.imageUrl.match(/\/(\d+)px-/);
+  if (width && Number(width[1]) < 200) score -= 0.3;
   return Math.max(0, Math.min(1, score));
 }
 
@@ -139,6 +158,17 @@ function dedupeCandidates(candidates: BousierCandidate[]): BousierCandidate[] {
   const byUrl = new Map<string, BousierCandidate>();
   for (const candidate of candidates) {
     if (!isSafeRemoteUrl(candidate.imageUrl, true)) continue;
+    // A card photo must be a raster photo. SVG graphics (flags, locator
+    // maps, logos) read as badges, not destination photos, so they never
+    // win the top slot. Wikimedia thumb URLs carry the .svg in the path
+    // (.../Flag.svg/1280px-Flag.svg.png), not at the end, so the match
+    // covers a slash after .svg too. No photo beats a flag as a photo.
+    if (/\.svg(\/|$|\?)/i.test(candidate.imageUrl)) continue;
+    // The URL must point at a raster image. Page scrapes also surface
+    // junk such as https://en.wikipedia.org/wiki/1200, which is not an
+    // image at all and can never render as a photo.
+    const path = candidate.imageUrl.split("?")[0];
+    if (!/\.(jpe?g|png|webp|gif|avif)$/i.test(path)) continue;
     const existing = byUrl.get(candidate.imageUrl);
     if (!existing || scoreCandidate(candidate) > scoreCandidate(existing)) {
       byUrl.set(candidate.imageUrl, candidate);
@@ -180,7 +210,7 @@ async function tier2FromWikipedia(input: BousierEntityInput): Promise<BousierCan
         "User-Agent": "beetlebot/1.0 (bousier-tier2)",
         Accept: "application/json",
       },
-      signal: AbortSignal.timeout(1200),
+      signal: AbortSignal.timeout(2000),
     });
     if (!res.ok) {
       telemetry.tier2_open_data.latencyMsTotal += Date.now() - started;
@@ -269,12 +299,17 @@ export async function resolveImageForEntity(
   const startedAt = nowIso();
   const candidates: BousierCandidate[] = [];
 
-  const tier1 = await withTimeout(tier1FromCanonicalPage(input), Math.min(1200, timeoutMs));
+  const tier1 = await withTimeout(tier1FromCanonicalPage(input), Math.min(3000, timeoutMs));
   if (tier1?.length) candidates.push(...tier1);
 
   const shouldRunTier2 = !tier1?.length || mode !== "safe";
   if (shouldRunTier2) {
-    const tier2 = await withTimeout(tier2FromWikipedia(input), Math.min(900, timeoutMs));
+    // Caps measured Nov 17, 2026: the full Wikipedia page takes about
+    // 1.6s and the summary API about 1.0s through this proxy, and three
+    // parallel page fetches contend, so the old 1200ms and 900ms caps
+    // timed out on every call and no photo ever resolved. The caps sit
+    // above measured latency with headroom for contention.
+    const tier2 = await withTimeout(tier2FromWikipedia(input), Math.min(2000, timeoutMs));
     if (tier2?.length) candidates.push(...tier2);
   }
 
@@ -315,7 +350,7 @@ export async function resolveImageBatch(
   options: BousierResolveOptions = {},
 ): Promise<BousierResolvedImage[]> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const perItem = Math.max(450, Math.min(timeoutMs, 2200));
+  const perItem = Math.max(450, Math.min(timeoutMs, 6000));
   return Promise.all(inputs.map((input) => resolveImageForEntity(input, { ...options, timeoutMs: perItem })));
 }
 

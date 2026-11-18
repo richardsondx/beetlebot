@@ -57,6 +57,31 @@ import {
 } from "@/lib/chat/stream";
 import { parseTripQuery, shortDateLabel } from "@/lib/travel/trip-parse";
 import {
+  beachItineraryStops,
+  buildBeachHotelCards,
+  buildBeachMapStrip,
+  buildBeachNearbyRow,
+  isBeachCompareTitles,
+  mentionsBeachCompare,
+  mentionsBeachDestination,
+  resolveBeachComparePhotos,
+} from "@/lib/travel/beach-compare";
+import {
+  buildItineraryTimeline,
+  resolveItineraryTimelinePhotos,
+  toItineraryTimelineBlock,
+} from "@/lib/travel/itinerary-timeline";
+import { toMapStripBlock } from "@/lib/travel/map-strip";
+import { toNearbyRowBlock } from "@/lib/travel/nearby";
+import {
+  buildTripPick,
+  messageNamesBeachDestination,
+  parseBeachPickReply,
+  pickMissingInputQuestion,
+  tripPickPriceLines,
+  tripPickTitle,
+} from "@/lib/travel/trip-pick";
+import {
   effectiveTripQuery,
   hasDuffelToken,
   searchFlights,
@@ -491,6 +516,66 @@ function buildOutputFormatPolicyPrompt(input: PromptPolicyContext): string {
     lines.push("- Keep response in concise text format for this turn.");
   }
   return lines.join("\n");
+}
+
+export type BeachAskIntentInput = {
+  isExplicitSuggestionRequest: boolean;
+  wantsBestEffortNow: boolean;
+  intentExtractionOk: boolean;
+  /** Classifier's isLocationInfoQuery for this message, if known. */
+  isLocationInfoQuery?: boolean;
+};
+
+export type BeachAskIntent = {
+  isBeachAsk: boolean;
+  explicitSuggestionRequest: boolean;
+  allowBestEffortSuggestions: boolean;
+  shouldUseSafeNoIntentMode: boolean;
+  /** Effective isLocationInfoQuery: a beach ask is never one. */
+  isLocationInfoQuery: boolean;
+};
+
+/**
+ * Beach-ask bypass for a failed intent parse. A compare ask ("Bali vs
+ * Maldives vs Palawan, which should I pick?") or a tell-me-about ask
+ * ("Tell me more about Palawan") is an explicit suggestion request
+ * even when intent extraction failed, so the safe-no-intent guard must
+ * not fire and enrichment must not be suppressed. Fix round 1 failed
+ * because shouldUseSafeNoIntentMode fired before the smalltalk branch
+ * and allowBestEffortSuggestions stayed false. Keep the three flags
+ * consistent here; the route reads them, and the dispatch at the
+ * shouldUseSafeNoIntentMode branch and the enrichment gate below both
+ * follow from them. A non-beach ask keeps the guard exactly as before.
+ *
+ * Fix cycle 2 adds a fourth flag, isLocationInfoQuery. The classifier
+ * reads "Tell me more about Palawan" as a factual place-info question
+ * ("details, info" about a place), so on a successful parse it returns
+ * isLocationInfoQuery true — and the B1 bypass above never engages,
+ * because it only repairs a failed parse. That flag then kills the
+ * preview twice: the dispatch sends the ask to info mode, and
+ * suppressVisualEnrichment skips enrichLlmReply entirely, so 0
+ * preview blocks are built even though the enricher would have built
+ * one full preview from the prose reply. A beach ask is a preview
+ * ask, never a place-info question, so the flag is cleared for beach
+ * asks here. A non-beach place-info question keeps it.
+ */
+export function resolveBeachAskIntent(
+  message: string,
+  intent: BeachAskIntentInput,
+): BeachAskIntent {
+  const isBeachAsk =
+    mentionsBeachCompare(message) || mentionsBeachDestination(message);
+  return {
+    isBeachAsk,
+    explicitSuggestionRequest:
+      intent.isExplicitSuggestionRequest || isBeachAsk,
+    allowBestEffortSuggestions:
+      intent.isExplicitSuggestionRequest ||
+      intent.wantsBestEffortNow ||
+      isBeachAsk,
+    shouldUseSafeNoIntentMode: !intent.intentExtractionOk && !isBeachAsk,
+    isLocationInfoQuery: Boolean(intent.isLocationInfoQuery) && !isBeachAsk,
+  };
 }
 
 export function composePolicySections(input: PromptPolicyContext): string[] {
@@ -2353,7 +2438,17 @@ type ChatPayload = {
  * Short-circuits the model flow: the reply is templated, no model call.
  */
 async function handleChatAction(input: {
-  action: { type: string; offerId?: string; searchId?: string; hotelId?: string };
+  action: {
+    type: string;
+    offerId?: string;
+    searchId?: string;
+    hotelId?: string;
+    destination?: string;
+    depart?: string;
+    return?: string;
+    budgetCad?: number;
+    travelers?: number;
+  };
   message: string;
   thread: { id: string };
   emit: ChatEventEmitter;
@@ -2416,6 +2511,74 @@ async function handleChatAction(input: {
       refreshed && hotel?.price
         ? `Checked ${hotel.name}: ${hotel.price.total !== null ? `$${hotel.price.total} total` : "price found"}.`
         : "No live price yet for that hotel. Try again in a bit, or check the rate on the hotel site.";
+  } else if (action.type === "select_destination") {
+    // Beach pick: carry destination, hotel, flight, dates, budget, and
+    // travelers into the trip plan. Dates and budget stay null when the
+    // user has not given them; the reply asks one short question.
+    const destination = action.destination ?? parseBeachPickReply(message);
+    const hotelCards = await buildBeachHotelCards();
+    const pickedCard = destination
+      ? hotelCards.find((h) => h.id === `beach-${destination.toLowerCase()}`)
+      : undefined;
+    const pick = destination
+      ? buildTripPick(destination, {
+          photoUrl: pickedCard?.photoUrl ?? null,
+          photoSourceName: pickedCard?.photoSourceName ?? null,
+          depart: action.depart ?? null,
+          return: action.return ?? null,
+          budgetCad: action.budgetCad ?? null,
+          travelers: action.travelers,
+        })
+      : null;
+    if (!pick || !pickedCard) {
+      reply = "I couldn't find that beach anymore. Ask me to compare beaches again and I'll pull fresh options.";
+    } else {
+      const question = pickMissingInputQuestion(pick);
+      const hero = (await resolveBeachComparePhotos()).items.find(
+        (item) => item.card.title === pick.destination,
+      )?.card;
+      const strip = buildBeachMapStrip(pick.destination);
+      const nearby = await buildBeachNearbyRow(pick.destination);
+      const stops = beachItineraryStops(pick.destination);
+      const timeline = await resolveItineraryTimelinePhotos(
+        buildItineraryTimeline({
+          hotelName: pick.hotel.name,
+          hotel: { lat: pick.hotel.lat, lng: pick.hotel.lng },
+          stops,
+          startDate: pick.depart ?? undefined,
+        }),
+        stops,
+      );
+      const priceSummary = tripPickPriceLines(pick).join("\n");
+      reply = question
+        ? `${tripPickTitle(pick)} is in your plan.\n\n${question.question}\n\n${priceSummary}`
+        : `${tripPickTitle(pick)} is in your plan.\n\n${priceSummary}`;
+      blocks = [
+        ...(hero
+          ? [{ ...hero, type: "image_card" as const }]
+          : []),
+        {
+          type: "hotel_set",
+          stay: {
+            checkIn: pick.depart ?? "",
+            checkOut: pick.return ?? "",
+            adults: pick.travelers,
+          },
+          hotels: [pickedCard],
+          checkedAt: pickedCard.checkedAt ?? "",
+        },
+        ...(strip ? [toMapStripBlock(strip)] : []),
+        toNearbyRowBlock(pick.hotel.name, nearby),
+        toItineraryTimelineBlock(timeline),
+        { type: "text_block", text: priceSummary },
+      ];
+      followUps = question
+        ? question.followUps
+        : [
+            { label: "Add this to my calendar", message: `Add ${pick.destination} trip to my calendar` },
+            { label: "Check the weather", message: `Check the weather in ${pick.destination}` },
+          ];
+    }
   } else {
     reply = "Got it.";
   }
@@ -2471,6 +2634,42 @@ async function runChatFlow(
         emit,
         requestId,
       });
+    }
+
+    // Typed beach pick: "2", "Maldives", or "Pick Bali" works like
+    // tapping Pick. A bare number only counts when the last assistant
+    // reply in this thread showed a beach compare, so it never hijacks
+    // a flight or hotel pick. "Tell me (more) about X" names one beach
+    // so it parses as a pick, but it is a preview ask, not a pick: let
+    // it flow to the normal route, where the beach-ask bypass keeps it
+    // out of the clarification path and enrichment runs.
+    const typedPick = parseBeachPickReply(body.message);
+    if (typedPick && !mentionsBeachDestination(body.message)) {
+      let isBeachTurn = messageNamesBeachDestination(body.message);
+      if (!isBeachTurn) {
+        const recent = await getConversationMessages(thread.id);
+        const lastAssistant = [...recent]
+          .reverse()
+          .find((m) => m.role === "assistant");
+        const blocks = lastAssistant
+          ? parseMessageBlocks(lastAssistant.blocksJson)
+          : null;
+        isBeachTurn = (blocks ?? []).some(
+          (b) =>
+            b.type === "option_set" &&
+            b.variant === "compare" &&
+            isBeachCompareTitles(b.items.map((i) => i.card.title)),
+        );
+      }
+      if (isBeachTurn) {
+        return handleChatAction({
+          action: { type: "select_destination", destination: typedPick },
+          message: body.message,
+          thread,
+          emit,
+          requestId,
+        });
+      }
     }
 
     // Trip fast-parse: start the flight search in parallel with the reply.
@@ -2689,10 +2888,24 @@ async function runChatFlow(
     const isSmallTalkTurn = intent.isSmallTalk;
     const isMetaConversationQuery = intent.isMetaConversationQuery;
     const isCapabilityQuery = intent.isCapabilityQuery;
-    const isLocationInfoQuery = intent.isLocationInfoQuery;
-    const explicitSuggestionRequest = intent.isExplicitSuggestionRequest;
-    const allowBestEffortSuggestions = explicitSuggestionRequest || intent.wantsBestEffortNow;
-    const shouldUseSafeNoIntentMode = !intent.intentExtractionOk;
+    // A beach compare or tell-me-about ask is an explicit suggestion
+    // request even when intent extraction failed. resolveBeachAskIntent
+    // keeps the flags consistent: the safe-no-intent guard below must
+    // not fire for these asks, and enrichment must run. Fix round 1
+    // failed because shouldUseSafeNoIntentMode fired first and
+    // allowBestEffortSuggestions stayed false. Fix cycle 2 found the
+    // same failure one flag over: the classifier reads "Tell me more
+    // about Palawan" as a factual place-info question, so
+    // isLocationInfoQuery came back true on a successful parse and
+    // killed the preview twice (info-mode dispatch, then the
+    // enrichment gate). The local isLocationInfoQuery below is the
+    // effective flag every consumer reads, so it comes from the
+    // beach-aware resolver, not straight from the classifier.
+    const beachAsk = resolveBeachAskIntent(body.message, intent);
+    const isLocationInfoQuery = beachAsk.isLocationInfoQuery;
+    const explicitSuggestionRequest = beachAsk.explicitSuggestionRequest;
+    const allowBestEffortSuggestions = beachAsk.allowBestEffortSuggestions;
+    const shouldUseSafeNoIntentMode = beachAsk.shouldUseSafeNoIntentMode;
     const recentClarifierAsked = hasRecentClarifierQuestion(recentConversation);
     const isProfileCaptureTurn =
       intent.isProfileCaptureTurn ||
@@ -2754,6 +2967,12 @@ async function runChatFlow(
       !isCapabilityHelpTurn &&
       !isLocationInfoQuery &&
       !allowBestEffortSuggestions &&
+      // A beach compare ask is a recommendation, never small talk: the
+      // classifier sometimes calls it small talk, which skips the
+      // compare step entirely and stores no compare. Same for a
+      // tell-me-about ask for one beach.
+      !mentionsBeachCompare(body.message) &&
+      !mentionsBeachDestination(body.message) &&
       (isGreetingTurn || isSmallTalkTurn || isProfileCaptureTurn || isMetaConversationQuery);
     const shouldRunResearch =
       !isActionCmd &&
@@ -2761,6 +2980,11 @@ async function runChatFlow(
       !isCapabilityHelpTurn &&
       !isLocationInfoQuery &&
       allowBestEffortSuggestions &&
+      // A compare ask names its options, so it never needs research.
+      // Research returns Toronto events for a beach trip ask. Same for
+      // a tell-me-about ask: the place is named.
+      !mentionsBeachCompare(body.message) &&
+      !mentionsBeachDestination(body.message) &&
       (signals.boredomSignal || intent.isResearchRequest);
     const threadSuggestions = extractThreadSuggestionsForIntent(recentConversation);
     const shouldResolveThreadSuggestions =
@@ -2920,6 +3144,18 @@ async function runChatFlow(
         role: "system",
         content:
           "If this calendar action references prior suggestions in thread context, carry those exact venues into event description (names + practical details) instead of broad summaries.",
+      });
+    }
+    if (beachAsk.isBeachAsk) {
+      // The reply shows each place as its own showcase, so the opening
+      // text must not compare them: live drives showed a "Quick take"
+      // line summing up how the three differ plus a question asking
+      // the user to choose between them, above the showcases. The
+      // previews carry the detail; the lead-in only introduces them.
+      systemMessages.push({
+        role: "system",
+        content:
+          "BEACH SHOWCASE LEAD-IN: The reply shows each place as its own showcase. The opening text introduces the places without comparing them against each other: no 'vs', no ranking, no one-line summary of how they differ, and no question asking the user to choose between them or whether the trip is one kind or another. Each place stands on its own.",
       });
     }
 
@@ -3633,6 +3869,7 @@ async function runChatFlow(
       ? { text: replyText, blocks: undefined as RichBlock[] | undefined }
       : await enrichLlmReply(replyText, {
           asyncUpgrade: true,
+          userMessage: body.message,
           onAsyncUpgrade: async (upgradedCards) => {
             const assistantId = await assistantMessageIdReady;
             const mergedBlocks = applyUpgradedCardsToBlocks(currentBlocks, upgradedCards);
@@ -3674,6 +3911,12 @@ async function runChatFlow(
     for (const chunk of splitTextDeltas(enriched.text)) {
       emit({ event: "text_delta", data: { text: chunk } });
     }
+    // Stream every enriched block, not just the flight compare. The browser
+    // renders from the stream, so a block that is only saved never shows live.
+    const nonFlightBlocks = (finalBlocks ?? []).filter((b) => b !== flightBlock);
+    nonFlightBlocks.forEach((block, i) => {
+      emit({ event: "block", data: { id: `block-${i}`, block } });
+    });
     if (flightBlock) {
       emit({ event: "block", data: { id: "flight-compare", block: flightBlock } });
     }

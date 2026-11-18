@@ -2,9 +2,14 @@
  * Visual enrichment pipeline.
  *
  * Takes structured LLM output (text + raw option list) and attaches real
- * image URLs.  Uses Bousier's tiered resolver first (metadata + open datasets),
- * then falls back to placeholders when no trusted image is available within the
- * latency budget.
+ * image URLs. Uses Bousier's tiered resolver first (metadata + open datasets),
+ * then leaves the image empty so the UI shows the named fallback icon when
+ * no trusted image is available within the latency budget. Never a
+ * placehold.co image, never a generated image.
+ *
+ * A destination suggestion with no price at all is marked price-pending
+ * (see lib/travel/destination-suggestion.ts) so it still renders as a
+ * photo-first card with a plain "Price coming soon" state.
  *
  * The module is intentionally tolerant: any fetch failure results in a
  * graceful fallback rather than a thrown error.
@@ -12,6 +17,25 @@
 
 import type { AssistantMessage, ImageCard, RichBlock } from "./rich-message";
 import { sanitiseBlocks } from "./safety";
+import {
+  BEACH_PREVIEW_CLOSING_LINE,
+  BEACH_PREVIEW_SET_LINE,
+  BEACH_PREVIEW_SINGLE_CLOSING_LINE,
+  BEACH_COUNTRY,
+  BEACH_DESTINATIONS,
+  beachDestinationNamed,
+  beachDestinationsNamedInOrder,
+  buildBeachDestinationPreviews,
+  isBeachCompareTitles,
+  mentionsBeachCompare,
+  mentionsBeachDestination,
+} from "@/lib/travel/beach-compare";
+import {
+  applyPricePending,
+  correctDestinationCountry,
+  normaliseDestinationTitle,
+  wikiUrlForDestination,
+} from "@/lib/travel/destination-suggestion";
 import {
   type BousierEntityInput,
   resolveImageBatch,
@@ -24,6 +48,7 @@ export type RawOption = {
   subtitle?: string;
   category?: string; // e.g. "hotel", "restaurant", "park"
   meta?: Record<string, string>;
+  compareRows?: Array<{ label: string; value: string }>;
   actionUrl?: string;
   sourceName?: string;
 };
@@ -36,10 +61,13 @@ export type RawLlmPayload = {
 };
 
 type EnrichOptions = {
-  /** Run a non-blocking second pass for cards that had placeholders. */
+  /** Run a non-blocking second pass for cards that had no photo yet. */
   asyncUpgrade?: boolean;
   /** Optional callback when upgraded cards are found in background pass. */
   onAsyncUpgrade?: (cards: ImageCard[]) => Promise<void> | void;
+  /** The user's message, so a compare ask can be answered visually even
+   * when the model replies in prose with no options. */
+  userMessage?: string;
 };
 
 // ── Enrichment entry point ─────────────────────────────────────────────────
@@ -62,13 +90,61 @@ export async function enrichLlmReply(
     };
   }
 
-  // No visual options → plain message
+  // No visual options → plain message, unless the user asked about a
+  // beach. The model sometimes answers a beach ask in prose with no
+  // options JSON; the ask already names the place(s), so previews are
+  // built directly instead of showing text only. A compare ask gets
+  // three short showcases; a tell-me-about ask gets one full preview.
   if (!payload.options?.length) {
+    const previews = await beachPreviewsForMessage(
+      options.userMessage ?? "",
+    );
+    if (previews) {
+      return { text: payload.text, blocks: previews };
+    }
     return { text: payload.text };
   }
 
+  // A beach compare in the model options becomes three short previews,
+  // not a compare OptionSet: no Pick buttons, no aligned price rows.
+  if (isBeachCompareTitles(payload.options.map((opt) => opt.title))) {
+    const previews = await buildBeachDestinationPreviews(
+      payload.options.map((opt) => normaliseDestinationTitle(opt.title)),
+      {
+        short: true,
+        whyItFitsByTitle: pitchLinesByTitle(payload.options),
+        setLine: BEACH_PREVIEW_SET_LINE,
+        closingLine: BEACH_PREVIEW_CLOSING_LINE,
+      },
+    );
+    if (previews.length > 0) {
+      return { text: payload.text, blocks: previews };
+    }
+  }
+
+  // A single beach option on a tell-me-about ask becomes one full
+  // preview, with the model pitch line as "Why it fits your ask".
+  if (
+    payload.options.length === 1 &&
+    mentionsBeachDestination(options.userMessage ?? "")
+  ) {
+    const title = normaliseDestinationTitle(payload.options[0].title);
+    const previews = await buildBeachDestinationPreviews([title], {
+      whyItFitsByTitle: pitchLinesByTitle(payload.options),
+      closingLine: BEACH_PREVIEW_SINGLE_CLOSING_LINE,
+    });
+    if (previews.length > 0) {
+      return { text: payload.text, blocks: previews };
+    }
+  }
+
   // Enrich each option with an image URL
-  const cards = await enrichOptionsWithBousier(payload.options);
+  const enriched = await enrichOptionsWithBousier(payload.options);
+  // Price-pending runs on the enriched cards, so a destination with no
+  // price still renders as a photo-first card with "Price coming soon".
+  const cards = enriched.map((card) =>
+    applyPricePending(correctDestinationCountry(card)),
+  );
 
   const blocks: RichBlock[] =
     cards.length === 1
@@ -179,27 +255,60 @@ function friendlySourceName(raw: string | undefined): string | undefined {
 }
 
 async function enrichOptionsWithBousier(options: RawOption[]): Promise<ImageCard[]> {
-  const inputs: BousierEntityInput[] = options.map((opt) => ({
-    title: opt.title,
-    category: opt.category,
-    actionUrl: opt.actionUrl,
-    query: `${opt.category ?? ""} ${opt.title}`.trim(),
-  }));
+  const inputs: BousierEntityInput[] = options.map((opt) => {
+    // Resolve under the bare name: the model writes "Bali, Indonesia",
+    // Wikipedia needs "Bali". The displayed card title stays as written.
+    const resolveTitle = normaliseDestinationTitle(opt.title);
+    return {
+      title: resolveTitle,
+      category: opt.category,
+      // Known destinations get their Wikipedia page as the tier 1 source
+      // when the LLM gave no detail URL, so a real photo can still resolve.
+      actionUrl: opt.actionUrl ?? wikiUrlForDestination(opt.title),
+      query: `${opt.category ?? ""} ${resolveTitle}`.trim(),
+    };
+  });
   const resolved = await resolveImageBatch(inputs, {
     mode: "balanced",
-    timeoutMs: Number(process.env.BOUSIER_TIMEOUT_MS ?? 1500),
+    // 3000ms: the measured Wikipedia page fetch is 1.6s, so the old
+    // 1500ms budget timed out on every call and cards came back
+    // photo-less. The compare path keeps its higher 5500ms budget.
+    timeoutMs: Number(process.env.BOUSIER_TIMEOUT_MS ?? 3000),
   });
 
   return options.map((opt, idx) => {
     const result = resolved[idx];
-    const query = `${opt.category ?? ""} ${opt.title}`.trim();
-    const imageUrl = result?.selectedImageUrl ?? makePlaceholder(query);
+    // No trusted photo: empty URL, so the card shows the named fallback
+    // icon. Never a placehold.co image.
+    const imageUrl = result?.selectedImageUrl ?? "";
     const friendly = friendlySourceName(result?.selectedSourceName);
     const sourceName = friendly
       ? opt.sourceName
         ? `${opt.sourceName} · ${friendly}`
         : friendly
       : opt.sourceName;
+
+    // Extra real photos of the same place, from the ranked Bousier
+    // candidates. Hero plus extras cap at 5, the ImageGallery maximum.
+    // A tap on the photo opens the gallery; a card with no extra
+    // candidates keeps the single-photo expand.
+    const gallery = (result?.imageCandidates ?? [])
+      .filter(
+        (c) =>
+          c.imageUrl !== imageUrl &&
+          !c.imageUrl.includes("placehold.co") &&
+          c.imageUrl.startsWith("https://"),
+      )
+      .slice(0, 4)
+      .map((c) => ({
+        imageUrl: c.imageUrl,
+        sourceName:
+          c.sourceName === "wikipedia_summary"
+            ? "Wikipedia"
+            : c.sourceName === "canonical_metadata"
+              ? "Official site"
+              : c.sourceName,
+      }));
 
     const meta: Record<string, string> = { ...(opt.meta ?? {}) };
 
@@ -209,11 +318,69 @@ async function enrichOptionsWithBousier(options: RawOption[]): Promise<ImageCard
       subtitle: opt.subtitle,
       imageUrl,
       alt: opt.title,
+      category: opt.category,
+      compareRows: opt.compareRows,
       meta: Object.keys(meta).length > 0 ? meta : undefined,
-      actionUrl: opt.actionUrl,
+      actionUrl: opt.actionUrl ?? wikiUrlForDestination(opt.title),
       sourceName,
+      gallery: gallery.length > 0 ? gallery : undefined,
     };
   });
+}
+
+/**
+ * Model pitch line per beach destination, from the option subtitle.
+ * A bare country name ("Indonesia") is a label, not a pitch, so it is
+ * skipped and the "Why it fits your ask" section hides instead.
+ */
+function pitchLinesByTitle(options: RawOption[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  const countries = new Set(
+    Object.values(BEACH_COUNTRY).map((c) => c.toLowerCase()),
+  );
+  for (const opt of options) {
+    const title = normaliseDestinationTitle(opt.title);
+    const subtitle = (opt.subtitle ?? "").trim();
+    if (!subtitle || countries.has(subtitle.toLowerCase())) continue;
+    out[title] = subtitle;
+  }
+  return out;
+}
+
+/**
+ * Previews for a beach ask the model answered in prose, or null when
+ * the message is not a beach ask. A compare ask gets three short
+ * showcases; a tell-me-about ask gets one full preview.
+ */
+async function beachPreviewsForMessage(
+  userMessage: string,
+): Promise<RichBlock[] | null> {
+  if (mentionsBeachCompare(userMessage)) {
+    // Showcase order follows the ask: places the user named, in the
+    // order they named them, then any unnamed place in seed order, so
+    // the reply still shows all three.
+    const named = beachDestinationsNamedInOrder(userMessage);
+    const ordered = [
+      ...named,
+      ...BEACH_DESTINATIONS.map((d) => d.title).filter(
+        (title) => !named.includes(title),
+      ),
+    ];
+    const previews = await buildBeachDestinationPreviews(ordered, {
+      short: true,
+      setLine: BEACH_PREVIEW_SET_LINE,
+      closingLine: BEACH_PREVIEW_CLOSING_LINE,
+    });
+    return previews.length > 0 ? previews : null;
+  }
+  const named = beachDestinationNamed(userMessage);
+  if (named) {
+    const previews = await buildBeachDestinationPreviews([named], {
+      closingLine: BEACH_PREVIEW_SINGLE_CLOSING_LINE,
+    });
+    return previews.length > 0 ? previews : null;
+  }
+  return null;
 }
 
 async function runAsyncCardUpgrade(
@@ -223,18 +390,20 @@ async function runAsyncCardUpgrade(
 ) {
   const targets = options
     .map((opt, idx) => ({ opt, idx }))
-    .filter(({ idx }) => cards[idx]?.imageUrl.includes("placehold.co"))
-    .filter(({ opt }) => !!opt.actionUrl);
+    .filter(({ idx }) => !cards[idx]?.imageUrl);
 
   if (targets.length === 0) return;
 
   const upgraded = await resolveImageBatch(
-    targets.map(({ opt }) => ({
-      title: opt.title,
-      category: opt.category,
-      actionUrl: opt.actionUrl,
-      query: `${opt.category ?? ""} ${opt.title}`.trim(),
-    })),
+    targets.map(({ opt }) => {
+      const resolveTitle = normaliseDestinationTitle(opt.title);
+      return {
+        title: resolveTitle,
+        category: opt.category,
+        actionUrl: opt.actionUrl ?? wikiUrlForDestination(opt.title),
+        query: `${opt.category ?? ""} ${resolveTitle}`.trim(),
+      };
+    }),
     { mode: "balanced", timeoutMs: Number(process.env.BOUSIER_ASYNC_TIMEOUT_MS ?? 3500) },
   );
 
@@ -279,17 +448,4 @@ export function applyUpgradedCardsToBlocks(
     return block;
   });
   return mapped;
-}
-
-// ── Image fetch helpers ────────────────────────────────────────────────────
-
-/**
- * Generate a deterministic, nice-looking placeholder using placehold.co.
- * Returns a valid https URL that always resolves — zero external dependencies.
- */
-function makePlaceholder(query: string): string {
-  const label = encodeURIComponent(
-    query.slice(0, 30).replace(/[^a-zA-Z0-9 ]/g, " ").trim(),
-  );
-  return `https://placehold.co/600x360/0d1826/4a7fbd?text=${label}`;
 }

@@ -4,7 +4,14 @@
  */
 
 import type { ImageCard, RichBlock } from "./rich-message";
-import { isFlightCompareBlock, isHotelSetBlock } from "./rich-message";
+import {
+  isDestinationPreviewBlock,
+  isFlightCompareBlock,
+  isHotelSetBlock,
+  isItineraryTimelineBlock,
+  isMapStripBlock,
+  isNearbyRowBlock,
+} from "./rich-message";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -105,6 +112,7 @@ export function sanitiseBlocks(raw: unknown[]): RichBlock[] {
               typeof b.prompt === "string"
                 ? b.prompt.slice(0, 500)
                 : undefined,
+            variant: b.variant === "compare" ? "compare" : undefined,
             items,
           });
         }
@@ -122,6 +130,30 @@ export function sanitiseBlocks(raw: unknown[]): RichBlock[] {
         if (block) safe.push(block);
         break;
       }
+
+      case "map_strip": {
+        const block = isMapStripBlock(b);
+        if (block) safe.push(block);
+        break;
+      }
+
+      case "nearby_row": {
+        const block = isNearbyRowBlock(b);
+        if (block) safe.push(block);
+        break;
+      }
+
+      case "itinerary_timeline": {
+        const block = isItineraryTimelineBlock(b);
+        if (block) safe.push(block);
+        break;
+      }
+
+      case "destination_preview": {
+        const block = isDestinationPreviewBlock(b);
+        if (block) safe.push(block);
+        break;
+      }
     }
   }
 
@@ -133,7 +165,10 @@ export function sanitiseBlocks(raw: unknown[]): RichBlock[] {
 function sanitiseCard(b: Record<string, unknown>): ImageCard | null {
   if (typeof b.title !== "string" || !b.title.trim()) return null;
 
-  const imageUrl = typeof b.imageUrl === "string" ? b.imageUrl : "";
+  const rawImageUrl = typeof b.imageUrl === "string" ? b.imageUrl : "";
+  // Drop placehold.co images to an empty URL (card renders the named
+  // fallback icon instead of a placeholder image).
+  const imageUrl = rawImageUrl.includes("placehold.co") ? "" : rawImageUrl;
   // Allow empty imageUrl (card renders with placeholder); block invalid URLs
   if (imageUrl && !isValidImageUrl(imageUrl)) return null;
 
@@ -152,6 +187,42 @@ function sanitiseCard(b: Record<string, unknown>): ImageCard | null {
           }, {})
       : undefined;
 
+  const compareRows = Array.isArray(b.compareRows)
+    ? (b.compareRows as unknown[])
+        .slice(0, 6)
+        .map((r) => {
+          const row = r as Record<string, unknown>;
+          if (typeof row?.label !== "string" || typeof row?.value !== "string") return null;
+          return {
+            label: row.label.slice(0, 50),
+            value: row.value.slice(0, 120),
+          };
+        })
+        .filter((r): r is { label: string; value: string } => r !== null)
+    : undefined;
+
+  // Extra gallery photos of the same place, at most 5 total with the hero.
+  const gallery = Array.isArray(b.gallery)
+    ? (b.gallery as unknown[])
+        .slice(0, MAX_CARDS_PER_GALLERY)
+        .map((g): { imageUrl: string; sourceName?: string } | null => {
+          const item = g as Record<string, unknown>;
+          if (typeof item?.imageUrl !== "string") return null;
+          if (item.imageUrl.includes("placehold.co")) return null;
+          if (!isValidImageUrl(item.imageUrl)) return null;
+          return {
+            imageUrl: item.imageUrl.slice(0, MAX_IMAGE_URL_LENGTH),
+            sourceName:
+              typeof item.sourceName === "string"
+                ? item.sourceName.slice(0, 100)
+                : undefined,
+          };
+        })
+        .filter(
+          (g): g is { imageUrl: string; sourceName?: string } => g !== null,
+        )
+    : undefined;
+
   return {
     type: "image_card",
     title: b.title.slice(0, 200),
@@ -159,9 +230,14 @@ function sanitiseCard(b: Record<string, unknown>): ImageCard | null {
       typeof b.subtitle === "string" ? b.subtitle.slice(0, 400) : undefined,
     imageUrl,
     alt: typeof b.alt === "string" ? b.alt.slice(0, 200) : undefined,
+    category:
+      typeof b.category === "string" ? b.category.slice(0, 50) : undefined,
+    compareRows: compareRows?.length ? compareRows : undefined,
     meta: rawMeta,
     actionUrl,
     sourceName:
       typeof b.sourceName === "string" ? b.sourceName.slice(0, 100) : undefined,
+    pricePending: b.pricePending === true ? true : undefined,
+    gallery: gallery?.length ? gallery : undefined,
   };
 }

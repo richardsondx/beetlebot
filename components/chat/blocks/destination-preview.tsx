@@ -6,6 +6,7 @@ import type {
   DestinationPreviewSection,
 } from "@/lib/chat/rich-message";
 import { PRICE_PENDING_LABEL } from "@/lib/travel/destination-suggestion";
+import { HotelStoryView } from "@/components/chat/blocks/hotel-set";
 import { MapStripView } from "@/components/chat/blocks/map-strip";
 import { NearbyRowView } from "@/components/chat/blocks/nearby-row";
 import { ItineraryTimelineView } from "@/components/chat/blocks/itinerary-timeline";
@@ -70,7 +71,7 @@ export function DestinationPreviewView({
         )}
 
         {visible.map((section) => (
-          <PreviewSection key={section.kind} section={section} />
+          <PreviewSection key={section.kind} block={block} section={section} />
         ))}
 
         {collapsed.length > 0 && (
@@ -87,7 +88,7 @@ export function DestinationPreviewView({
             </button>
             {detailsOpen &&
               collapsed.map((section) => (
-                <PreviewSection key={section.kind} section={section} />
+                <PreviewSection key={section.kind} block={block} section={section} />
               ))}
           </div>
         )}
@@ -129,7 +130,13 @@ function SectionLabel({ section }: { section: DestinationPreviewSection }) {
   );
 }
 
-function PreviewSection({ section }: { section: DestinationPreviewSection }) {
+function PreviewSection({
+  block,
+  section,
+}: {
+  block: DestinationPreviewBlock;
+  section: DestinationPreviewSection;
+}) {
   switch (section.kind) {
     case "what_it_is_like":
     case "why_it_fits":
@@ -183,46 +190,21 @@ function PreviewSection({ section }: { section: DestinationPreviewSection }) {
       );
     case "stay": {
       if (!section.hotel) return null;
-      const hotel = section.hotel;
       return (
         <div className="mt-4">
           <p className="text-sm font-semibold text-[#1C1B19]">
             {section.heading}
+            <SectionLabel section={section} />
           </p>
-          {hotel.photoUrl ? (
-            <div className="relative mt-2 overflow-hidden rounded-xl">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={hotel.photoUrl}
-                alt={`${hotel.name} photo`}
-                className="aspect-[16/9] w-full object-cover"
-                loading="lazy"
-              />
-              {hotel.photoSourceName && (
-                <span className="absolute bottom-1.5 right-2 text-[10px] text-white drop-shadow">
-                  Photo: {hotel.photoSourceName}
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="mt-2 flex aspect-[16/9] w-full flex-col items-center justify-center gap-2 rounded-xl bg-[#F2F1EE] px-4">
-              <span className="text-2xl" aria-hidden="true">
-                🏨
-              </span>
-              <p className="max-w-[90%] text-center text-xs text-[#6B6862]">
-                {hotel.photoFallback || "No hotel photo found"}
-              </p>
-            </div>
-          )}
-          <p className="mt-2 text-sm font-semibold text-[#1C1B19]">
-            {hotel.name}
-          </p>
-          <p className="text-xs text-[#6B6862]">{hotel.area}</p>
-          {hotel.whyItFits && (
-            <p className="mt-1 text-sm leading-relaxed text-[#6B6862]">
-              {hotel.whyItFits}
-            </p>
-          )}
+          <div className="mt-2">
+            <HotelStoryView
+              hotel={{
+                ...section.hotel,
+                sourceUrl: block.wikiUrl,
+                sourceName: "Wikipedia",
+              }}
+            />
+          </div>
         </div>
       );
     }
@@ -230,30 +212,21 @@ function PreviewSection({ section }: { section: DestinationPreviewSection }) {
       if (!section.map) return null;
       return (
         <div className="mt-4">
-          <p className="text-sm font-semibold text-[#1C1B19]">
-            {section.heading}
-          </p>
-          <MapStripView block={section.map} />
+          <MapStripView block={section.map} heading={section.heading} />
         </div>
       );
     case "nearby":
       if (!section.nearby) return null;
       return (
         <div className="mt-4">
-          <p className="text-sm font-semibold text-[#1C1B19]">
-            {section.heading}
-          </p>
-          <NearbyRowView block={section.nearby} />
+          <NearbyRowView block={section.nearby} heading={section.heading} />
         </div>
       );
     case "sample_day":
       if (!section.day) return null;
       return (
         <div className="mt-4">
-          <p className="text-sm font-semibold text-[#1C1B19]">
-            {section.heading}
-          </p>
-          <ItineraryTimelineView block={section.day} />
+          <ItineraryTimelineView block={section.day} singleDay />
         </div>
       );
     case "practical_notes": {
@@ -263,6 +236,7 @@ function PreviewSection({ section }: { section: DestinationPreviewSection }) {
         <div className="mt-4">
           <p className="text-sm font-semibold text-[#1C1B19]">
             {section.heading}
+            <SectionLabel section={section} />
           </p>
           <div className="mt-1 space-y-1 text-sm leading-relaxed text-[#6B6862]">
             {p.gettingThere && <p>{p.gettingThere}</p>}

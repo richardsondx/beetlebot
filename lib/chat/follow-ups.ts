@@ -23,9 +23,10 @@ const HOTEL_CHIPS: FollowUp[] = [
 
 /**
  * Chips under a set of destination previews: one "Tell me more"
- * per place, plus the February question. Kept as listed in the
- * design for now; the February chip asks for a ranking and is
- * B3's to replace.
+ * per place, plus a packing question for the user's month. The
+ * February chip asks what to pack, never which place is best: a
+ * ranking question contradicts the showcase rule (no winner, no
+ * ranking, no choice language).
  */
 function previewChips(blocks: RichBlock[]): FollowUp[] {
   const previews = blocks.filter(
@@ -41,8 +42,8 @@ function previewChips(blocks: RichBlock[]): FollowUp[] {
     };
   });
   chips.push({
-    label: "Which is best in February?",
-    message: "Which is best in February?",
+    label: "What should I pack for February?",
+    message: "What should I pack for February?",
   });
   return chips;
 }

@@ -488,7 +488,7 @@ export function destinationPreviewToText(block: DestinationPreviewBlock): string
       case "stay":
         if (section.hotel) {
           lines.push(
-            `${section.heading}: ${section.hotel.name}, ${section.hotel.area}. ${section.hotel.whyItFits}`,
+            `${section.heading}${label}: ${section.hotel.name}, ${section.hotel.area}. ${section.hotel.whyItFits}`,
           );
           lines.push(
             section.hotel.photoUrl
@@ -552,7 +552,7 @@ export function destinationPreviewToText(block: DestinationPreviewBlock): string
           if (p.nightly) bits.push(`Hotel: ${p.nightly}`);
         }
         bits.push("Beetlebot does not book.");
-        lines.push(`${section.heading}: ${bits.join(" ")}`);
+        lines.push(`${section.heading}${label}: ${bits.join(" ")}`);
         break;
       }
     }

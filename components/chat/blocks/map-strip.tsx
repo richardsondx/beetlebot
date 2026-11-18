@@ -6,9 +6,20 @@ import type { MapStripBlock } from "@/lib/chat/rich-message";
  * Map strip: one static map image per trip, hotel pin plus numbered stops.
  * No pan or zoom, no routing, no live traffic, no turn-by-turn. A tap
  * opens Google Maps. When no Google key exists the image is replaced by
- * the named fallback, and the stop rows still show.
+ * the named fallback, and the stop rows still show. The heading defaults
+ * to "Map near {hotelName}" for standalone use; a destination preview
+ * passes its section heading ("Where things are") instead, and null
+ * hides the heading when the caller renders it.
  */
-export function MapStripView({ block }: { block: MapStripBlock }) {
+export function MapStripView({
+  block,
+  heading,
+}: {
+  block: MapStripBlock;
+  heading?: string | null;
+}) {
+  const resolvedHeading =
+    heading === undefined ? `Map near ${block.hotelName}` : heading;
   return (
     <div className="mt-3 overflow-hidden rounded-2xl border border-[#E7E5E0] bg-white">
       {block.staticMapsUrl ? (
@@ -45,9 +56,9 @@ export function MapStripView({ block }: { block: MapStripBlock }) {
         </div>
       )}
       <div className="p-4">
-        <p className="text-sm font-semibold text-[#1C1B19]">
-          Map near {block.hotelName}
-        </p>
+        {resolvedHeading !== null && (
+          <p className="text-sm font-semibold text-[#1C1B19]">{resolvedHeading}</p>
+        )}
         <ul className="mt-2 space-y-1.5">
           {block.stops.map((stop) => (
             <li key={`${stop.pin ?? "unknown"}-${stop.name}`} className="text-xs text-[#6B6862]">

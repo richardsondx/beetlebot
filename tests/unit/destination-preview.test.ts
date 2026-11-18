@@ -123,13 +123,102 @@ describe("single-place preview", () => {
     });
     for (const section of block!.sections) {
       if (
-        ["what_it_is_like", "why_it_fits", "highlights", "best_time", "honest_take"].includes(
+        ["what_it_is_like", "why_it_fits", "highlights", "best_time", "honest_take", "stay", "practical_notes"].includes(
           section.kind,
         )
       ) {
         expect(section.label).toBe("General guidance");
       }
     }
+  });
+
+  it("uses the exact design copy for Maldives and Palawan", () => {
+    const maldives = buildBeachDestinationPreview("Maldives", {});
+    const m = Object.fromEntries(
+      maldives!.sections.map((s) => [s.kind, s]),
+    );
+    expect(maldives!.countryLine).toBe(
+      "Maldives, its own country in the Indian Ocean",
+    );
+    expect(m.what_it_is_like.body).toBe(
+      "A country made of coral atolls in the Indian Ocean. Most stays are on a private resort island with lagoon, reef, and little else.",
+    );
+    expect(m.highlights.bullets).toEqual([
+      "Snorkelling off the resort's house reef.",
+      "Lagoon time from your villa.",
+      "Stops on the resort island itself.",
+    ]);
+    expect(m.best_time.body).toBe(
+      "The drier season is usually around December to April, so February is generally a good month.",
+    );
+    expect(m.honest_take.rows).toEqual([
+      { label: "Good for", value: "Quiet, water, and privacy." },
+      { label: "Suits", value: "Couples who want to rest and stay put." },
+      {
+        label: "Trade-offs",
+        value:
+          "Highest cost of the three. Little to do beyond the island. Getting there can add a boat or seaplane transfer.",
+      },
+    ]);
+    expect(m.stay.hotel?.name).toBe("Soneva Fushi");
+    expect(m.stay.hotel?.area).toBe("Baa Atoll, Maldives");
+    expect(m.stay.hotel?.whyItFits).toBe(
+      "A resort on its own island. The island is the trip.",
+    );
+    expect(m.practical_notes.practical?.gettingThere).toBe(
+      "International flights land near Malé, then a transfer to the resort.",
+    );
+    expect(m.practical_notes.practical?.flight).toBe("CA$1,480 Sample");
+    expect(m.practical_notes.practical?.nightly).toBe(
+      "$890 per night Sample",
+    );
+
+    const palawan = buildBeachDestinationPreview("Palawan", {});
+    const p = Object.fromEntries(
+      palawan!.sections.map((s) => [s.kind, s]),
+    );
+    expect(palawan!.countryLine).toBe("Palawan, an island in the Philippines");
+    expect(p.what_it_is_like.body).toBe(
+      "A long island in the western Philippines known for limestone islands, clear water, and lagoons. Much of the draw is by boat.",
+    );
+    expect(p.highlights.bullets).toEqual([
+      "Island hopping by boat.",
+      "Lagoons and limestone cliffs.",
+      "Stops on the resort island itself.",
+    ]);
+    expect(p.best_time.body).toBe(
+      "The drier season is usually around December to May, so February is generally a good month.",
+    );
+    expect(p.honest_take.rows).toEqual([
+      {
+        label: "Good for",
+        value: "Scenery and boat days at a lower nightly cost than the Maldives.",
+      },
+      { label: "Suits", value: "Couples who like a bit of adventure with a calm base." },
+      {
+        label: "Trade-offs",
+        value:
+          "Longer trip to reach, often with a domestic connection. Fewer big-city comforts nearby.",
+      },
+    ]);
+    expect(p.stay.hotel?.name).toBe("Pangulasian Island Resort");
+    expect(p.stay.hotel?.area).toBe("El Nido, Palawan");
+    expect(p.stay.hotel?.whyItFits).toBe(
+      "On its own small island. Quiet base for boat days.",
+    );
+    expect(p.practical_notes.practical?.gettingThere).toBe(
+      "Most routes connect through Manila.",
+    );
+    expect(p.practical_notes.practical?.flight).toBe("CA$1,320 Sample");
+    expect(p.practical_notes.practical?.nightly).toBe(
+      "$310 per night Sample",
+    );
+  });
+
+  it("uses the exact three-place set line", () => {
+    expect(BEACH_PREVIEW_SET_LINE).toBe(
+      "Three places, each its own kind of trip: Bali for temples, rice terraces, and surf; the Maldives for quiet water and privacy; Palawan for limestone islands and boat days.",
+    );
   });
 
   it("labels a Wikipedia lead From Wikipedia with the source link", () => {
@@ -291,8 +380,16 @@ describe("preview follow-up chips", () => {
       "Tell me more about Bali",
       "Tell me more about the Maldives",
       "Tell me more about Palawan",
-      "Which is best in February?",
+      "What should I pack for February?",
     ]);
+  });
+
+  it("keeps every preview chip free of ranking or choice language", () => {
+    const chips = ruleFollowUps(threePreviews());
+    for (const chip of chips) {
+      expect(chip.label).not.toMatch(/\bbest\b|\bvs\b|winner|pick|choose|rank/i);
+      expect(chip.message).not.toMatch(/\bbest\b|\bvs\b|winner|pick|choose|rank/i);
+    }
   });
 
   it("adds no chips under a single preview", () => {

@@ -19,18 +19,31 @@ const TIMELINE_SHOW_ALL_LABEL = "Show all days";
  * A day with no photos uses the compact text layout: time, category
  * icon, name, distance line. No stock or generated images. Days after
  * Day 3 collapse behind "Show all days". A tap opens Google Maps.
+ *
+ * Single-day mode is the destination preview's "What a day could look
+ * like": only the first day shows, under that heading, with no collapse
+ * control.
  */
-export function ItineraryTimelineView({ block }: { block: ItineraryTimelineBlock }) {
+export function ItineraryTimelineView({
+  block,
+  singleDay,
+}: {
+  block: ItineraryTimelineBlock;
+  singleDay?: boolean;
+}) {
   const [showAll, setShowAll] = useState(false);
-  const visibleDays = showAll
-    ? block.days
-    : block.days.slice(0, TIMELINE_COLLAPSE_AFTER_DAY);
-  const hiddenCount = block.days.length - visibleDays.length;
+  const days = singleDay ? block.days.slice(0, 1) : block.days;
+  const visibleDays = singleDay
+    ? days
+    : showAll
+      ? block.days
+      : block.days.slice(0, TIMELINE_COLLAPSE_AFTER_DAY);
+  const hiddenCount = singleDay ? 0 : block.days.length - visibleDays.length;
 
   return (
     <div className="mt-3 space-y-3">
       <p className="text-sm font-semibold text-[#1C1B19]">
-        Itinerary near {block.hotelName}
+        {singleDay ? "What a day could look like" : `Itinerary near ${block.hotelName}`}
       </p>
       {visibleDays.map((day) => (
         <div

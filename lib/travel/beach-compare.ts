@@ -591,6 +591,7 @@ export function buildBeachDestinationPreview(
     {
       kind: "stay",
       heading: "Where you'd stay",
+      label: "General guidance",
       hotel: {
         name: dest.hotelName,
         area: dest.hotelArea,
@@ -634,6 +635,7 @@ export function buildBeachDestinationPreview(
   sections.push({
     kind: "practical_notes",
     heading: "Practical notes",
+    label: "General guidance",
     practical: {
       gettingThere: copy.gettingThere,
       flight: input.pricePending

@@ -6,24 +6,35 @@ import type { NearbyRowBlock } from "@/lib/chat/rich-message";
  * Near your hotel row: places within 800 m of the hotel, each with a
  * photo, a name, a rating when one exists, a walk time, and a category
  * badge. A tap opens Google Maps. A place with no photo shows the
- * fallback icon, never a generated image.
+ * fallback icon, never a generated image. The heading defaults to
+ * "Near {hotelName}" for standalone use; a destination preview passes
+ * its section heading ("What's nearby") instead, and null hides the
+ * heading when the caller renders it.
  */
-export function NearbyRowView({ block }: { block: NearbyRowBlock }) {
+export function NearbyRowView({
+  block,
+  heading,
+}: {
+  block: NearbyRowBlock;
+  heading?: string | null;
+}) {
+  const resolvedHeading =
+    heading === undefined ? `Near ${block.hotelName}` : heading;
   if (block.places.length === 0) {
     return (
       <div className="mt-3 rounded-2xl border border-[#E7E5E0] bg-white p-4">
-        <p className="text-sm font-semibold text-[#1C1B19]">
-          Near {block.hotelName}
-        </p>
+        {resolvedHeading !== null && (
+          <p className="text-sm font-semibold text-[#1C1B19]">{resolvedHeading}</p>
+        )}
         <p className="mt-1 text-xs text-[#6B6862]">{block.emptyText}</p>
       </div>
     );
   }
   return (
     <div className="mt-3">
-      <p className="text-sm font-semibold text-[#1C1B19]">
-        Near {block.hotelName}
-      </p>
+      {resolvedHeading !== null && (
+        <p className="text-sm font-semibold text-[#1C1B19]">{resolvedHeading}</p>
+      )}
       <div className="mt-2 grid gap-3 sm:grid-cols-3">
         {block.places.map((place) => (
           <a

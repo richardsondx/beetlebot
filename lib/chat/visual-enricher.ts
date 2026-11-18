@@ -22,7 +22,9 @@ import {
   BEACH_PREVIEW_SET_LINE,
   BEACH_PREVIEW_SINGLE_CLOSING_LINE,
   BEACH_COUNTRY,
+  BEACH_DESTINATIONS,
   beachDestinationNamed,
+  beachDestinationsNamedInOrder,
   buildBeachDestinationPreviews,
   isBeachCompareTitles,
   mentionsBeachCompare,
@@ -354,14 +356,21 @@ async function beachPreviewsForMessage(
   userMessage: string,
 ): Promise<RichBlock[] | null> {
   if (mentionsBeachCompare(userMessage)) {
-    const previews = await buildBeachDestinationPreviews(
-      ["Bali", "Maldives", "Palawan"],
-      {
-        short: true,
-        setLine: BEACH_PREVIEW_SET_LINE,
-        closingLine: BEACH_PREVIEW_CLOSING_LINE,
-      },
-    );
+    // Showcase order follows the ask: places the user named, in the
+    // order they named them, then any unnamed place in seed order, so
+    // the reply still shows all three.
+    const named = beachDestinationsNamedInOrder(userMessage);
+    const ordered = [
+      ...named,
+      ...BEACH_DESTINATIONS.map((d) => d.title).filter(
+        (title) => !named.includes(title),
+      ),
+    ];
+    const previews = await buildBeachDestinationPreviews(ordered, {
+      short: true,
+      setLine: BEACH_PREVIEW_SET_LINE,
+      closingLine: BEACH_PREVIEW_CLOSING_LINE,
+    });
     return previews.length > 0 ? previews : null;
   }
   const named = beachDestinationNamed(userMessage);

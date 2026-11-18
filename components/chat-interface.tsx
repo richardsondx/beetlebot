@@ -34,6 +34,10 @@ import { MapStripView } from "@/components/chat/blocks/map-strip";
 import { NearbyRowView } from "@/components/chat/blocks/nearby-row";
 import { ItineraryTimelineView } from "@/components/chat/blocks/itinerary-timeline";
 import { DestinationPreviewView } from "@/components/chat/blocks/destination-preview";
+import {
+  DestinationPreviewStackView,
+  groupDestinationPreviewBlocks,
+} from "@/components/chat/blocks/destination-preview-stack";
 
 type ChatMode = ModeDefinition;
 
@@ -663,25 +667,36 @@ function AssistantMessageBody({
   const hasBlocks = message.blocks && message.blocks.length > 0;
 
   if (hasBlocks) {
+    // Runs of two or more destination previews render as one showcase
+    // stack (jump bar, swipe and dots on phone); everything else
+    // renders block by block as before.
+    const grouped = groupDestinationPreviewBlocks(message.blocks!);
     return (
       <>
         {message.text && (
           <p className="whitespace-pre-wrap break-words text-[#1C1B19]">{message.text}</p>
         )}
-        {message.blocks!.map((block, bi) => (
-          <RichBlockRenderer
-            key={`${block.type}-${bi}`}
-            block={block}
-            selectedFlight={selectedFlight}
-            selectedHotel={selectedHotel}
-            checkingHotelId={checkingHotelId}
-            onSelectCard={onSelectCard}
-            onSelectFlight={onSelectFlight}
-            onSelectHotel={onSelectHotel}
-            onCheckHotelPrice={onCheckHotelPrice}
-            onRefreshFlights={onRefreshFlights}
-          />
-        ))}
+        {grouped.map((entry, gi) =>
+          Array.isArray(entry) ? (
+            <DestinationPreviewStackView
+              key={`preview-stack-${gi}`}
+              blocks={entry}
+            />
+          ) : (
+            <RichBlockRenderer
+              key={`${entry.type}-${gi}`}
+              block={entry}
+              selectedFlight={selectedFlight}
+              selectedHotel={selectedHotel}
+              checkingHotelId={checkingHotelId}
+              onSelectCard={onSelectCard}
+              onSelectFlight={onSelectFlight}
+              onSelectHotel={onSelectHotel}
+              onCheckHotelPrice={onCheckHotelPrice}
+              onRefreshFlights={onRefreshFlights}
+            />
+          ),
+        )}
       </>
     );
   }

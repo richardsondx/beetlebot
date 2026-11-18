@@ -157,7 +157,7 @@ describe("single-place preview", () => {
       {
         label: "Trade-offs",
         value:
-          "Highest cost of the three. Little to do beyond the island. Getting there can add a boat or seaplane transfer.",
+          "The nightly cost is high. Little to do beyond the island. Getting there can add a boat or seaplane transfer.",
       },
     ]);
     expect(m.stay.hotel?.name).toBe("Soneva Fushi");
@@ -192,7 +192,7 @@ describe("single-place preview", () => {
     expect(p.honest_take.rows).toEqual([
       {
         label: "Good for",
-        value: "Scenery and boat days at a lower nightly cost than the Maldives.",
+        value: "Scenery and boat days, with a modest nightly cost.",
       },
       { label: "Suits", value: "Couples who like a bit of adventure with a calm base." },
       {

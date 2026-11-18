@@ -103,7 +103,7 @@ export const BEACH_PREVIEW_COPY: Record<string, BeachPreviewCopy> = {
     goodFor: "Quiet, water, and privacy.",
     suits: "Couples who want to rest and stay put.",
     tradeOffs:
-      "Highest cost of the three. Little to do beyond the island. Getting there can add a boat or seaplane transfer.",
+      "The nightly cost is high. Little to do beyond the island. Getting there can add a boat or seaplane transfer.",
     stayWhy: "A resort on its own island. The island is the trip.",
     gettingThere:
       "International flights land near Malé, then a transfer to the resort.",
@@ -119,7 +119,7 @@ export const BEACH_PREVIEW_COPY: Record<string, BeachPreviewCopy> = {
     ],
     bestTime:
       "The drier season is usually around December to May, so February is generally a good month.",
-    goodFor: "Scenery and boat days at a lower nightly cost than the Maldives.",
+    goodFor: "Scenery and boat days, with a modest nightly cost.",
     suits: "Couples who like a bit of adventure with a calm base.",
     tradeOffs:
       "Longer trip to reach, often with a domestic connection. Fewer big-city comforts nearby.",
@@ -448,6 +448,23 @@ export function beachDestinationNamed(message: string): string | null {
     ).test(text),
   );
   return found?.title ?? null;
+}
+
+/**
+ * Beach destinations named in a message, in the order the user named
+ * them. The showcase order follows the ask: "Palawan vs Bali" shows
+ * Palawan first. Names that never appear are left out; callers that
+ * want all three append the unnamed ones in seed order.
+ */
+export function beachDestinationsNamedInOrder(message: string): string[] {
+  const text = (message ?? "").toLowerCase();
+  return BEACH_DESTINATIONS.map((d) => ({
+    title: d.title,
+    at: text.search(new RegExp(`\\b${d.title.toLowerCase()}\\b`)),
+  }))
+    .filter((hit) => hit.at >= 0)
+    .sort((a, b) => a.at - b.at)
+    .map((hit) => hit.title);
 }
 
 /**

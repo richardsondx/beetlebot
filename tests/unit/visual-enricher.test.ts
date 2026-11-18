@@ -9,41 +9,45 @@ const PROSE_REPLY =
   "disconnect and best snorkeling, Maldives. If you want wild lagoon " +
   "stuff, Palawan. Are you two more go-go explorers or park-it types?";
 
-describe("beach compare from a prose reply", () => {
-  it("builds the visual compare when the model answers in prose", async () => {
+describe("beach previews from a prose reply", () => {
+  it("builds three short showcases when the model answers in prose", async () => {
     const msg = await enrichLlmReply(PROSE_REPLY, {
       userMessage: COMPARE_ASK,
     });
-    expect(msg.blocks).toHaveLength(1);
-    const block = msg.blocks![0];
-    expect(block.type).toBe("option_set");
-    if (block.type !== "option_set") return;
-    expect(block.variant).toBe("compare");
-    expect(block.items).toHaveLength(3);
-    const first = block.items[0].card;
-    expect(first.title).toBe("Bali");
-    expect(
-      first.compareRows?.find((r) => r.label === "Hotel")?.value,
-    ).toBe("Alila Villas Uluwatu");
-    expect(
-      first.compareRows?.find((r) => r.label === "Flight")?.value,
-    ).toContain("Sample");
-    expect(first.imageUrl).not.toContain("placehold.co");
-    expect(
-      first.imageUrl === "" || first.imageUrl.startsWith("https://"),
-    ).toBe(true);
-    // The model's prose verdict stays as the text above the cards.
+    expect(msg.blocks).toHaveLength(3);
+    for (const block of msg.blocks!) {
+      expect(block.type).toBe("destination_preview");
+    }
+    const first = msg.blocks![0];
+    if (first.type !== "destination_preview") return;
+    expect(first.place).toBe("Bali");
+    expect(first.countryLine).toBe("Bali, Indonesia");
+    const practical = first.sections.find(
+      (s) => s.kind === "practical_notes",
+    )?.practical;
+    expect(practical?.flight).toContain("Sample");
+    expect(first.heroPhotoUrl === "" || first.heroPhotoUrl.startsWith("https://")).toBe(true);
+    expect(first.heroPhotoUrl).not.toContain("placehold.co");
+    // No Pick button, no compare OptionSet anywhere in the reply.
+    expect(JSON.stringify(msg.blocks)).not.toMatch(/pick/i);
+    expect(JSON.stringify(msg.blocks)).not.toContain("option_set");
+    // Closing line and set line sit on the last preview.
+    const last = msg.blocks![2];
+    if (last.type !== "destination_preview") return;
+    expect(last.setLine).toContain("Three places, each its own kind of trip");
+    expect(last.closingLine).toContain("When you're ready to go");
+    // The model's prose verdict stays as the text above the previews.
     expect(msg.text).toContain("Bali wins for 10 days");
   });
 
-  it("does not inject a compare for a plain suggestion ask", async () => {
+  it("does not inject previews for a plain suggestion ask", async () => {
     const msg = await enrichLlmReply(PROSE_REPLY, {
       userMessage: "suggest a beach destination",
     });
     expect(msg.blocks).toBeUndefined();
   });
 
-  it("does not inject a compare when no user message is passed", async () => {
+  it("does not inject previews when no user message is passed", async () => {
     const msg = await enrichLlmReply(PROSE_REPLY);
     expect(msg.blocks).toBeUndefined();
   });

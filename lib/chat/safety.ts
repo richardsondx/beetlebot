@@ -5,6 +5,7 @@
 
 import type { ImageCard, RichBlock } from "./rich-message";
 import {
+  isDestinationPreviewBlock,
   isFlightCompareBlock,
   isHotelSetBlock,
   isItineraryTimelineBlock,
@@ -144,6 +145,12 @@ export function sanitiseBlocks(raw: unknown[]): RichBlock[] {
 
       case "itinerary_timeline": {
         const block = isItineraryTimelineBlock(b);
+        if (block) safe.push(block);
+        break;
+      }
+
+      case "destination_preview": {
+        const block = isDestinationPreviewBlock(b);
         if (block) safe.push(block);
         break;
       }

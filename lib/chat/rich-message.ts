@@ -190,6 +190,86 @@ export type ItineraryTimelineBlock = {
   days: ItineraryTimelineDay[];
 };
 
+// ── Destination preview block (visual field guide, not a pick grid) ─────
+
+/** Source label on a preview section: model-written or Wikipedia text. */
+export type PreviewSectionLabel = "General guidance" | "From Wikipedia";
+
+/** One section of a destination preview, in design section 2 order. */
+export type DestinationPreviewSection = {
+  kind:
+    | "what_it_is_like"
+    | "why_it_fits"
+    | "highlights"
+    | "best_time"
+    | "honest_take"
+    | "stay"
+    | "map"
+    | "nearby"
+    | "sample_day"
+    | "practical_notes";
+  heading: string;
+  /** Small source label shown on the section. */
+  label?: PreviewSectionLabel;
+  /** Source link for Wikipedia text. */
+  sourceUrl?: string;
+  /** Plain body for text sections (what it's like, why it fits, best time). */
+  body?: string;
+  /** Short bullets for highlights. */
+  bullets?: string[];
+  /** Label/value rows for the honest take (good for, suits, trade-offs). */
+  rows?: Array<{ label: string; value: string }>;
+  /** Where you'd stay: hotel seed plus one line on why it fits. */
+  hotel?: {
+    name: string;
+    area: string;
+    whyItFits: string;
+    photoUrl?: string;
+    photoSourceName?: string;
+    photoFallback?: string;
+  };
+  /** Where things are: embedded map strip block. */
+  map?: MapStripBlock;
+  /** What's nearby: embedded nearby row block. */
+  nearby?: NearbyRowBlock;
+  /** What a day could look like: embedded single-day timeline block. */
+  day?: ItineraryTimelineBlock;
+  /** Practical notes: getting there plus Sample figures, never a live price. */
+  practical?: {
+    gettingThere?: string;
+    /** Sample round-trip flight line, for example "CA$1,240 Sample". */
+    flight?: string;
+    /** Sample nightly line, for example "$420 per night Sample". */
+    nightly?: string;
+    /** True when no Sample figures exist: the line reads "Price coming soon". */
+    pricePending: boolean;
+  };
+  /**
+   * In the three-place case the map, nearby, and sample-day sections
+   * start collapsed behind "Show where things are and a sample day".
+   */
+  collapsed?: boolean;
+};
+
+export type DestinationPreviewBlock = {
+  type: "destination_preview";
+  place: string;
+  /** Country line under the place name, for example "Bali, Indonesia". */
+  countryLine: string;
+  /** Real hero photo URL, "" when none resolved (named fallback renders). */
+  heroPhotoUrl: string;
+  heroPhotoSourceName?: string;
+  /** Named reason shown when no hero photo exists. */
+  heroPhotoFallback: string;
+  wikiUrl: string;
+  /** Sections 2 to 11 in design order; the hero is section 1. */
+  sections: DestinationPreviewSection[];
+  /** Short line introducing the set, shown after the last of three previews. */
+  setLine?: string;
+  /** Closing line shown under the preview (section 12). */
+  closingLine?: string;
+};
+
 // ── Hotel set block (in-chat Hello Axel prices) ─────────────────────────────
 
 export type HotelPrice = {
@@ -241,7 +321,8 @@ export type RichBlock =
   | HotelSetBlock
   | MapStripBlock
   | NearbyRowBlock
-  | ItineraryTimelineBlock;
+  | ItineraryTimelineBlock
+  | DestinationPreviewBlock;
 
 // ── Top-level message ──────────────────────────────────────────────────────
 
@@ -358,10 +439,128 @@ export function toPlainText(msg: AssistantMessage): string {
         });
         break;
       }
+      case "destination_preview": {
+        parts.push(destinationPreviewToText(block));
+        break;
+      }
     }
   }
 
   return parts.filter(Boolean).join("\n\n");
+}
+
+/**
+ * Plain-text fallback for a destination preview: the hero line, then
+ * each section as a headed line in the same order as the rich render.
+ * Collapsed sections in the three-place case still print, so the
+ * fallback loses nothing.
+ */
+export function destinationPreviewToText(block: DestinationPreviewBlock): string {
+  const lines: string[] = [
+    block.countryLine,
+    block.heroPhotoUrl
+      ? `(photo: ${block.heroPhotoSourceName ?? "photo"} ${block.heroPhotoUrl})`
+      : `(no photo: ${block.heroPhotoFallback})`,
+  ];
+  for (const section of block.sections) {
+    const label = section.label ? ` (${section.label})` : "";
+    switch (section.kind) {
+      case "what_it_is_like":
+      case "why_it_fits":
+      case "best_time":
+        if (section.body) {
+          lines.push(`${section.heading}${label}: ${section.body}`);
+          if (section.sourceUrl) lines.push(`Source: ${section.sourceUrl}`);
+        }
+        break;
+      case "highlights":
+        if (section.bullets?.length) {
+          lines.push(`${section.heading}${label}:`);
+          section.bullets.forEach((b) => lines.push(`- ${b}`));
+        }
+        break;
+      case "honest_take":
+        if (section.rows?.length) {
+          lines.push(`${section.heading}${label}:`);
+          section.rows.forEach((r) => lines.push(`${r.label}: ${r.value}`));
+        }
+        break;
+      case "stay":
+        if (section.hotel) {
+          lines.push(
+            `${section.heading}: ${section.hotel.name}, ${section.hotel.area}. ${section.hotel.whyItFits}`,
+          );
+          lines.push(
+            section.hotel.photoUrl
+              ? `(hotel photo: ${section.hotel.photoSourceName ?? "hotel photo"} ${section.hotel.photoUrl})`
+              : `(no hotel photo: ${section.hotel.photoFallback ?? "No hotel photo found"})`,
+          );
+        }
+        break;
+      case "map":
+        if (section.map) {
+          lines.push(`${section.heading}:`);
+          lines.push(`Map near ${section.map.hotelName}`);
+          if (section.map.staticMapsUrl) lines.push(section.map.staticMapsUrl);
+          section.map.stops.forEach((stop) => {
+            lines.push(
+              stop.pin === null
+                ? `${stop.name} · location unknown · ${stop.mapsUrl}`
+                : `${stop.pin} · ${stop.name} · ${stop.distanceText} · ${stop.walkText} · ${stop.mapsUrl}`,
+            );
+          });
+        }
+        break;
+      case "nearby":
+        if (section.nearby) {
+          lines.push(`${section.heading}:`);
+          if (section.nearby.places.length === 0) {
+            lines.push(section.nearby.emptyText);
+          } else {
+            section.nearby.places.forEach((place) => {
+              lines.push(
+                `${place.name} (${place.category}) · ${place.walkText} · ${place.mapsUrl}`,
+              );
+            });
+          }
+        }
+        break;
+      case "sample_day":
+        if (section.day) {
+          lines.push(`${section.heading} (times are suggested):`);
+          section.day.days.forEach((day) => {
+            day.stops.forEach((stop) => {
+              const walk = stop.distanceLine
+                ? (stop.distanceLine.split(" · ").pop() ?? stop.distanceLine)
+                : "location unknown";
+              lines.push(
+                `Day ${day.day}: ${stop.time} ${stop.name} (${walk}) ${stop.mapsUrl}`,
+              );
+            });
+          });
+        }
+        break;
+      case "practical_notes": {
+        if (!section.practical) break;
+        const p = section.practical;
+        const bits: string[] = [];
+        if (p.gettingThere) bits.push(p.gettingThere);
+        if (p.pricePending) {
+          bits.push(`Price: ${PRICE_PENDING_LABEL}`);
+        } else {
+          if (p.flight) bits.push(`Flight from Canada: ${p.flight}`);
+          if (p.nightly) bits.push(`Hotel: ${p.nightly}`);
+        }
+        bits.push("Beetlebot does not book.");
+        lines.push(`${section.heading}: ${bits.join(" ")}`);
+        break;
+      }
+    }
+  }
+  if (block.setLine) lines.push(block.setLine);
+  if (block.closingLine) lines.push(block.closingLine);
+  lines.push(block.wikiUrl);
+  return lines.filter(Boolean).join("\n");
 }
 
 /** "CA$377.68" for CAD, "$373" for USD. Falls back to a plain amount. */
@@ -682,6 +881,147 @@ export function isItineraryTimelineBlock(raw: unknown): ItineraryTimelineBlock |
   };
 }
 
+/** Validate an untrusted destination_preview block, dropping bad fields. */
+export function isDestinationPreviewBlock(raw: unknown): DestinationPreviewBlock | null {
+  const b = raw as Record<string, unknown>;
+  if (!b || b.type !== "destination_preview") return null;
+  if (typeof b.place !== "string" || !b.place.trim()) return null;
+  if (!Array.isArray(b.sections) || b.sections.length === 0) return null;
+  const validKinds = new Set([
+    "what_it_is_like",
+    "why_it_fits",
+    "highlights",
+    "best_time",
+    "honest_take",
+    "stay",
+    "map",
+    "nearby",
+    "sample_day",
+    "practical_notes",
+  ]);
+  const sections: DestinationPreviewSection[] = [];
+  for (const rawSection of b.sections.slice(0, 11)) {
+    const s = rawSection as Record<string, unknown>;
+    if (typeof s.kind !== "string" || !validKinds.has(s.kind)) continue;
+    if (typeof s.heading !== "string" || !s.heading.trim()) continue;
+    const kind = s.kind as DestinationPreviewSection["kind"];
+    const label =
+      s.label === "General guidance" || s.label === "From Wikipedia"
+        ? s.label
+        : undefined;
+    const section: DestinationPreviewSection = {
+      kind,
+      heading: s.heading.slice(0, 60),
+      label,
+      sourceUrl:
+        typeof s.sourceUrl === "string" && s.sourceUrl.startsWith("https://")
+          ? s.sourceUrl.slice(0, 2048)
+          : undefined,
+      body: typeof s.body === "string" ? s.body.slice(0, 2000) : undefined,
+      bullets: Array.isArray(s.bullets)
+        ? (s.bullets as unknown[])
+            .filter((x): x is string => typeof x === "string")
+            .slice(0, 6)
+            .map((x) => x.slice(0, 500))
+        : undefined,
+      rows: Array.isArray(s.rows)
+        ? (s.rows as unknown[])
+            .map((r) => r as Record<string, unknown>)
+            .filter(
+              (r) => typeof r.label === "string" && typeof r.value === "string",
+            )
+            .slice(0, 6)
+            .map((r) => ({
+              label: (r.label as string).slice(0, 60),
+              value: (r.value as string).slice(0, 500),
+            }))
+        : undefined,
+      collapsed: s.collapsed === true ? true : undefined,
+    };
+    if (s.hotel && typeof s.hotel === "object") {
+      const h = s.hotel as Record<string, unknown>;
+      if (typeof h.name === "string" && h.name.trim()) {
+        section.hotel = {
+          name: h.name.slice(0, 120),
+          area: typeof h.area === "string" ? h.area.slice(0, 120) : "",
+          whyItFits:
+            typeof h.whyItFits === "string" ? h.whyItFits.slice(0, 500) : "",
+          photoUrl:
+            typeof h.photoUrl === "string" && h.photoUrl.startsWith("https://")
+              ? h.photoUrl.slice(0, 2048)
+              : undefined,
+          photoSourceName:
+            typeof h.photoSourceName === "string"
+              ? h.photoSourceName.slice(0, 100)
+              : undefined,
+          photoFallback:
+            typeof h.photoFallback === "string"
+              ? h.photoFallback.slice(0, 200)
+              : undefined,
+        };
+      }
+    }
+    if (s.map && typeof s.map === "object") {
+      const map = isMapStripBlock(s.map);
+      if (map) section.map = map;
+    }
+    if (s.nearby && typeof s.nearby === "object") {
+      const nearby = isNearbyRowBlock(s.nearby);
+      if (nearby) section.nearby = nearby;
+    }
+    if (s.day && typeof s.day === "object") {
+      const day = isItineraryTimelineBlock(s.day);
+      if (day) section.day = day;
+    }
+    if (s.practical && typeof s.practical === "object") {
+      const p = s.practical as Record<string, unknown>;
+      section.practical = {
+        gettingThere:
+          typeof p.gettingThere === "string"
+            ? p.gettingThere.slice(0, 500)
+            : undefined,
+        flight:
+          typeof p.flight === "string" ? p.flight.slice(0, 120) : undefined,
+        nightly:
+          typeof p.nightly === "string" ? p.nightly.slice(0, 120) : undefined,
+        pricePending: p.pricePending === true,
+      };
+    }
+    sections.push(section);
+  }
+  if (sections.length === 0) return null;
+  return {
+    type: "destination_preview",
+    place: b.place.slice(0, 120),
+    countryLine:
+      typeof b.countryLine === "string" ? b.countryLine.slice(0, 200) : "",
+    heroPhotoUrl:
+      typeof b.heroPhotoUrl === "string" &&
+      b.heroPhotoUrl.startsWith("https://")
+        ? b.heroPhotoUrl.slice(0, 2048)
+        : "",
+    heroPhotoSourceName:
+      typeof b.heroPhotoSourceName === "string"
+        ? b.heroPhotoSourceName.slice(0, 100)
+        : undefined,
+    heroPhotoFallback:
+      typeof b.heroPhotoFallback === "string"
+        ? b.heroPhotoFallback.slice(0, 200)
+        : "No photo found",
+    wikiUrl:
+      typeof b.wikiUrl === "string" && b.wikiUrl.startsWith("https://")
+        ? b.wikiUrl.slice(0, 2048)
+        : "",
+    sections,
+    setLine:
+      typeof b.setLine === "string" ? b.setLine.slice(0, 500) : undefined,
+    closingLine:
+      typeof b.closingLine === "string"
+        ? b.closingLine.slice(0, 500)
+        : undefined,
+  };
+}
+
 /** Serialize a single ImageCard to readable text with URL at the end. */
 export function cardToText(card: ImageCard): string {
   const lines: string[] = [card.title];
@@ -761,6 +1101,37 @@ export function extractOptions(
       for (const day of block.days) {
         for (const stop of day.stops) {
           out.push({ index: counter++, title: stop.name, url: stop.mapsUrl });
+        }
+      }
+    }
+    if (block.type === "destination_preview") {
+      out.push({
+        index: counter++,
+        title: `${block.place} on Wikipedia`,
+        url: block.wikiUrl,
+      });
+      for (const section of block.sections) {
+        if (section.map) {
+          out.push({
+            index: counter++,
+            title: `Map near ${section.map.hotelName}`,
+            url: section.map.hotelMapsUrl,
+          });
+          for (const stop of section.map.stops) {
+            out.push({ index: counter++, title: stop.name, url: stop.mapsUrl });
+          }
+        }
+        if (section.nearby) {
+          for (const place of section.nearby.places) {
+            out.push({ index: counter++, title: place.name, url: place.mapsUrl });
+          }
+        }
+        if (section.day) {
+          for (const day of section.day.days) {
+            for (const stop of day.stops) {
+              out.push({ index: counter++, title: stop.name, url: stop.mapsUrl });
+            }
+          }
         }
       }
     }

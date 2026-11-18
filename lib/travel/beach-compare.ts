@@ -18,16 +18,22 @@
  */
 
 import type {
+  DestinationPreviewBlock,
+  DestinationPreviewSection,
   HotelCard,
   ImageCard,
+  ItineraryTimelineBlock,
+  MapStripBlock,
+  NearbyRowBlock,
   OptionSet,
 } from "@/lib/chat/rich-message";
 import { resolveImageBatch } from "@/lib/media/bousier";
 import { resolveHotelPhoto } from "@/lib/media/hotel-photo";
-import { buildMapStrip, type MapStopInput, type MapStripData } from "@/lib/travel/map-strip";
-import type { ItineraryStopInput } from "@/lib/travel/itinerary-timeline";
+import { buildMapStrip, toMapStripBlock, type MapStopInput, type MapStripData } from "@/lib/travel/map-strip";
+import { buildItineraryTimeline, toItineraryTimelineBlock, type ItineraryStopInput } from "@/lib/travel/itinerary-timeline";
 import {
   buildNearbyRow,
+  toNearbyRowBlock,
   type NearbyPlace,
   type NearbyPlaceInput,
 } from "@/lib/travel/nearby";
@@ -36,6 +42,91 @@ import { normaliseDestinationTitle } from "@/lib/travel/destination-suggestion";
 export const BEACH_COMPARE_CAP = 3;
 export const BEACH_COMPARE_PROMPT = "Which beach?";
 export const BEACH_COMPARE_PRICE_LABEL = "Sample, not live";
+
+/** Closing line under the last preview (design section 3). */
+export const BEACH_PREVIEW_CLOSING_LINE =
+  "Take your time with these. When you're ready to go, tell me and I'll plan the trip.";
+
+/** Closing line under a single-place preview. */
+export const BEACH_PREVIEW_SINGLE_CLOSING_LINE =
+  "Take your time with this one. When you're ready to go, tell me and I'll plan the trip.";
+
+/** One short line introducing the set, after the third preview. */
+export const BEACH_PREVIEW_SET_LINE =
+  "Three places, each its own kind of trip: Bali for temples, rice terraces, and surf; the Maldives for quiet water and privacy; Palawan for limestone islands and boat days.";
+
+/** Exact copy from design section 4. All of it is model-written text,
+// so the UI labels it "General guidance". Flight and nightly figures
+// come from the BEACH_DESTINATIONS seed, not from this table. */
+export type BeachPreviewCopy = {
+  countryLine: string;
+  whatItIsLike: string;
+  highlights: string[];
+  bestTime: string;
+  goodFor: string;
+  suits: string;
+  tradeOffs: string;
+  stayWhy: string;
+  gettingThere: string;
+};
+
+export const BEACH_PREVIEW_COPY: Record<string, BeachPreviewCopy> = {
+  Bali: {
+    countryLine: "Bali, Indonesia",
+    whatItIsLike:
+      "An Indonesian island with temples, rice terraces, surf beaches, and a busy food scene. The south, where Uluwatu sits, has limestone cliffs above small beaches.",
+    highlights: [
+      "Uluwatu Temple on the cliff edge at sunset.",
+      "Padang Padang Beach below the cliffs.",
+      "Day trips inland to rice terraces and temples.",
+    ],
+    bestTime:
+      "Drier months are usually around April to October. February falls in the wet season, so expect rain showers, often short.",
+    goodFor: "Variety: beaches, culture, food, and day trips in one place.",
+    suits: "Couples who want to do things, not only rest.",
+    tradeOffs: "Busy roads and crowded spots. February rain. Cliff beaches can mean stairs.",
+    stayWhy:
+      "On the cliffs in Uluwatu. It puts you close to the temple and the cliff beaches.",
+    gettingThere: "Most visitors fly into Denpasar.",
+  },
+  Maldives: {
+    countryLine: "Maldives, its own country in the Indian Ocean",
+    whatItIsLike:
+      "A country made of coral atolls in the Indian Ocean. Most stays are on a private resort island with lagoon, reef, and little else.",
+    highlights: [
+      "Snorkelling off the resort's house reef.",
+      "Lagoon time from your villa.",
+      "Stops on the resort island itself.",
+    ],
+    bestTime:
+      "The drier season is usually around December to April, so February is generally a good month.",
+    goodFor: "Quiet, water, and privacy.",
+    suits: "Couples who want to rest and stay put.",
+    tradeOffs:
+      "Highest cost of the three. Little to do beyond the island. Getting there can add a boat or seaplane transfer.",
+    stayWhy: "A resort on its own island. The island is the trip.",
+    gettingThere:
+      "International flights land near Malé, then a transfer to the resort.",
+  },
+  Palawan: {
+    countryLine: "Palawan, an island in the Philippines",
+    whatItIsLike:
+      "A long island in the western Philippines known for limestone islands, clear water, and lagoons. Much of the draw is by boat.",
+    highlights: [
+      "Island hopping by boat.",
+      "Lagoons and limestone cliffs.",
+      "Stops on the resort island itself.",
+    ],
+    bestTime:
+      "The drier season is usually around December to May, so February is generally a good month.",
+    goodFor: "Scenery and boat days at a lower nightly cost than the Maldives.",
+    suits: "Couples who like a bit of adventure with a calm base.",
+    tradeOffs:
+      "Longer trip to reach, often with a domestic connection. Fewer big-city comforts nearby.",
+    stayWhy: "On its own small island. Quiet base for boat days.",
+    gettingThere: "Most routes connect through Manila.",
+  },
+};
 
 /** Fixed country lookup, checked against the geography rule. */
 export const BEACH_COUNTRY: Record<string, string> = {
@@ -348,6 +439,17 @@ export function mentionsBeachDestination(message: string): boolean {
   );
 }
 
+/** The beach destination a tell-me-about ask names, or null. */
+export function beachDestinationNamed(message: string): string | null {
+  const text = (message ?? "").toLowerCase();
+  const found = BEACH_DESTINATIONS.find((d) =>
+    new RegExp(
+      `\\btell me (?:more )?about (?:the )?${d.title.toLowerCase()}\\b`,
+    ).test(text),
+  );
+  return found?.title ?? null;
+}
+
 /**
  * True when the three card titles Bali, Maldives, and Palawan are all
  * present, in any order. Titles are normalised first, so "Bali, Indonesia"
@@ -388,4 +490,242 @@ export function applyBeachCompareRows(cards: ImageCard[]): ImageCard[] {
       actionUrl: dest.wikiUrl,
     };
   });
+}
+
+// ── Destination preview builder ────────────────────────────────────────────
+
+export type BeachDestinationPreviewInput = {
+  heroPhotoUrl?: string;
+  heroPhotoSourceName?: string;
+  hotelPhotoUrl?: string;
+  hotelPhotoSourceName?: string;
+  hotelPhotoFallback?: string;
+  /** Model pitch line ("Why it fits your ask"); the section hides when absent. */
+  whyItFits?: string;
+  /**
+   * Wikipedia lead for "What it's like". When given, the section is
+   * labelled "From Wikipedia" with the source link; otherwise the
+   * design copy is used, labelled "General guidance".
+   */
+  whatItIsLike?: { text: string; sourceUrl: string };
+  map?: MapStripBlock;
+  nearby?: NearbyRowBlock;
+  day?: ItineraryTimelineBlock;
+  /** Short form for the three-place case: 8 visible sections, with the
+   * map, nearby, and sample day collapsed behind one toggle. */
+  short?: boolean;
+  /** No Sample figures: practical notes read "Price coming soon". */
+  pricePending?: boolean;
+  setLine?: string;
+  closingLine?: string;
+};
+
+/**
+ * Build one destination preview from the design copy, the hotel seed,
+ * and already-resolved photos and detail blocks. Pure and sync, so
+ * tests can check the section shape without network. The single-place
+ * form has 12 sections (hero, 10 content sections, closing line); the
+ * short form shows 8 (hero plus 7), with map, nearby, and sample day
+ * present but collapsed. No Pick button and no aligned price row is
+ * ever built: Sample figures live only inside Practical notes.
+ */
+export function buildBeachDestinationPreview(
+  title: string,
+  input: BeachDestinationPreviewInput = {},
+): DestinationPreviewBlock | null {
+  const dest = BEACH_DESTINATIONS.find(
+    (d) => d.title.toLowerCase() === title.trim().toLowerCase(),
+  );
+  const copy = dest ? BEACH_PREVIEW_COPY[dest.title] : undefined;
+  if (!dest || !copy) return null;
+
+  const whatItIsLike = input.whatItIsLike
+    ? {
+        kind: "what_it_is_like" as const,
+        heading: "What it's like",
+        label: "From Wikipedia" as const,
+        sourceUrl: input.whatItIsLike.sourceUrl,
+        body: input.whatItIsLike.text,
+      }
+    : {
+        kind: "what_it_is_like" as const,
+        heading: "What it's like",
+        label: "General guidance" as const,
+        body: copy.whatItIsLike,
+      };
+
+  const sections: DestinationPreviewSection[] = [whatItIsLike];
+
+  if (input.whyItFits?.trim()) {
+    sections.push({
+      kind: "why_it_fits",
+      heading: "Why it fits your ask",
+      label: "General guidance",
+      body: input.whyItFits.trim(),
+    });
+  }
+
+  sections.push(
+    {
+      kind: "highlights",
+      heading: "Highlights",
+      label: "General guidance",
+      bullets: [...copy.highlights],
+    },
+    {
+      kind: "best_time",
+      heading: "Best time to go",
+      label: "General guidance",
+      body: copy.bestTime,
+    },
+    {
+      kind: "honest_take",
+      heading: "Honest take",
+      label: "General guidance",
+      rows: [
+        { label: "Good for", value: copy.goodFor },
+        { label: "Suits", value: copy.suits },
+        { label: "Trade-offs", value: copy.tradeOffs },
+      ],
+    },
+    {
+      kind: "stay",
+      heading: "Where you'd stay",
+      hotel: {
+        name: dest.hotelName,
+        area: dest.hotelArea,
+        whyItFits: copy.stayWhy,
+        photoUrl: input.hotelPhotoUrl,
+        photoSourceName: input.hotelPhotoSourceName,
+        photoFallback:
+          input.hotelPhotoUrl === undefined
+            ? (input.hotelPhotoFallback ?? "No hotel photo found")
+            : undefined,
+      },
+    },
+  );
+
+  const detailCollapsed = input.short === true;
+  if (input.map) {
+    sections.push({
+      kind: "map",
+      heading: "Where things are",
+      map: input.map,
+      collapsed: detailCollapsed ? true : undefined,
+    });
+  }
+  if (input.nearby) {
+    sections.push({
+      kind: "nearby",
+      heading: "What's nearby",
+      nearby: input.nearby,
+      collapsed: detailCollapsed ? true : undefined,
+    });
+  }
+  if (input.day) {
+    sections.push({
+      kind: "sample_day",
+      heading: "What a day could look like",
+      day: input.day,
+      collapsed: detailCollapsed ? true : undefined,
+    });
+  }
+
+  sections.push({
+    kind: "practical_notes",
+    heading: "Practical notes",
+    practical: {
+      gettingThere: copy.gettingThere,
+      flight: input.pricePending
+        ? undefined
+        : `${moneyCad(dest.sampleFlightCad)} Sample`,
+      nightly: input.pricePending
+        ? undefined
+        : `${moneyUsd(dest.sampleNightlyUsd)} per night Sample`,
+      pricePending: input.pricePending === true,
+    },
+  });
+
+  return {
+    type: "destination_preview",
+    place: dest.title,
+    countryLine: copy.countryLine,
+    heroPhotoUrl: input.heroPhotoUrl ?? "",
+    heroPhotoSourceName: input.heroPhotoSourceName,
+    heroPhotoFallback: "No photo found",
+    wikiUrl: dest.wikiUrl,
+    sections,
+    setLine: input.setLine,
+    closingLine: input.closingLine,
+  };
+}
+
+/**
+ * Resolve photos and detail blocks for each named beach destination,
+ * then build one preview per place, in the order given. Hero photos
+ * resolve through Bousier and Wikipedia in one batch; hotel photos
+ * through Bousier; map, nearby, and sample day from the seed data.
+ * A photo that does not resolve stays empty and renders the named
+ * fallback. Unknown titles are skipped.
+ */
+export async function buildBeachDestinationPreviews(
+  titles: string[],
+  opts: {
+    short?: boolean;
+    whyItFitsByTitle?: Record<string, string>;
+    setLine?: string;
+    closingLine?: string;
+  } = {},
+): Promise<DestinationPreviewBlock[]> {
+  const dests = titles
+    .map((t) =>
+      BEACH_DESTINATIONS.find(
+        (d) => d.title.toLowerCase() === t.trim().toLowerCase(),
+      ),
+    )
+    .filter((d): d is BeachDestination => d !== undefined);
+  if (dests.length === 0) return [];
+
+  const resolved = await resolveImageBatch(
+    dests.map((dest) => ({ title: dest.title, actionUrl: dest.wikiUrl })),
+    { mode: "balanced", timeoutMs: 5500 },
+  );
+
+  const previews: DestinationPreviewBlock[] = [];
+  for (let i = 0; i < dests.length; i++) {
+    const dest = dests[i];
+    const photo = resolved[i];
+    const hotelPhoto = await resolveHotelPhoto({
+      name: dest.hotelName,
+      area: dest.hotelArea,
+      sourceUrl: dest.wikiUrl,
+    });
+    const mapData = buildBeachMapStrip(dest.title);
+    const nearbyPlaces = await buildBeachNearbyRow(dest.title);
+    const dayData = buildItineraryTimeline({
+      hotelName: dest.hotelName,
+      hotel: { lat: dest.hotelLat, lng: dest.hotelLng },
+      stops: beachItineraryStops(dest.title),
+    });
+    const isLast = i === dests.length - 1;
+    const preview = buildBeachDestinationPreview(dest.title, {
+      heroPhotoUrl: photo?.selectedImageUrl ?? "",
+      heroPhotoSourceName:
+        photo?.selectedSourceName === "wikipedia_summary"
+          ? "Wikipedia"
+          : photo?.selectedSourceName,
+      hotelPhotoUrl: hotelPhoto.photoUrl ?? undefined,
+      hotelPhotoSourceName: hotelPhoto.photoSourceName ?? undefined,
+      hotelPhotoFallback: hotelPhoto.photoFallback,
+      whyItFits: opts.whyItFitsByTitle?.[dest.title],
+      map: mapData ? toMapStripBlock(mapData) : undefined,
+      nearby: toNearbyRowBlock(dest.hotelName, nearbyPlaces),
+      day: toItineraryTimelineBlock(dayData),
+      short: opts.short,
+      setLine: isLast ? opts.setLine : undefined,
+      closingLine: isLast ? opts.closingLine : undefined,
+    });
+    if (preview) previews.push(preview);
+  }
+  return previews;
 }

@@ -21,6 +21,32 @@ const HOTEL_CHIPS: FollowUp[] = [
   { label: "Add this to my calendar", message: "Add this trip to my calendar" },
 ];
 
+/**
+ * Chips under a set of destination previews: one "Tell me more"
+ * per place, plus the February question. Kept as listed in the
+ * design for now; the February chip asks for a ranking and is
+ * B3's to replace.
+ */
+function previewChips(blocks: RichBlock[]): FollowUp[] {
+  const previews = blocks.filter(
+    (b): b is Extract<RichBlock, { type: "destination_preview" }> =>
+      b.type === "destination_preview",
+  );
+  if (previews.length < 2) return [];
+  const chips: FollowUp[] = previews.map((p) => {
+    const name = p.place === "Maldives" ? "the Maldives" : p.place;
+    return {
+      label: `Tell me more about ${name}`,
+      message: `Tell me more about ${name}`,
+    };
+  });
+  chips.push({
+    label: "Which is best in February?",
+    message: "Which is best in February?",
+  });
+  return chips;
+}
+
 /** Rule chips from the blocks in the latest reply. */
 export function ruleFollowUps(blocks: RichBlock[] | undefined): FollowUp[] {
   if (!blocks?.length) return [];
@@ -29,6 +55,7 @@ export function ruleFollowUps(blocks: RichBlock[] | undefined): FollowUp[] {
     if (block.type === "flight_compare") out.push(...FLIGHT_CHIPS);
     if (block.type === "hotel_set") out.push(...HOTEL_CHIPS);
   }
+  out.push(...previewChips(blocks));
   return out;
 }
 

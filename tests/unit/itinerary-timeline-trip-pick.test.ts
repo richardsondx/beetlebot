@@ -277,13 +277,16 @@ describe("trip pick", () => {
 
 describe("5 photo gallery", () => {
   it("attaches up to 4 extra real photos per card, hero plus extras at most 5", async () => {
+    // Non-beach options keep the option_set gallery path. Beach
+    // options now become destination previews instead, and the
+    // preview hero gallery stays deferred (design section 5).
     const msg = await enrichLlmReply(
       JSON.stringify({
-        text: "Three beaches fit.",
+        text: "Three cities fit.",
         options: [
-          { title: "Bali", category: "Beach" },
-          { title: "Maldives", category: "Beach" },
-          { title: "Palawan", category: "Beach" },
+          { title: "Paris", category: "destination" },
+          { title: "Tokyo", category: "destination" },
+          { title: "Rome", category: "destination" },
         ],
       }),
     );

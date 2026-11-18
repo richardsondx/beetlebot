@@ -18,10 +18,15 @@
 import type { AssistantMessage, ImageCard, RichBlock } from "./rich-message";
 import { sanitiseBlocks } from "./safety";
 import {
-  applyBeachCompareRows,
+  BEACH_PREVIEW_CLOSING_LINE,
+  BEACH_PREVIEW_SET_LINE,
+  BEACH_PREVIEW_SINGLE_CLOSING_LINE,
+  BEACH_COUNTRY,
+  beachDestinationNamed,
+  buildBeachDestinationPreviews,
   isBeachCompareTitles,
   mentionsBeachCompare,
-  resolveBeachComparePhotos,
+  mentionsBeachDestination,
 } from "@/lib/travel/beach-compare";
 import {
   applyPricePending,
@@ -83,27 +88,59 @@ export async function enrichLlmReply(
     };
   }
 
-  // No visual options → plain message, unless the user asked for a
-  // beach compare. The model sometimes answers a compare ask in prose
-  // with no options JSON; the ask already names the three options, so
-  // the compare is built directly instead of showing text only.
+  // No visual options → plain message, unless the user asked about a
+  // beach. The model sometimes answers a beach ask in prose with no
+  // options JSON; the ask already names the place(s), so previews are
+  // built directly instead of showing text only. A compare ask gets
+  // three short showcases; a tell-me-about ask gets one full preview.
   if (!payload.options?.length) {
-    if (mentionsBeachCompare(options.userMessage ?? "")) {
-      const compare = await resolveBeachComparePhotos();
-      return { text: payload.text, blocks: [compare] };
+    const previews = await beachPreviewsForMessage(
+      options.userMessage ?? "",
+    );
+    if (previews) {
+      return { text: payload.text, blocks: previews };
     }
     return { text: payload.text };
   }
 
+  // A beach compare in the model options becomes three short previews,
+  // not a compare OptionSet: no Pick buttons, no aligned price rows.
+  if (isBeachCompareTitles(payload.options.map((opt) => opt.title))) {
+    const previews = await buildBeachDestinationPreviews(
+      payload.options.map((opt) => normaliseDestinationTitle(opt.title)),
+      {
+        short: true,
+        whyItFitsByTitle: pitchLinesByTitle(payload.options),
+        setLine: BEACH_PREVIEW_SET_LINE,
+        closingLine: BEACH_PREVIEW_CLOSING_LINE,
+      },
+    );
+    if (previews.length > 0) {
+      return { text: payload.text, blocks: previews };
+    }
+  }
+
+  // A single beach option on a tell-me-about ask becomes one full
+  // preview, with the model pitch line as "Why it fits your ask".
+  if (
+    payload.options.length === 1 &&
+    mentionsBeachDestination(options.userMessage ?? "")
+  ) {
+    const title = normaliseDestinationTitle(payload.options[0].title);
+    const previews = await buildBeachDestinationPreviews([title], {
+      whyItFitsByTitle: pitchLinesByTitle(payload.options),
+      closingLine: BEACH_PREVIEW_SINGLE_CLOSING_LINE,
+    });
+    if (previews.length > 0) {
+      return { text: payload.text, blocks: previews };
+    }
+  }
+
   // Enrich each option with an image URL
   const enriched = await enrichOptionsWithBousier(payload.options);
-  const isBeachCompare = isBeachCompareTitles(
-    enriched.map((card) => card.title),
-  );
-  const compared = isBeachCompare ? applyBeachCompareRows(enriched) : enriched;
-  // Price-pending runs after the compare overlay, so a Sample price on a
-  // compare card is never also marked pending.
-  const cards = compared.map((card) =>
+  // Price-pending runs on the enriched cards, so a destination with no
+  // price still renders as a photo-first card with "Price coming soon".
+  const cards = enriched.map((card) =>
     applyPricePending(correctDestinationCountry(card)),
   );
 
@@ -113,10 +150,7 @@ export async function enrichLlmReply(
       : [
           {
             type: "option_set",
-            prompt: isBeachCompare
-              ? "Which beach?"
-              : "Here are your options — tap one to explore further:",
-            variant: isBeachCompare ? "compare" : undefined,
+            prompt: "Here are your options — tap one to explore further:",
             items: cards.map((card, i) => ({ index: i + 1, card })),
           },
         ];
@@ -290,6 +324,54 @@ async function enrichOptionsWithBousier(options: RawOption[]): Promise<ImageCard
       gallery: gallery.length > 0 ? gallery : undefined,
     };
   });
+}
+
+/**
+ * Model pitch line per beach destination, from the option subtitle.
+ * A bare country name ("Indonesia") is a label, not a pitch, so it is
+ * skipped and the "Why it fits your ask" section hides instead.
+ */
+function pitchLinesByTitle(options: RawOption[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  const countries = new Set(
+    Object.values(BEACH_COUNTRY).map((c) => c.toLowerCase()),
+  );
+  for (const opt of options) {
+    const title = normaliseDestinationTitle(opt.title);
+    const subtitle = (opt.subtitle ?? "").trim();
+    if (!subtitle || countries.has(subtitle.toLowerCase())) continue;
+    out[title] = subtitle;
+  }
+  return out;
+}
+
+/**
+ * Previews for a beach ask the model answered in prose, or null when
+ * the message is not a beach ask. A compare ask gets three short
+ * showcases; a tell-me-about ask gets one full preview.
+ */
+async function beachPreviewsForMessage(
+  userMessage: string,
+): Promise<RichBlock[] | null> {
+  if (mentionsBeachCompare(userMessage)) {
+    const previews = await buildBeachDestinationPreviews(
+      ["Bali", "Maldives", "Palawan"],
+      {
+        short: true,
+        setLine: BEACH_PREVIEW_SET_LINE,
+        closingLine: BEACH_PREVIEW_CLOSING_LINE,
+      },
+    );
+    return previews.length > 0 ? previews : null;
+  }
+  const named = beachDestinationNamed(userMessage);
+  if (named) {
+    const previews = await buildBeachDestinationPreviews([named], {
+      closingLine: BEACH_PREVIEW_SINGLE_CLOSING_LINE,
+    });
+    return previews.length > 0 ? previews : null;
+  }
+  return null;
 }
 
 async function runAsyncCardUpgrade(

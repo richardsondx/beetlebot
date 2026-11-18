@@ -33,6 +33,7 @@ import { HotelSetView } from "@/components/chat/blocks/hotel-set";
 import { MapStripView } from "@/components/chat/blocks/map-strip";
 import { NearbyRowView } from "@/components/chat/blocks/nearby-row";
 import { ItineraryTimelineView } from "@/components/chat/blocks/itinerary-timeline";
+import { DestinationPreviewView } from "@/components/chat/blocks/destination-preview";
 
 type ChatMode = ModeDefinition;
 
@@ -597,6 +598,8 @@ function RichBlockRenderer({
       return <NearbyRowView block={block} />;
     case "itinerary_timeline":
       return <ItineraryTimelineView block={block} />;
+    case "destination_preview":
+      return <DestinationPreviewView block={block} />;
     default:
       return null;
   }

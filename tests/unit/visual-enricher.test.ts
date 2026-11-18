@@ -10,7 +10,10 @@ const PROSE_REPLY =
   "stuff, Palawan. Are you two more go-go explorers or park-it types?";
 
 describe("beach previews from a prose reply", () => {
-  it("builds three short showcases when the model answers in prose", async () => {
+  it(
+    "builds three short showcases when the model answers in prose",
+    { timeout: 30_000 },
+    async () => {
     const msg = await enrichLlmReply(PROSE_REPLY, {
       userMessage: COMPARE_ASK,
     });

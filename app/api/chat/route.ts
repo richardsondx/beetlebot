@@ -63,6 +63,7 @@ import {
   buildBeachNearbyRow,
   isBeachCompareTitles,
   mentionsBeachCompare,
+  mentionsBeachDestination,
   resolveBeachComparePhotos,
 } from "@/lib/travel/beach-compare";
 import {
@@ -515,6 +516,49 @@ function buildOutputFormatPolicyPrompt(input: PromptPolicyContext): string {
     lines.push("- Keep response in concise text format for this turn.");
   }
   return lines.join("\n");
+}
+
+export type BeachAskIntentInput = {
+  isExplicitSuggestionRequest: boolean;
+  wantsBestEffortNow: boolean;
+  intentExtractionOk: boolean;
+};
+
+export type BeachAskIntent = {
+  isBeachAsk: boolean;
+  explicitSuggestionRequest: boolean;
+  allowBestEffortSuggestions: boolean;
+  shouldUseSafeNoIntentMode: boolean;
+};
+
+/**
+ * Beach-ask bypass for a failed intent parse. A compare ask ("Bali vs
+ * Maldives vs Palawan, which should I pick?") or a tell-me-about ask
+ * ("Tell me more about Palawan") is an explicit suggestion request
+ * even when intent extraction failed, so the safe-no-intent guard must
+ * not fire and enrichment must not be suppressed. Fix round 1 failed
+ * because shouldUseSafeNoIntentMode fired before the smalltalk branch
+ * and allowBestEffortSuggestions stayed false. Keep the three flags
+ * consistent here; the route reads them, and the dispatch at the
+ * shouldUseSafeNoIntentMode branch and the enrichment gate below both
+ * follow from them. A non-beach ask keeps the guard exactly as before.
+ */
+export function resolveBeachAskIntent(
+  message: string,
+  intent: BeachAskIntentInput,
+): BeachAskIntent {
+  const isBeachAsk =
+    mentionsBeachCompare(message) || mentionsBeachDestination(message);
+  return {
+    isBeachAsk,
+    explicitSuggestionRequest:
+      intent.isExplicitSuggestionRequest || isBeachAsk,
+    allowBestEffortSuggestions:
+      intent.isExplicitSuggestionRequest ||
+      intent.wantsBestEffortNow ||
+      isBeachAsk,
+    shouldUseSafeNoIntentMode: !intent.intentExtractionOk && !isBeachAsk,
+  };
 }
 
 export function composePolicySections(input: PromptPolicyContext): string[] {
@@ -2578,9 +2622,12 @@ async function runChatFlow(
     // Typed beach pick: "2", "Maldives", or "Pick Bali" works like
     // tapping Pick. A bare number only counts when the last assistant
     // reply in this thread showed a beach compare, so it never hijacks
-    // a flight or hotel pick.
+    // a flight or hotel pick. "Tell me (more) about X" names one beach
+    // so it parses as a pick, but it is a preview ask, not a pick: let
+    // it flow to the normal route, where the beach-ask bypass keeps it
+    // out of the clarification path and enrichment runs.
     const typedPick = parseBeachPickReply(body.message);
-    if (typedPick) {
+    if (typedPick && !mentionsBeachDestination(body.message)) {
       let isBeachTurn = messageNamesBeachDestination(body.message);
       if (!isBeachTurn) {
         const recent = await getConversationMessages(thread.id);
@@ -2825,9 +2872,16 @@ async function runChatFlow(
     const isMetaConversationQuery = intent.isMetaConversationQuery;
     const isCapabilityQuery = intent.isCapabilityQuery;
     const isLocationInfoQuery = intent.isLocationInfoQuery;
-    const explicitSuggestionRequest = intent.isExplicitSuggestionRequest;
-    const allowBestEffortSuggestions = explicitSuggestionRequest || intent.wantsBestEffortNow;
-    const shouldUseSafeNoIntentMode = !intent.intentExtractionOk;
+    // A beach compare or tell-me-about ask is an explicit suggestion
+    // request even when intent extraction failed. resolveBeachAskIntent
+    // keeps the three flags consistent: the safe-no-intent guard below
+    // must not fire for these asks, and enrichment must run. Fix round
+    // 1 failed because shouldUseSafeNoIntentMode fired first and
+    // allowBestEffortSuggestions stayed false.
+    const beachAsk = resolveBeachAskIntent(body.message, intent);
+    const explicitSuggestionRequest = beachAsk.explicitSuggestionRequest;
+    const allowBestEffortSuggestions = beachAsk.allowBestEffortSuggestions;
+    const shouldUseSafeNoIntentMode = beachAsk.shouldUseSafeNoIntentMode;
     const recentClarifierAsked = hasRecentClarifierQuestion(recentConversation);
     const isProfileCaptureTurn =
       intent.isProfileCaptureTurn ||
@@ -2891,8 +2945,10 @@ async function runChatFlow(
       !allowBestEffortSuggestions &&
       // A beach compare ask is a recommendation, never small talk: the
       // classifier sometimes calls it small talk, which skips the
-      // compare step entirely and stores no compare.
+      // compare step entirely and stores no compare. Same for a
+      // tell-me-about ask for one beach.
       !mentionsBeachCompare(body.message) &&
+      !mentionsBeachDestination(body.message) &&
       (isGreetingTurn || isSmallTalkTurn || isProfileCaptureTurn || isMetaConversationQuery);
     const shouldRunResearch =
       !isActionCmd &&
@@ -2901,8 +2957,10 @@ async function runChatFlow(
       !isLocationInfoQuery &&
       allowBestEffortSuggestions &&
       // A compare ask names its options, so it never needs research.
-      // Research returns Toronto events for a beach trip ask.
+      // Research returns Toronto events for a beach trip ask. Same for
+      // a tell-me-about ask: the place is named.
       !mentionsBeachCompare(body.message) &&
+      !mentionsBeachDestination(body.message) &&
       (signals.boredomSignal || intent.isResearchRequest);
     const threadSuggestions = extractThreadSuggestionsForIntent(recentConversation);
     const shouldResolveThreadSuggestions =

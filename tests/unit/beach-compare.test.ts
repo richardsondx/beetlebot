@@ -7,6 +7,7 @@ import {
   buildBeachCompareOptionSet,
   isBeachCompareTitles,
   mentionsBeachCompare,
+  mentionsBeachDestination,
 } from "../../lib/travel/beach-compare";
 import {
   isHotelSetBlock,
@@ -214,5 +215,42 @@ describe("beach compare ask detection", () => {
   it("does not fire on one beach or on no beach", () => {
     expect(mentionsBeachCompare("Plan a beach trip to Bali")).toBe(false);
     expect(mentionsBeachCompare("suggest a beach destination")).toBe(false);
+  });
+
+  it("covers every pair, so no place is missed by the matcher", () => {
+    // The matcher needs two names; each pair must fire, proving all
+    // three titles match and the only gap is the single-place ask.
+    expect(mentionsBeachCompare("Bali vs Maldives, which is better?")).toBe(
+      true,
+    );
+    expect(mentionsBeachCompare("Bali vs Palawan, which should I pick?")).toBe(
+      true,
+    );
+    expect(
+      mentionsBeachCompare("Maldives vs Palawan, which should I pick?"),
+    ).toBe(true);
+  });
+});
+
+describe("single beach tell-me-about detection", () => {
+  it("spots 'tell me about X' and 'tell me more about X' for all 3 places", () => {
+    expect(mentionsBeachDestination("Tell me about Bali")).toBe(true);
+    expect(mentionsBeachDestination("Tell me more about Bali")).toBe(true);
+    expect(mentionsBeachDestination("Tell me about Maldives")).toBe(true);
+    expect(mentionsBeachDestination("Tell me more about the Maldives")).toBe(
+      true,
+    );
+    expect(mentionsBeachDestination("Tell me about Palawan")).toBe(true);
+    expect(mentionsBeachDestination("Tell me more about Palawan")).toBe(true);
+  });
+
+  it("does not fire on a bare name, a pick, a plan ask, or another place", () => {
+    expect(mentionsBeachDestination("Maldives")).toBe(false);
+    expect(mentionsBeachDestination("Pick Bali")).toBe(false);
+    expect(mentionsBeachDestination("Plan a beach trip to Bali")).toBe(false);
+    expect(mentionsBeachDestination("Tell me more about Paris")).toBe(false);
+    expect(mentionsBeachDestination("suggest a beach destination")).toBe(
+      false,
+    );
   });
 });

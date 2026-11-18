@@ -330,6 +330,25 @@ export function mentionsBeachCompare(message: string): boolean {
 }
 
 /**
+ * True when the message asks to hear about one beach destination:
+ * "tell me about X" or "tell me more about X", for any of the three
+ * places. A bare name ("Maldives") or a planning ask ("Plan a beach
+ * trip to Bali") does not count: those are a pick reply and a plan
+ * request, not a tell-me-about ask. mentionsBeachCompare needs two
+ * names, so it never fires on a single place; this covers that gap.
+ * The route uses it so a single-place ask survives a failed intent
+ * parse the same way a compare ask does.
+ */
+export function mentionsBeachDestination(message: string): boolean {
+  const text = (message ?? "").toLowerCase();
+  return BEACH_DESTINATIONS.some((d) =>
+    new RegExp(
+      `\\btell me (?:more )?about (?:the )?${d.title.toLowerCase()}\\b`,
+    ).test(text),
+  );
+}
+
+/**
  * True when the three card titles Bali, Maldives, and Palawan are all
  * present, in any order. Titles are normalised first, so "Bali, Indonesia"
  * counts as Bali, and extra cards, such as a backup, do not break the match.
